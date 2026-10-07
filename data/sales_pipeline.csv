@@ -1,0 +1,31 @@
+merchant_id,segment,city,expected_monthly_volume_inr_crore,needs_international_cards,stage
+P-301,Exporter,Mumbai,0.55,yes,Qualified
+P-302,D2C brand,Bengaluru,1.71,yes,Proposal
+P-303,Travel,Delhi,0.72,yes,Negotiation
+P-304,Education,Pune,1.88,yes,Waiting on intl cards
+P-305,Marketplace seller,Hyderabad,0.88,yes,Qualified
+P-306,Exporter,Chennai,2.04,yes,Proposal
+P-307,D2C brand,Jaipur,1.05,yes,Negotiation
+P-308,Travel,Surat,2.21,yes,Waiting on intl cards
+P-309,Education,Kochi,1.21,yes,Qualified
+P-310,Marketplace seller,Ahmedabad,2.37,yes,Proposal
+P-311,Exporter,Mumbai,1.38,yes,Negotiation
+P-312,D2C brand,Bengaluru,2.54,yes,Waiting on intl cards
+P-313,Travel,Delhi,1.54,yes,Qualified
+P-314,Education,Pune,0.55,yes,Proposal
+P-315,Marketplace seller,Hyderabad,1.71,yes,Negotiation
+P-316,Exporter,Chennai,0.72,yes,Waiting on intl cards
+P-317,D2C brand,Jaipur,1.88,yes,Qualified
+P-318,Travel,Surat,0.88,yes,Proposal
+P-319,Education,Kochi,2.04,yes,Negotiation
+P-320,Marketplace seller,Ahmedabad,1.05,yes,Waiting on intl cards
+P-321,Exporter,Mumbai,2.21,yes,Qualified
+P-322,D2C brand,Bengaluru,1.21,yes,Proposal
+P-323,Travel,Delhi,2.37,yes,Negotiation
+P-324,Education,Pune,1.38,yes,Waiting on intl cards
+P-325,Marketplace seller,Hyderabad,2.54,yes,Qualified
+P-326,Exporter,Chennai,1.54,yes,Proposal
+P-327,D2C brand,Jaipur,0.55,yes,Negotiation
+P-328,Travel,Surat,1.71,yes,Waiting on intl cards
+P-329,Education,Kochi,0.72,yes,Qualified
+P-330,Marketplace seller,Ahmedabad,1.86,yes,Proposal

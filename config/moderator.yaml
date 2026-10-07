@@ -1,0 +1,31 @@
+# Moderator: two checks. Deterministic checks run first (in code); the LLM only judges what code can't.
+claim_checks:
+  deterministic:                      # run in code, in this order
+    - evidence_present                # STRIKE if a claim cites no evidence
+    - evidence_exists                 # STRIKE if a cited fact_id/doc_ref doesn't exist
+    - not_superseded                  # STRIKE if a cited fact has superseded_by set
+    - number_matches                  # STRIKE if a claimed number differs from evidence or recomputed formula
+    - reliability                     # FLAG if the only evidence has reliability=low
+  number_tolerance_pct: 1.0
+  llm_support_check:                  # for claims that pass the code checks
+    model: reasoning
+    prompt: prompts/moderator_claims.md
+    outcomes: [KEEP, FLAG, STRIKE]
+  protect_blocking_findings: true     # blocking findings from can_block advisers are never struck, only flagged
+
+final_check:
+  model: reasoning
+  prompt: prompts/moderator_final.md
+  deterministic:
+    - every_criterion_addressed
+    - every_selected_adviser_represented
+    - unresolved_blockers_reflected   # recommendation can't ignore an unresolved blocking finding
+    - dissent_present_if_any_adviser_disagreed
+    - memo_numbers_match_evidence
+  verdicts: [PASS, INCOMPLETE, WRONG]
+  max_revisions: 2                    # send back to the Scribe at most twice
+
+scorecard:                            # computed in code, not by the LLM
+  score_range: [1, 5]
+  combine: mean_of_owner_scores
+  blocked_option_rule: flag_not_eligible_until_fixed

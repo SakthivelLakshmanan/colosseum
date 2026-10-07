@@ -1,0 +1,43 @@
+# Colosseum settings. Copy model IDs and resource names from your Setup tab.
+project_id: colosseum-510716
+models_location: global            # Gemini endpoint location
+models:
+  adviser: gemini-3.8-flash        # six advisers + routing-prompt writer
+  reasoning: gemini-3.1-pro-preview # moderator + scribe (check exact ID in Model Garden)
+  embedding: gemini-embedding-001  # harness routing (and fact ranking later)
+
+bigquery:
+  location: asia-south1
+  dataset: colosseum               # agents may read ONLY this dataset
+  eval_dataset: colosseum_eval     # answer keys and tests; agents must never read it
+
+documents:
+  bucket: colosseum-docs-sl
+  prefix: docs/
+  agent_search:
+    location: global
+    engine_id: YOUR_SEARCH_APP_ID      # from the Agent Search app you create on Day 2
+    data_store_id: colosseum-docs
+
+firestore:
+  database: "(default)"
+  collections:
+    runs: runs
+    routing: routing_logs
+    decisions: human_decisions
+
+retrieval:                         # how evidence packs are built for each adviser
+  max_facts_per_adviser: 25        # above this, the aggregator kicks in
+  include_related_domains: true    # FIN fact tagged 'business' also goes to Business
+  exclude_superseded: true
+  ranking: keyword                 # v1: keyword overlap with the brief. v2: "vector" (BigQuery VECTOR_SEARCH)
+
+aggregation:
+  strategy: latest_per_metric_then_summarise
+  summary_model: adviser
+  keep_fact_ids_in_summaries: true # summaries must list the fact_ids they cover
+
+run:
+  parallel_advisers: true
+  adviser_timeout_s: 60
+  continue_if_adviser_fails: true  # one failing adviser must not break the run

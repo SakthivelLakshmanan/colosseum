@@ -1,0 +1,9 @@
+test_id,brief,must_include,acceptable,must_exclude,why
+RT-01,Should we move 40% of our payment volume from Arvanta Payments to Brevis Pay?,finance|business|customer|legal|infosec|ops,,,Main demo decision: every adviser has something to add
+RT-02,Should we hire 20 more engineers for the lending platform next quarter?,finance|business|ops,,infosec|customer,Leaves out advisers with nothing to add
+RT-03,Should we share anonymised borrower repayment data with a co-lending partner?,infosec|legal|business,customer,ops,Data sharing must bring in InfoSec and Legal
+RT-04,Should we cut the personal-loan interest rate by 1 percentage point for prime borrowers?,finance|business|customer,legal,infosec|ops,Pricing decision
+RT-05,Should we move our data warehouse to a new cloud region?,infosec|ops|finance,legal,customer,Infrastructure and data location
+RT-06,"Should we launch Legion Pay Later (buy now, pay later) at checkout?",business|finance|customer|legal,infosec|ops,,New product
+RT-07,Should we outsource customer support to a third-party call centre?,customer|ops|finance|infosec|legal,business,,Outsourcing with customer data
+RT-08,Should we open a new office in Pune?,finance|ops|business,legal,infosec|customer,Facilities decision

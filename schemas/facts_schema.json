@@ -1,0 +1,65 @@
+[
+  {
+    "name": "fact_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "domain",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "related_domains",
+    "type": "STRING"
+  },
+  {
+    "name": "topic",
+    "type": "STRING"
+  },
+  {
+    "name": "statement",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "entity",
+    "type": "STRING"
+  },
+  {
+    "name": "metric",
+    "type": "STRING"
+  },
+  {
+    "name": "value_num",
+    "type": "FLOAT"
+  },
+  {
+    "name": "value_text",
+    "type": "STRING"
+  },
+  {
+    "name": "unit",
+    "type": "STRING"
+  },
+  {
+    "name": "as_of",
+    "type": "DATE"
+  },
+  {
+    "name": "superseded_by",
+    "type": "STRING"
+  },
+  {
+    "name": "source_type",
+    "type": "STRING"
+  },
+  {
+    "name": "source_ref",
+    "type": "STRING"
+  },
+  {
+    "name": "reliability",
+    "type": "STRING"
+  }
+]

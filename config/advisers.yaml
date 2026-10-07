@@ -1,0 +1,140 @@
+# Adviser registry. Add an adviser by adding an entry here plus a prompt file. No code changes.
+advisers:
+- id: finance
+  name: Finance
+  enabled: true
+  lens: Is this decision worth it in money terms, after every cost and benefit?
+  capabilities:
+  - Costs, fees, pricing and savings
+  - Budgets, cost-to-income ratio, return on investment and payback
+  - Cash flow, settlement timing, funding cost and treasury
+  - One-time investment, migration and exit costs
+  - Revenue forecasts and unit economics
+  - Headcount, office and infrastructure spend
+  criteria_owned:
+  - Cost
+  can_block: false
+  model: adviser
+  instructions: prompts/advisers/finance.md
+  fact_domains:
+  - finance
+  tools:
+  - get_facts
+  - query_table
+  - search_documents
+  - calculate
+- id: business
+  name: Business
+  enabled: true
+  lens: Does this move the company toward its strategy and growth goals?
+  capabilities:
+  - Company strategy, OKRs and board priorities
+  - Growth, new products, new markets and partnerships
+  - Competitive position and market trends
+  - Sales pipeline and new revenue opportunities
+  - Vendor strategy and concentration risk
+  - Time-to-market and deadlines
+  criteria_owned:
+  - Growth
+  can_block: false
+  model: adviser
+  instructions: prompts/advisers/business.md
+  fact_domains:
+  - business
+  tools:
+  - get_facts
+  - query_table
+  - search_documents
+  - calculate
+- id: customer
+  name: Customer
+  enabled: true
+  lens: What happens to merchants and borrowers?
+  capabilities:
+  - Merchant and borrower experience
+  - Complaints, support tickets and grievance deadlines
+  - Checkout conversion, refunds and payment failures customers feel
+  - Churn, NPS, satisfaction and app reviews
+  - Language and accessibility
+  - Customer communication and support cost
+  criteria_owned:
+  - Customer impact
+  can_block: false
+  model: adviser
+  instructions: prompts/advisers/customer.md
+  fact_domains:
+  - customer
+  tools:
+  - get_facts
+  - query_table
+  - search_documents
+  - calculate
+- id: legal
+  name: Legal
+  enabled: true
+  lens: Are we protected and compliant under the contracts and the law?
+  capabilities:
+  - Contracts, terms, notice periods, exit fees and renewals
+  - Liability, indemnity, governing law and disputes
+  - 'Regulatory compliance: RBI rules, licences, outsourcing norms'
+  - Data protection law and data processing agreements
+  - Partner, vendor and outsourcing agreements
+  criteria_owned:
+  - Security & compliance
+  can_block: false
+  model: adviser
+  instructions: prompts/advisers/legal.md
+  fact_domains:
+  - legal
+  tools:
+  - get_facts
+  - query_table
+  - search_documents
+  - calculate
+- id: infosec
+  name: InfoSec & Data Privacy
+  enabled: true
+  lens: Is our data and our customers' data safe, and does it stay where the rules say?
+  capabilities:
+  - Information security posture of vendors and systems
+  - Where data is stored and processed; data localisation
+  - Privacy, personal data sharing and the DPDP Act
+  - 'Certifications: SOC 2, PCI DSS, ISO 27001'
+  - Security incidents, breach reporting and CERT-In
+  - Access control, encryption and tokenisation
+  - Third-party, outsourcing and cloud vendor risk
+  criteria_owned:
+  - Security & compliance
+  can_block: true
+  model: adviser
+  instructions: prompts/advisers/infosec.md
+  fact_domains:
+  - infosec
+  tools:
+  - get_facts
+  - query_table
+  - search_documents
+  - calculate
+- id: ops
+  name: Ops & Engineering
+  enabled: true
+  lens: Will it work reliably, and can we deliver it?
+  capabilities:
+  - System reliability, uptime, success rates and latency
+  - Incidents and outages
+  - Migration effort, engineering capacity and delivery timelines
+  - Integrations, routing and reconciliation
+  - Infrastructure, cloud regions and data centres
+  - Operational processes and call-centre operations
+  criteria_owned:
+  - Reliability
+  can_block: false
+  model: adviser
+  instructions: prompts/advisers/ops.md
+  fact_domains:
+  - ops
+  tools:
+  - get_facts
+  - query_table
+  - search_documents
+  - calculate

@@ -1,0 +1,10 @@
+gateway,fee_item,value,unit,effective_from,source_doc
+Arvanta Payments,blended_fee,0.2,% of volume,2023-04-01,Arvanta_MSA_Excerpt.pdf §4.1
+Arvanta Payments,dispute_fee,150,INR per dispute,2023-04-01,Arvanta_MSA_Excerpt.pdf §4.3
+Arvanta Payments,card_settlement,2,days (T+n),2023-04-01,Arvanta_MSA_Excerpt.pdf §4.2
+Arvanta Payments,counter_offer_discount,8,% off blended fee for 3-year 100% commitment,2026-09-20,Board_Minutes_Sep2026.pdf item 4
+Brevis Pay,blended_fee,0.176,% of volume,2026-09-15,Brevis_Draft_Agreement.pdf Schedule 1 item 1
+Brevis Pay,dispute_fee,250,INR per dispute,2026-09-15,Brevis_Draft_Agreement.pdf Schedule 1 item 2
+Brevis Pay,card_settlement,1,days (T+n),2026-09-15,Brevis_Draft_Agreement.pdf Schedule 1 item 3
+Brevis Pay,india_hosting_addon,6,INR lakh per month (flat),2026-09-15,Brevis_Draft_Agreement.pdf Schedule 1 item 4
+Brevis Pay,blended_fee_estimate_mar,0.164,"% of volume (early estimate, superseded)",2026-03-12,Finance_Email_Mar2026.pdf

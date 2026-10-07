@@ -1,0 +1,15 @@
+test_id,stage,source,input,cited_evidence,expected,reason
+MT-01,claim,Finance,Brevis would save us 18% on fees.,FIN-12,STRIKE,FIN-12 is superseded by FIN-03 (final quote: 12%). Superseded facts can't support a claim.
+MT-02,claim,Ops,Migration to Brevis can be done in under 4 weeks.,OPS-13,FLAG,Low-reliability vendor claim that conflicts with the internal 6-week estimate (OPS-09).
+MT-03,claim,Business,Brevis has much better uptime than Arvanta.,,STRIKE,No evidence cited. (The supporting fact OPS-04 exists but the claim must cite it.)
+MT-04,claim,Finance,Moving 40% saves ₹18 lakh a month in fees.,FIN-02|FIN-03,STRIKE,"Cited facts give ₹120 − ₹105.6 = ₹14.4 lakh, not ₹18 lakh. Number check fails."
+MT-05,claim,Ops,Brevis's overall success rate is slightly lower than Arvanta's.,OPS-01,KEEP,Control case: the claim matches the evidence (97.6% vs 97.8%). The moderator must not over-strike.
+MT-06,claim,Finance,Moving 40% avoids Arvanta's exit fee.,LEG-01,STRIKE,"Contradicts LEG-01: a 40% move leaves Arvanta at 60%, below the 80% minimum, so the ₹25 lakh fee applies."
+MT-07,claim,InfoSec,BLOCKING: card data goes to a Singapore sub-processor.,SEC-01|SEC-02,KEEP,"Blocking finding with valid evidence. The moderator can't strike it, even if another adviser disputes it."
+MT-08,claim,Customer,Brevis improves checkout conversion by 3.1 points across all channels.,CUS-04,FLAG,Over-generalised: the evidence covers mobile checkout in a 2% pilot only.
+MT-09,memo,Scribe,"Memo recommends moving 40% now, with no mention of the Singapore sub-processor.",SEC-01,WRONG,An unresolved blocking finding is ignored and not formally overridden.
+MT-10,memo,Scribe,"Memo addresses cost, security, reliability and growth but says nothing about customer impact.",,INCOMPLETE,"A weighted criterion (Customer impact, 10%) is missing."
+MT-11,memo,Scribe,Memo says payback is about 3 months.,FIN-03|FIN-04|FIN-05|LEG-01,WRONG,Ignores the ₹40 lakh migration cost and the add-on. Correct: (₹40L + ₹25L) / ₹10.4L ≈ 6.3 months for the 40% plan.
+MT-12,memo,Scribe,Memo has no dissent section although Legal argued for waiting.,,INCOMPLETE,Dissent from a selected adviser must be recorded.
+MT-13,memo,Scribe,Memo double-counts the exit fee as ₹50 lakh.,LEG-01,WRONG,"The exit fee is ₹25 lakh, one-time."
+MT-14,memo,Scribe,"Memo matches the expected outcome: conditional, phased move with all conditions and dissent.",,PASS,Control case: a correct memo must pass first time.

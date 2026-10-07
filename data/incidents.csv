@@ -1,0 +1,8 @@
+incident_id,date,gateway,type,severity,duration_minutes,collections_delayed_inr_crore,description,certin_report_hours
+INC-2501,2025-10-28,Brevis Pay,security,high,,0,Misconfigured log bucket exposed merchant contact data (no card data),216
+INC-2502,2025-11-20,Arvanta Payments,security,low,,0,"Minor credential-stuffing attempt on merchant portal, contained",5
+INC-2503,2025-12-03,Arvanta Payments,availability,major,55,0.4,Card authorisation outage,
+INC-2601,2026-02-10,Brevis Pay,availability,major,45,0.0,UPI switch degradation (no Legion traffic at the time),
+INC-2602,2026-03-18,Arvanta Payments,availability,major,70,0.6,Settlement API outage,
+INC-2603,2026-06-14,Arvanta Payments,availability,major,240,2.3,Full platform outage; loan collections delayed,
+INC-2604,2026-08-22,Arvanta Payments,availability,minor,15,0.0,Webhook delays,

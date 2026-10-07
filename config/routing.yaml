@@ -1,0 +1,23 @@
+# Agentic harness: how a decision is routed to advisers.
+routing_query:
+  model: adviser
+  prompt: prompts/harness_routing.md     # turns the brief into a routing query (topics involved)
+
+embedding:
+  model: embedding
+  query_task_type: RETRIEVAL_QUERY       # for the routing query
+  document_task_type: RETRIEVAL_DOCUMENT # for adviser capability statements
+  cache: firestore                       # capability embeddings computed once, reused until advisers.yaml changes
+
+scoring:
+  method: max_capability_similarity      # adviser score = best cosine similarity across its capability statements
+
+selection:                               # starting values; tune on Day 5 with evals/routing_tests.csv
+  relative_margin: 0.06                  # select advisers within 0.06 of the top score...
+  absolute_floor: 0.55                   # ...or above 0.55
+  min_advisers: 2
+  max_advisers: 6
+
+always_include:                          # safety-net rules, applied after scoring
+  infosec: [data, personal, customer data, vendor, outsourc, cloud, share, gateway, card, third-party]
+  legal: [contract, vendor, partner, outsourc, regulat, licence, agreement, gateway]

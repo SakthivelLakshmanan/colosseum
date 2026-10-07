@@ -1,0 +1,126 @@
+fact_id,adviser,planted,expected_conclusion,direction,impact,blocking
+FIN-01,finance,yes,"40% of volume is about ₹600 crore a month, the slice being decided on.",neutral,high,no
+FIN-02,finance,yes,Cost of the 40% slice on Arvanta is ₹120 lakh a month.,neutral,high,no
+FIN-03,finance,yes,Gross saving on the 40% slice is ₹14.4 lakh a month (12%).,favours_B,high,no
+FIN-04,finance,yes,"Fixing the InfoSec block costs ₹6 lakh a month; because it is flat, it eats most of the saving in a small first phase.",caution,high,no
+FIN-05,finance,yes,Add ₹40 lakh migration cost (plus the ₹25 lakh exit fee if triggered) to payback.,caution,medium,no
+FIN-06,finance,yes,Adds ₹4 lakh a month of benefit on the 40% slice.,favours_B,medium,no
+FIN-07,finance,yes,Context for valuing faster settlement.,neutral,low,no
+FIN-08,finance,yes,Brevis costs ₹2 lakh a month more in dispute fees on the 40% slice.,favours_A,medium,no
+FIN-09,finance,yes,There is real pressure to cut payment costs.,favours_B,medium,no
+FIN-10,finance,yes,"Savings and fees scale with volume, so the gap grows over time.",favours_B,low,no
+FIN-11,finance,yes,"Supports cost reduction, but not at the expense of a compliance breach.",favours_B,medium,no
+FIN-12,finance,yes,"Out of date. Superseded by the final quote (FIN-03, 12%). Must not be used.",neutral,low,no
+BUS-01,business,yes,Moving to Brevis unlocks a ₹45 crore/month pipeline.,favours_B,high,no
+BUS-02,business,yes,At least 30% must move by 31 Mar 2027; a 15% phase alone doesn't meet it.,favours_B,high,no
+BUS-03,business,yes,Competitive pressure to reduce single-gateway dependence.,favours_B,medium,no
+BUS-04,business,yes,Brevis shortens time-to-market for BNPL.,favours_B,medium,no
+BUS-05,business,yes,"Real alternative, but it conflicts with the 70% vendor OKR and locks out cross-border.",favours_A,medium,no
+BUS-06,business,yes,"About ₹9 lakh a month of new revenue, larger than the fee saving in phase 1.",favours_B,high,no
+BUS-07,business,yes,Simpler reconciliation with key partners.,favours_B,low,no
+BUS-08,business,yes,International acceptance is a real sales blocker.,favours_B,medium,no
+BUS-09,business,yes,Time pressure: a phased plan must still reach cross-border by end of March.,favours_B,medium,no
+BUS-10,business,yes,Shows the cost of depending on one gateway.,favours_B,medium,no
+BUS-11,business,yes,"Vendor maturity risk argues for a phased, reversible move.",caution,medium,no
+CUS-01,customer,yes,Complaints nearly tripled in 3 months; staying 100% on Arvanta has a customer cost.,favours_B,high,no
+CUS-02,customer,yes,Urgent revenue risk if settlement delays continue.,favours_B,high,no
+CUS-03,customer,yes,Payment failures hurt borrowers directly; mandate success rate matters.,neutral,medium,no
+CUS-04,customer,yes,Better mobile conversion on Brevis (mobile only; pilot sample).,favours_B,medium,no
+CUS-05,customer,yes,Keep Coral Bank and Tamra Bank traffic on Arvanta.,caution,medium,no
+CUS-06,customer,yes,Merchant experience needs improving.,neutral,low,no
+CUS-07,customer,yes,Faster refunds on Brevis.,favours_B,low,no
+CUS-08,customer,yes,Better reach for non-English-first customers.,favours_B,low,no
+CUS-09,customer,yes,Churn is rising; settlement experience is a likely driver.,favours_B,medium,no
+CUS-10,customer,yes,Regulatory risk from slow complaint resolution; adds urgency.,caution,medium,no
+CUS-11,customer,yes,Payment reliability shapes app reputation.,neutral,low,no
+CUS-12,customer,yes,"Settlement tickets alone cost about ₹61,000 a month in September.",neutral,low,no
+LEG-01,legal,yes,A 40% move (Arvanta at 60%) triggers the fee; a 15% first phase (Arvanta at 85%) doesn't.,caution,high,no
+LEG-02,legal,yes,Serve notice now to keep the timeline.,caution,medium,no
+LEG-03,legal,yes,Calendar item; not decisive now.,neutral,low,no
+LEG-04,legal,yes,Must add an India-only storage and processing clause before signing.,caution,high,no
+LEG-05,legal,yes,Weaker protection with Brevis; negotiate a higher cap.,favours_A,medium,no
+LEG-06,legal,yes,Savings aren't secure; negotiate a 24-month price lock.,caution,medium,no
+LEG-07,legal,yes,Ask for Indian law and Mumbai seat.,favours_A,medium,no
+LEG-08,legal,yes,Must add audit rights; a regulatory requirement.,caution,high,no
+LEG-09,legal,yes,A signed DPA is a precondition for Brevis.,favours_A,medium,no
+LEG-10,legal,yes,Narrower protection with Brevis; negotiate.,favours_A,low,no
+LEG-11,legal,yes,No licensing barrier either way.,neutral,low,no
+SEC-01,infosec,yes,BLOCKING: breaks the rule that payment data stays in India. Fix: switch on India-only fraud scoring and add an India-only clause.,caution,high,yes
+SEC-02,infosec,yes,The rule behind the SEC-01 block.,neutral,high,no
+SEC-03,infosec,yes,Out of date; require a current report before go-live.,caution,medium,no
+SEC-04,infosec,yes,Must be fixed and re-tested before go-live.,caution,high,no
+SEC-05,infosec,yes,The SEC-01 block has a practical fix.,favours_B,high,no
+SEC-06,infosec,yes,Far outside the 6-hour CERT-In rule; contract must enforce fast notification.,favours_A,medium,no
+SEC-07,infosec,yes,Add a 2-hour notification clause to the Brevis contract.,caution,medium,no
+SEC-08,infosec,yes,Arvanta's track record on disclosure is good.,favours_A,low,no
+SEC-09,infosec,yes,Both compliant; Arvanta's renewal is due sooner.,neutral,low,no
+SEC-10,infosec,yes,Brevis is stronger on access control.,favours_B,low,no
+SEC-11,infosec,yes,Calendar item; not decisive.,neutral,low,no
+SEC-12,infosec,yes,No difference.,neutral,low,no
+OPS-01,ops,yes,Nearly equal overall.,neutral,medium,no
+OPS-02,ops,yes,Keep these two banks on Arvanta via bank-level routing.,caution,high,no
+OPS-03,ops,yes,"With smart routing, Brevis improves success on most traffic.",favours_B,high,no
+OPS-04,ops,yes,Brevis is more available.,favours_B,medium,no
+OPS-05,ops,yes,Faster checkout on Brevis.,favours_B,low,no
+OPS-06,ops,yes,Arvanta has been less stable.,favours_B,medium,no
+OPS-07,ops,yes,Fewer failed EMI debits on Brevis.,favours_B,medium,no
+OPS-08,ops,yes,Arvanta must stay as a fallback; another reason not to exit fully.,caution,low,no
+OPS-09,ops,yes,Fits inside the 90-day notice period.,neutral,medium,no
+OPS-10,ops,yes,Plan for 8 weeks; another reason to phase.,caution,medium,no
+OPS-11,ops,yes,"Makes a phased, bank-aware move possible.",favours_B,high,no
+OPS-12,ops,yes,Less manual reconciliation work on Brevis.,favours_B,low,no
+OPS-13,ops,yes,Vendor claim; conflicts with the internal 6-week estimate (OPS-09). Don't rely on it.,neutral,low,no
+FIN-101,finance,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+FIN-102,finance,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+FIN-103,finance,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+FIN-104,finance,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+FIN-105,finance,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+FIN-106,finance,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+FIN-107,finance,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+FIN-108,finance,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+FIN-109,finance,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+BUS-101,business,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+BUS-102,business,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+BUS-103,business,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+BUS-104,business,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+BUS-105,business,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+BUS-106,business,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+BUS-107,business,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+BUS-108,business,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+BUS-109,business,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+CUS-101,customer,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+CUS-102,customer,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+CUS-103,customer,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+CUS-104,customer,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+CUS-105,customer,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+CUS-106,customer,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+CUS-107,customer,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+CUS-108,customer,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+LEG-101,legal,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+LEG-102,legal,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+LEG-103,legal,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+LEG-104,legal,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+LEG-105,legal,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+LEG-106,legal,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+LEG-107,legal,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+LEG-108,legal,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+SEC-101,infosec,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+SEC-102,infosec,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+SEC-103,infosec,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+SEC-104,infosec,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+SEC-105,infosec,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+SEC-106,infosec,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+SEC-107,infosec,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+SEC-108,infosec,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+OPS-101,ops,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+OPS-102,ops,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+OPS-103,ops,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+OPS-104,ops,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+OPS-105,ops,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+OPS-106,ops,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+OPS-107,ops,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+OPS-108,ops,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+OPS-109,ops,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+OPS-110,ops,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+OPS-111,ops,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
+FIN-110,finance,no,Not relevant to the gateway decision; should not drive the recommendation.,neutral,none,no
