@@ -16,7 +16,7 @@ documents:
   prefix: docs/
   agent_search:
     location: global
-    engine_id: YOUR_SEARCH_APP_ID      # from the Agent Search app you create on Day 2
+    engine_id: colosseum-search_1791392970153      # from the Agent Search app you create on Day 2
     data_store_id: colosseum-docs
 
 firestore:
