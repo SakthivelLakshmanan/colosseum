@@ -13,6 +13,7 @@ Loaded on top of `_shared.md` (the adviser factory fills in name, lens, criteria
 - Experience differences between options: conversion, refunds, failures, languages.
 - Grievance-resolution deadlines and breaches.
 - Any customer segments that would be worse off.
+- Merchant NPS benchmarks and mobile app review sentiment.
 
 ## What to calculate (with `calculate`)
 - Complaint growth over the period.

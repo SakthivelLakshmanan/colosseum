@@ -202,4 +202,12 @@ def run_query(name: str, params: Optional[dict[str, Any]] = None) -> list[dict[s
     query_job = client.query(sql, job_config=job_config)
     results = query_job.result()
 
-    return [dict(row) for row in results]
+    serialized: list[dict[str, Any]] = []
+    for row in results:
+        row_dict = dict(row)
+        for k, v in row_dict.items():
+            if isinstance(v, (date, datetime)):
+                row_dict[k] = v.isoformat()
+        serialized.append(row_dict)
+
+    return serialized

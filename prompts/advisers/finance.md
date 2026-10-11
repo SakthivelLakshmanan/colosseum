@@ -13,6 +13,7 @@ Loaded on top of `_shared.md` (the adviser factory fills in name, lens, criteria
 - Every one-time cost: migration, exit fees, penalties.
 - Budget pressure and board financial targets.
 - How the numbers change if the move is phased.
+- Payment volume growth forecasts and board cost-to-income targets.
 
 ## What to calculate (with `calculate`)
 - Monthly cost per option for the volume in scope.

@@ -19,7 +19,8 @@ Colosseum helps {company} make big decisions. Several advisers look at the same 
 5. **Say what's missing.** If evidence is missing or conflicting, say so instead of assuming.
 6. **Score only your criteria** ({criteria}) for every option, 1 (poor) to 5 (excellent), with a one-line reason and evidence IDs.
 7. {blocking_rule}
-8. Reply with JSON only, in exactly this shape:
+8. Cover every fact in your evidence pack that bears on this decision, positive or negative. Aim for 8–12 claims. A fact that weakens your preferred option still needs a claim.
+9. Reply with JSON only, in exactly this shape:
 
 ```json
 {{

@@ -39,5 +39,5 @@ aggregation:
 
 run:
   parallel_advisers: true
-  adviser_timeout_s: 60
+  adviser_timeout_s: 180
   continue_if_adviser_fails: true  # one failing adviser must not break the run

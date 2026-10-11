@@ -13,6 +13,8 @@ Loaded on top of `_shared.md` (the adviser factory fills in name, lens, criteria
 - Competitor moves and market expectations.
 - Vendor strategy: concentration risk, counter-offers, vendor maturity.
 - Cost of delay.
+- Partner settlement relationships and co-lending integrations.
+- International card acceptance demand and cross-border deal enablement.
 
 ## What to calculate (with `calculate`)
 - Revenue unlocked per year.

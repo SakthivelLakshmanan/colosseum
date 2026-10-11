@@ -6,13 +6,27 @@ of every invocation so the moderator can verify cited evidence.
 from __future__ import annotations
 
 import ast
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal
 import operator
 from typing import Any, Optional
 
 from knowledge.documents import search as search_docs
 from knowledge.fact_store import load_facts, rank_facts
 from knowledge.queries import QUERY_DEFINITIONS, run_query
+
+
+def _serialize_tool_output(obj: Any) -> Any:
+    """Ensure all tool outputs are JSON-serializable primitives for LLM agent frameworks."""
+    if isinstance(obj, (date, datetime)):
+        return obj.isoformat()
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, list):
+        return [_serialize_tool_output(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _serialize_tool_output(v) for k, v in obj.items()}
+    return obj
 
 # Default six adviser domains
 ALL_DOMAINS = ["finance", "business", "customer", "legal", "infosec", "ops"]
@@ -163,12 +177,13 @@ def query_table(
         )
         return error_result
 
+    serialized_results = _serialize_tool_output(results)
     record_tool_call(
         tool_name="query_table",
         arguments={"name": name, "params": params},
-        result_count=len(results),
+        result_count=len(serialized_results),
     )
-    return results
+    return serialized_results
 
 
 def search_documents(

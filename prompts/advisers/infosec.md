@@ -14,6 +14,7 @@ Loaded on top of `_shared.md` (the adviser factory fills in name, lens, criteria
 - Incident history and how fast incidents were disclosed.
 - Access control, encryption, tokenisation.
 - Available fixes and how long they take.
+- Vendor risk reassessment cycles and card-on-file tokenisation compliance.
 
 ## What to produce
 - A risk rating (low/medium/high) for each area, with evidence.
