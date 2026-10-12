@@ -10,8 +10,9 @@ import time
 # Ensure project root is on sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from agents.adviser_factory import run_adviser, simple_pack
+from agents.adviser_factory import run_adviser
 from core.schemas import DecisionBrief
+from harness.context_builder import build_pack
 
 
 def main():
@@ -36,7 +37,7 @@ def main():
     brief = DecisionBrief.model_validate(brief_data)
 
     print(f"Building evidence pack for '{adviser_id}'...")
-    pack = simple_pack(adviser_id=adviser_id, brief=brief)
+    pack = build_pack(adviser_id=adviser_id, brief=brief)
     print(f"Evidence pack ready: {len(pack.facts)} facts (total matching: {pack.total_matching_facts})")
 
     print(f"\nRunning adviser agent '{adviser_id}'...")

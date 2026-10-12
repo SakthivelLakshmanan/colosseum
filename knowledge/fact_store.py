@@ -152,27 +152,42 @@ def get_fact(fact_id: str) -> Fact | None:
     return _row_to_fact(results[0])
 
 
-def rank_facts(facts: list[Fact], query_text: str, top_k: int = 10) -> list[Fact]:
-    """Pure Python keyword ranking.
+def rank_facts(
+    facts: list[Fact],
+    query_text: str,
+    top_k: int = 10,
+    entity_names: list[str] | None = None,
+) -> list[Fact]:
+    """Pure Python keyword ranking with optional entity-name boost.
 
-    Score = count of lowercase query words (ignoring words under 3 letters) appearing in statement + topic + metric.
-    Tie-break by reliability (high > medium > low), then newest as_of.
+    Primary sort key: entity_hit (1 if any entity_name appears in statement/topic/metric, else 0).
+    Secondary: keyword overlap score (count of query words appearing in statement + topic + metric).
+    Tertiary: reliability (high > medium > low).
+    Quaternary: newest as_of.
+
+    The entity boost ensures that facts explicitly naming a principal in the brief
+    (e.g. "Arvanta", "Brevis", "Legion") surface above generic background facts
+    that happen to match query keywords.
     """
     words = [w.lower() for w in re.findall(r"[a-zA-Z0-9_-]+", query_text) if len(w) >= 3]
+    entity_lower = [e.lower() for e in (entity_names or [])]
     reliability_order = {
         Reliability.high: 3,
         Reliability.medium: 2,
         Reliability.low: 1,
     }
 
-    def score_fact(f: Fact) -> tuple[int, int, date]:
-        if not words:
-            score = 0
-        else:
-            target = f"{f.statement} {f.topic} {f.metric}".lower()
-            score = sum(1 for w in words if w in target)
+    def score_fact(f: Fact) -> tuple[int, int, int, date]:
+        target = f"{f.statement} {f.topic} {f.metric}".lower()
+
+        # Entity-name hit: 1 if any brief entity is mentioned, 0 otherwise
+        entity_hit = 1 if entity_lower and any(e in target for e in entity_lower) else 0
+
+        # Keyword overlap score
+        kw_score = sum(1 for w in words if w in target) if words else 0
+
         rel_val = reliability_order.get(f.reliability, 0)
-        return (score, rel_val, f.as_of)
+        return (entity_hit, kw_score, rel_val, f.as_of)
 
     ranked = sorted(facts, key=score_fact, reverse=True)
     return ranked[:top_k] if top_k is not None else ranked

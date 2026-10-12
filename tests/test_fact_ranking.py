@@ -121,3 +121,133 @@ def test_fact_ranking_tiebreak_by_recency():
 
     ranked = rank_facts([f_older, f_newer], query_text="dispute charge", top_k=2)
     assert [f.fact_id for f in ranked] == ["NEWER", "OLDER"]
+
+
+def test_entity_name_boost_overrides_keyword_score():
+    """A fact with fewer keyword matches but an entity-name hit must outrank
+    a fact with more keyword matches that doesn't mention any entity."""
+    # Generic fact: 3 keyword hits ("payment", "gateway", "volume"), no entity mention
+    f_generic = Fact(
+        fact_id="GEN-01",
+        domain="ops",
+        topic="payment gateway volume",
+        statement="Payment gateway volume increased across all gateways this quarter.",
+        entity="Industry",
+        metric="volume",
+        as_of=date(2026, 9, 1),
+        source_type="table",
+        source_ref="ops_table",
+        reliability=Reliability.high,
+    )
+    # Entity fact: 1 keyword hit ("payment"), but mentions "Arvanta" — should win
+    f_entity = Fact(
+        fact_id="ENT-01",
+        domain="ops",
+        topic="payment uptime",
+        statement="Arvanta payment uptime dropped to 97.3% in Q3 2026.",
+        entity="Arvanta",
+        metric="uptime_pct",
+        as_of=date(2026, 9, 1),
+        source_type="table",
+        source_ref="health_table",
+        reliability=Reliability.high,
+    )
+
+    ranked = rank_facts(
+        [f_generic, f_entity],
+        query_text="payment gateway volume",
+        top_k=2,
+        entity_names=["Arvanta", "Brevis", "Legion"],
+    )
+    assert ranked[0].fact_id == "ENT-01", "Entity-named fact should rank first"
+    assert ranked[1].fact_id == "GEN-01"
+
+
+def test_entity_boost_absent_when_no_entity_names():
+    """Without entity_names the old keyword-only ordering is preserved."""
+    # Generic fact: 3 keyword hits
+    f_generic = Fact(
+        fact_id="GEN-02",
+        domain="ops",
+        topic="payment gateway volume",
+        statement="Payment gateway volume increased across all gateways this quarter.",
+        entity="Industry",
+        metric="volume",
+        as_of=date(2026, 9, 1),
+        source_type="table",
+        source_ref="ops_table",
+        reliability=Reliability.high,
+    )
+    # Entity fact: 1 keyword hit only
+    f_entity = Fact(
+        fact_id="ENT-02",
+        domain="ops",
+        topic="payment uptime",
+        statement="Arvanta payment uptime dropped to 97.3% in Q3 2026.",
+        entity="Arvanta",
+        metric="uptime_pct",
+        as_of=date(2026, 9, 1),
+        source_type="table",
+        source_ref="health_table",
+        reliability=Reliability.high,
+    )
+
+    ranked = rank_facts(
+        [f_entity, f_generic],
+        query_text="payment gateway volume",
+        top_k=2,
+        # No entity_names → entity_hit is always 0 for all facts
+    )
+    assert ranked[0].fact_id == "GEN-02", "Without entity_names generic keyword winner should rank first"
+    assert ranked[1].fact_id == "ENT-02"
+
+
+def test_entity_boost_multiple_entities():
+    """Facts mentioning different entities all get boosted over non-entity facts."""
+    f_arvanta = Fact(
+        fact_id="ARV-01",
+        domain="finance",
+        topic="fees",
+        statement="Arvanta blended fee is 0.195%.",
+        entity="Arvanta",
+        metric="blended_fee",
+        as_of=date(2026, 9, 1),
+        source_type="document",
+        source_ref="doc.pdf",
+        reliability=Reliability.medium,
+    )
+    f_brevis = Fact(
+        fact_id="BRV-01",
+        domain="finance",
+        topic="fees",
+        statement="Brevis blended fee is 0.17%.",
+        entity="Brevis",
+        metric="blended_fee",
+        as_of=date(2026, 9, 1),
+        source_type="document",
+        source_ref="doc.pdf",
+        reliability=Reliability.medium,
+    )
+    f_background = Fact(
+        fact_id="BG-01",
+        domain="finance",
+        topic="industry benchmarks",
+        statement="Industry average blended fee is 0.21%.",
+        entity="Industry",
+        metric="blended_fee",
+        as_of=date(2026, 9, 1),
+        source_type="document",
+        source_ref="benchmark.pdf",
+        reliability=Reliability.high,  # Higher reliability but no entity hit
+    )
+
+    ranked = rank_facts(
+        [f_background, f_brevis, f_arvanta],
+        query_text="blended fee analysis",
+        top_k=3,
+        entity_names=["Arvanta", "Brevis", "Legion"],
+    )
+    fact_ids = [f.fact_id for f in ranked]
+    # Both entity facts must come before the background fact
+    assert fact_ids.index("BG-01") > fact_ids.index("ARV-01"), "Arvanta should outrank background"
+    assert fact_ids.index("BG-01") > fact_ids.index("BRV-01"), "Brevis should outrank background"

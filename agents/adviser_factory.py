@@ -19,6 +19,7 @@ from agents.tools import calculate, get_facts, query_table, search_documents
 from core.registry import find_project_root, get_registry
 from core.schemas import AdviserPosition, Claim, DecisionBrief, EvidencePack
 from core.settings import get_settings
+from harness.context_builder import build_pack
 from knowledge.fact_store import load_facts, rank_facts
 
 logger = logging.getLogger(__name__)
@@ -125,28 +126,11 @@ def simple_pack(
     adviser_id: str,
     brief: Optional[DecisionBrief] = None,
 ) -> EvidencePack:
-    """Construct a temporary evidence pack for the given adviser.
+    """Construct an evidence pack for the given adviser using build_pack.
 
-    Loads active facts for the adviser domain, ranks by keyword overlap with the
-    decision brief's question and options, and returns the top 25 facts.
+    Retained for backward compatibility.
     """
-    if brief is None:
-        root = find_project_root()
-        brief_file = root / "evals" / "brief_DEC-001.json"
-        with open(brief_file, "r", encoding="utf-8") as f:
-            brief = DecisionBrief.model_validate(json.load(f))
-
-    query_text = f"{brief.question} " + " ".join(brief.options.values())
-    facts = load_facts([adviser_id], include_superseded=False)
-    ranked = rank_facts(facts, query_text, top_k=25)
-
-    return EvidencePack(
-        adviser_id=adviser_id,
-        facts=ranked,
-        summaries=[],
-        total_matching_facts=len(facts),
-        truncated=len(facts) > len(ranked),
-    )
+    return build_pack(adviser_id=adviser_id, brief=brief)
 
 
 def _normalize_position_dict(data: Any, adviser_id: str) -> Any:
@@ -349,7 +333,7 @@ async def run_advisers(
         pack_map = {}
 
     async def _execute_single(aid: str) -> tuple[str, AdviserPosition | str, float]:
-        pack = pack_map.get(aid) or simple_pack(aid, brief)
+        pack = pack_map.get(aid) or build_pack(aid, brief)
         start_t = time.time()
         try:
             position = await asyncio.wait_for(

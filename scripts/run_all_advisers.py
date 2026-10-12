@@ -13,9 +13,10 @@ root_dir = str(Path(__file__).resolve().parent.parent)
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
-from agents.adviser_factory import get_last_adviser_durations, run_advisers, simple_pack
+from agents.adviser_factory import get_last_adviser_durations, run_advisers
 from core.registry import get_registry
 from core.schemas import AdviserPosition, DecisionBrief
+from harness.context_builder import build_pack
 
 
 async def main_async(timeout_override: float | None = None):
@@ -34,11 +35,11 @@ async def main_async(timeout_override: float | None = None):
     print(f"Decision: {brief.decision_id} — {brief.question[:70]}...")
     print("=" * 80)
 
-    # 1. Build simple evidence pack for each adviser
+    # 1. Build bounded evidence pack for each adviser
     print("\nPreparing evidence packs for advisers...")
     packs = {}
     for aid in adviser_ids:
-        pack = simple_pack(adviser_id=aid, brief=brief)
+        pack = build_pack(adviser_id=aid, brief=brief)
         packs[aid] = pack
         print(f"  * {aid:<10}: {len(pack.facts)} facts (matching: {pack.total_matching_facts})")
 
