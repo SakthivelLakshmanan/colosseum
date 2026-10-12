@@ -222,12 +222,118 @@ def evaluate_planted(runs_dir: Path) -> str:
     return report
 
 
+def load_routing_tests() -> List[Dict[str, Any]]:
+    """Load routing tests from BigQuery colosseum_eval.routing_tests or local CSV fallback."""
+    settings = get_settings()
+    tests: List[Dict[str, Any]] = []
+
+    try:
+        from google.cloud import bigquery
+
+        client = bigquery.Client(
+            project=settings.project_id,
+            location=settings.bigquery.location,
+        )
+        query = f"SELECT * FROM `{settings.project_id}.{settings.bigquery.eval_dataset}.routing_tests`"
+        query_job = client.query(query, timeout=10.0)
+        for row in query_job.result(timeout=10.0):
+            r = dict(row)
+            test_id = str(r.get("test_id") or r.get("string_field_0") or "")
+            if not test_id or test_id.lower() == "test_id":
+                continue
+            tests.append({
+                "test_id": test_id,
+                "brief": str(r.get("brief") or r.get("string_field_1") or ""),
+                "must_include": str(r.get("must_include") or r.get("string_field_2") or ""),
+                "acceptable": str(r.get("acceptable") or r.get("string_field_3") or ""),
+                "must_exclude": str(r.get("must_exclude") or r.get("string_field_4") or ""),
+                "why": str(r.get("why") or r.get("string_field_5") or ""),
+            })
+        if tests:
+            return sorted(tests, key=lambda x: x["test_id"])
+    except Exception as exc:
+        print(f"[evals] Note: BigQuery routing_tests query fell back to local CSV ({exc})")
+
+    csv_file = root_dir / "evals" / "routing_tests.csv"
+    if csv_file.is_file():
+        with open(csv_file, "r", encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                tests.append(r)
+
+    return sorted(tests, key=lambda x: x["test_id"])
+
+
+def evaluate_routing() -> str:
+    """Run the full router on all routing test briefs and produce a test & score report."""
+    from harness.router import route_decision
+
+    tests = load_routing_tests()
+    registry = get_registry()
+    adviser_ids = registry.get_ids()
+
+    lines: List[str] = []
+    lines.append("=" * 115)
+    lines.append("COLOSSEUM EVALUATION — ADVISER ROUTING REPORT")
+    lines.append("=" * 115)
+    lines.append(f"{'id':<6} | {'pass/fail':<9} | {'selected':<45} | {'missing':<20} | wrongly included")
+    lines.append("-" * 115)
+
+    passed_count = 0
+    scores_by_test: Dict[str, Dict[str, float]] = {}
+
+    for t in tests:
+        tid = t["test_id"]
+        brief_text = t["brief"]
+        must_inc = set(x.strip() for x in t.get("must_include", "").split("|") if x.strip())
+        must_exc = set(x.strip() for x in t.get("must_exclude", "").split("|") if x.strip())
+
+        decision = route_decision(brief_text)
+        selected = set(decision.selected)
+
+        missing = must_inc - selected
+        wrongly_included = must_exc & selected
+        passed = (len(missing) == 0 and len(wrongly_included) == 0)
+        if passed:
+            passed_count += 1
+
+        status_str = "PASS" if passed else "FAIL"
+        selected_str = ", ".join(sorted(selected)) if selected else "None"
+        missing_str = ", ".join(sorted(missing)) if missing else "None"
+        wrong_str = ", ".join(sorted(wrongly_included)) if wrongly_included else "None"
+
+        lines.append(f"{tid:<6} | {status_str:<9} | {selected_str:<45} | {missing_str:<20} | {wrong_str}")
+
+        scores_by_test[tid] = {s.adviser_id: s.similarity for s in decision.scores}
+
+    lines.append("-" * 115)
+    lines.append(f"TOTAL: {passed_count}/{len(tests)} passed\n")
+
+    # Score table: adviser x test
+    lines.append("SCORE TABLE (adviser × test):")
+    test_ids = [t["test_id"] for t in tests]
+    header = f"{'adviser':<10} | " + " | ".join(f"{tid:<7}" for tid in test_ids)
+    lines.append(header)
+    lines.append("-" * len(header))
+
+    for aid in adviser_ids:
+        row_vals = []
+        for tid in test_ids:
+            score = scores_by_test.get(tid, {}).get(aid, 0.0)
+            row_vals.append(f"{score:.4f} ")
+        lines.append(f"{aid:<10} | " + " | ".join(row_vals))
+
+    lines.append("=" * 115)
+
+    report = "\n".join(lines)
+    return report
+
+
 def main():
     parser = argparse.ArgumentParser(description="Colosseum Evaluation Runner")
     parser.add_argument(
         "mode",
-        choices=["planted"],
-        help="Evaluation mode (e.g. 'planted')",
+        choices=["planted", "routing"],
+        help="Evaluation mode ('planted' or 'routing')",
     )
     parser.add_argument(
         "--fresh",
@@ -236,13 +342,12 @@ def main():
     )
     args = parser.parse_args()
 
-    runs_dir = root_dir / "runs" / "day4"
-    runs_dir.mkdir(parents=True, exist_ok=True)
-
     if args.fresh:
         run_fresh_advisers()
 
     if args.mode == "planted":
+        runs_dir = root_dir / "runs" / "day4"
+        runs_dir.mkdir(parents=True, exist_ok=True)
         report = evaluate_planted(runs_dir)
         print(report)
 
@@ -250,6 +355,17 @@ def main():
         report_file.write_text(report, encoding="utf-8")
         print(f"\nReport saved to: {report_file}")
 
+    elif args.mode == "routing":
+        runs_dir = root_dir / "runs" / "day5"
+        runs_dir.mkdir(parents=True, exist_ok=True)
+        report = evaluate_routing()
+        print(report)
+
+        report_file = runs_dir / "eval_routing.txt"
+        report_file.write_text(report, encoding="utf-8")
+        print(f"\nReport saved to: {report_file}")
+
 
 if __name__ == "__main__":
     main()
+
