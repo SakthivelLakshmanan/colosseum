@@ -925,11 +925,11 @@ def check_memo(
                             matched = True
                             break
 
-            # Only flag number_mismatch when a *single* directly comparable evidence ID
-            # contradicts the value. When multiple evidence IDs in the same unit family are
-            # cited, the memo value is likely a derived aggregate (sum/difference of
-            # components) that cannot be verified without an explicit formula — skip.
-            if comparable_eids and not matched and len(comparable_eids) == 1:
+            # Only flag number_mismatch when a *single* evidence ID was cited and it
+            # contradicts the value. When multiple evidence IDs are cited, the key number
+            # represents multi-fact synthesis or calculation (e.g. combining volume and fee rates)
+            # which cannot be verified against a single fact without an explicit formula — skip.
+            if comparable_eids and not matched and len(kn.evidence_ids) == 1:
                 code_check_issues.append(
                     MemoIssue(
                         kind="number_mismatch",
@@ -1038,11 +1038,14 @@ def check_memo(
 
     revision_instructions = str(parsed.get("revision_instructions") or "").strip()
 
-    # Rule: If any code check failed, the verdict can't be PASS
+    # Rule: If any code check failed, the verdict can't be PASS.
+    # Furthermore, if an unresolved blocker is ignored, the verdict must be WRONG per ARCHITECTURE §8.
     final_issues = code_check_issues + llm_issues
-    if code_check_issues:
+    if any(i.kind == "ignored_blocker" for i in code_check_issues):
+        verdict_type = MemoVerdictType.wrong
+    elif code_check_issues:
         if verdict_type == MemoVerdictType.pass_:
-            has_wrong = any(i.kind in ("number_mismatch", "ignored_blocker") for i in code_check_issues)
+            has_wrong = any(i.kind == "number_mismatch" for i in code_check_issues)
             verdict_type = MemoVerdictType.wrong if has_wrong else MemoVerdictType.incomplete
 
         cc_instr = "; ".join(i.detail for i in code_check_issues)

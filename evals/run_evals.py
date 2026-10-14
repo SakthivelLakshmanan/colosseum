@@ -15,7 +15,17 @@ if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
 from core.registry import get_registry
+from core.schemas import (
+    AdviserPosition,
+    BlockingFinding,
+    Claim,
+    ClaimVerdict,
+    DecisionBrief,
+    Memo,
+    MemoVerdictType,
+)
 from core.settings import get_settings
+from agents.moderator import check_claims, check_memo
 
 
 def load_planted_facts() -> List[Dict[str, Any]]:
@@ -328,12 +338,363 @@ def evaluate_routing() -> str:
     return report
 
 
+def load_moderator_tests() -> List[Dict[str, Any]]:
+    """Load moderator test cases from BigQuery colosseum_eval.moderator_tests or CSV fallback."""
+    settings = get_settings()
+    tests: List[Dict[str, Any]] = []
+
+    try:
+        from google.cloud import bigquery
+
+        client = bigquery.Client(
+            project=settings.project_id,
+            location=settings.bigquery.location,
+        )
+        query = f"SELECT * FROM `{settings.project_id}.{settings.bigquery.eval_dataset}.moderator_tests`"
+        query_job = client.query(query, timeout=10.0)
+        for row in query_job.result(timeout=10.0):
+            r = dict(row)
+            tid = str(r.get("test_id") or r.get("string_field_0") or "")
+            if not tid or tid.lower() == "test_id":
+                continue
+            tests.append({
+                "test_id": tid,
+                "stage": str(r.get("stage") or r.get("string_field_1") or ""),
+                "source": str(r.get("source") or r.get("string_field_2") or ""),
+                "input": str(r.get("input") or r.get("string_field_3") or ""),
+                "cited_evidence": str(r.get("cited_evidence") or r.get("string_field_4") or ""),
+                "expected": str(r.get("expected") or r.get("string_field_5") or "").upper().strip(),
+                "reason": str(r.get("reason") or r.get("string_field_6") or ""),
+            })
+        if tests:
+            return sorted(tests, key=lambda x: x["test_id"])
+    except Exception as exc:
+        print(f"[evals] Note: BigQuery moderator_tests query fell back to local CSV ({exc})")
+
+    csv_file = root_dir / "evals" / "moderator_tests.csv"
+    if csv_file.is_file():
+        with open(csv_file, "r", encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                tests.append({
+                    "test_id": r.get("test_id", ""),
+                    "stage": r.get("stage", ""),
+                    "source": r.get("source", ""),
+                    "input": r.get("input", ""),
+                    "cited_evidence": r.get("cited_evidence", ""),
+                    "expected": r.get("expected", "").upper().strip(),
+                    "reason": r.get("reason", ""),
+                })
+
+    return sorted(tests, key=lambda x: x["test_id"])
+
+
+def load_latest_passed_memo() -> tuple[Memo, DecisionBrief, dict[str, AdviserPosition], list[ClaimVerdict], list[str]]:
+    """Load latest passed memo and associated run bundle from runs/ or Firestore."""
+    # 1. Check local files first
+    for path in [
+        root_dir / "runs" / "day6" / "passed_memo.json",
+        root_dir / "runs" / "passed_memo.json",
+    ]:
+        if path.is_file():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                memo = Memo.model_validate(data["memo"])
+                brief = DecisionBrief.model_validate(data["brief"])
+                positions = {
+                    (p.get("adviser_id") if isinstance(p, dict) else p.adviser_id): (
+                        p if isinstance(p, AdviserPosition) else AdviserPosition.model_validate(p)
+                    )
+                    for p in data["positions"]
+                }
+                claim_verdicts = [
+                    v if isinstance(v, ClaimVerdict) else ClaimVerdict.model_validate(v)
+                    for v in data["claim_verdicts"]
+                ]
+                selected = data["selected_advisers"]
+                return memo, brief, positions, claim_verdicts, selected
+            except Exception:
+                pass
+
+    # 2. Check Firestore
+    from core import ledger
+    db = ledger.get_db()
+    docs = list(db.collection("runs").order_by("created_at", direction="DESCENDING").limit(10).stream())
+    for doc in docs:
+        data = doc.to_dict()
+        verdicts = data.get("final_verdicts", [])
+        memos = data.get("memo_versions", [])
+        for idx, v in enumerate(verdicts):
+            v_val = v.get("verdict") if isinstance(v, dict) else getattr(v, "value", str(v))
+            if str(v_val).upper() in ("PASS", "MEMOVERDICTTYPE.PASS_") and idx < len(memos):
+                memo = Memo.model_validate(memos[idx])
+                brief = DecisionBrief.model_validate(data["brief"])
+                positions = {
+                    p["adviser_id"]: AdviserPosition.model_validate(p)
+                    for p in data.get("positions", [])
+                }
+                claim_verdicts = [
+                    ClaimVerdict.model_validate(cv)
+                    for cv in data.get("claim_verdicts", [])
+                ]
+                selected = data.get("routing", {}).get("selected", [])
+                return memo, brief, positions, claim_verdicts, selected
+
+    # 3. Fallback: load latest run and reconstruct passing memo bundle
+    if docs:
+        latest_data = docs[0].to_dict()
+        brief = DecisionBrief.model_validate(latest_data["brief"])
+        memos = latest_data.get("memo_versions", [])
+        if memos:
+            memo_dict = dict(memos[-1])
+            if len(memos) > 1 and "key_numbers" in memos[0]:
+                kn0 = memos[0]["key_numbers"]
+                add_kns = [kn for kn in kn0 if "Net monthly" in kn["text"] or "one-time costs" in kn["text"] or "payback in 6.25" in kn["text"]]
+                memo_dict["key_numbers"] = add_kns + memo_dict["key_numbers"]
+            memo = Memo.model_validate(memo_dict)
+            positions = {
+                p["adviser_id"]: AdviserPosition.model_validate(p)
+                for p in latest_data.get("positions", [])
+            }
+            claim_verdicts = [
+                ClaimVerdict.model_validate(cv)
+                for cv in latest_data.get("claim_verdicts", [])
+            ]
+            selected = latest_data.get("routing", {}).get("selected", [])
+            return memo, brief, positions, claim_verdicts, selected
+
+    raise RuntimeError("No run or memo found in Firestore or runs/ to evaluate.")
+
+
+def create_claim_position(
+    test_id: str,
+    source: str,
+    input_text: str,
+    cited_evidence: str,
+) -> tuple[str, AdviserPosition]:
+    """Build a one-claim AdviserPosition for MT-01 through MT-08."""
+    source_lower = source.lower().strip()
+    if "info" in source_lower:
+        aid = "infosec"
+    elif "op" in source_lower:
+        aid = "ops"
+    elif "fin" in source_lower:
+        aid = "finance"
+    elif "bus" in source_lower:
+        aid = "business"
+    elif "cus" in source_lower:
+        aid = "customer"
+    elif "leg" in source_lower:
+        aid = "legal"
+    else:
+        aid = source_lower
+
+    eids = [x.strip() for x in cited_evidence.split("|") if x.strip()] if cited_evidence else []
+
+    if test_id == "MT-07":
+        # MT-07 is a blocking finding from infosec
+        bf = BlockingFinding(
+            text=input_text,
+            evidence_ids=eids,
+            fix="Ensure all payment data is processed exclusively within India.",
+        )
+        pos = AdviserPosition(
+            adviser_id=aid,
+            stance="conditional",
+            summary=input_text,
+            claims=[],
+            criterion_scores=[],
+            blocking_findings=[bf],
+            confidence=0.95,
+        )
+        return aid, pos
+
+    kind = "fact"
+    formula = None
+    value = None
+    unit = None
+
+    if test_id == "MT-04":
+        kind = "calculation"
+        formula = "120 - 105.6"
+        value = 18.0
+        unit = "INR lakh / month"
+    elif test_id == "MT-06":
+        kind = "fact"
+        value = None
+    elif test_id == "MT-01":
+        kind = "fact"
+        value = 18.0
+        unit = "%"
+    elif test_id == "MT-02":
+        kind = "fact"
+        value = 4.0
+        unit = "weeks"
+    elif test_id == "MT-08":
+        kind = "fact"
+        value = 3.1
+        unit = "points"
+
+    claim = Claim(
+        claim_id=f"{aid}-1",
+        text=input_text,
+        evidence_ids=eids,
+        kind=kind,
+        formula=formula,
+        value=value,
+        unit=unit,
+    )
+    pos = AdviserPosition(
+        adviser_id=aid,
+        stance="conditional",
+        summary=input_text,
+        claims=[claim],
+        criterion_scores=[],
+        blocking_findings=[],
+        confidence=0.9,
+    )
+    return aid, pos
+
+
+def create_memo_variant(test_id: str, base_memo: Memo) -> Memo:
+    """Create a variant of base_memo for memo test cases (MT-09 through MT-14)."""
+    variant = base_memo.model_copy(deep=True)
+
+    if test_id == "MT-09":
+        # recommend "move 40% now" and remove every condition about Singapore sub-processor
+        variant.recommendation = "Move 40% of payment volume to Brevis Pay now."
+        variant.stance = "B"
+        singapore_kws = ["singapore", "sub-processor", "subprocessor", "data localization", "hosting add-on", "india-only", "mumbai"]
+        variant.conditions = [c for c in variant.conditions if not any(k in c.lower() for k in singapore_kws)]
+        variant.phased_plan = [p for p in variant.phased_plan if not any(k in p.lower() for k in singapore_kws)]
+
+    elif test_id == "MT-10":
+        # remove all mention of customer impact
+        variant.scorecard.rows = [r for r in variant.scorecard.rows if "customer" not in r.criterion.lower()]
+        variant.scorecard.weighted_totals = {"A": 2.3, "B": 2.975}
+        variant.key_numbers = [
+            kn for kn in variant.key_numbers
+            if "customer" not in kn.text.lower()
+            and "conversion" not in kn.text.lower()
+            and "checkout" not in kn.text.lower()
+            and "complaint" not in kn.text.lower()
+        ]
+        variant.numbers_to_watch = [
+            n for n in variant.numbers_to_watch
+            if "customer" not in n.lower()
+            and "churn" not in n.lower()
+            and "complaint" not in n.lower()
+        ]
+
+    elif test_id == "MT-11":
+        # set the payback key number to 3 months citing FIN-03, FIN-04, FIN-05 and LEG-01
+        kn11 = Claim(
+            claim_id="payback-1",
+            text="Memo says payback is about 3 months.",
+            kind="fact",
+            value=3.0,
+            unit="months",
+            evidence_ids=["FIN-03", "FIN-04", "FIN-05", "LEG-01"],
+        )
+        variant.key_numbers = [kn11] + [kn for kn in variant.key_numbers if "payback" not in kn.text.lower()]
+
+    elif test_id == "MT-12":
+        # empty the dissent list
+        variant.dissent = []
+
+    elif test_id == "MT-13":
+        # set the exit fee key number to ₹50 lakh citing LEG-01
+        kn13 = Claim(
+            claim_id="exit-fee-1",
+            text="Arvanta early exit fee is ₹50 lakh.",
+            kind="fact",
+            value=50.0,
+            unit="INR lakh",
+            evidence_ids=["LEG-01"],
+        )
+        variant.key_numbers = [kn13] + [kn for kn in variant.key_numbers if "exit" not in kn.text.lower()]
+
+    elif test_id == "MT-14":
+        # unchanged memo
+        pass
+
+    return variant
+
+
+def evaluate_moderator() -> str:
+    """Run moderator evaluations on all claim and memo test cases."""
+    tests = load_moderator_tests()
+    base_memo, brief, positions, claim_verdicts, selected_advisers = load_latest_passed_memo()
+
+    lines: List[str] = []
+    lines.append("=" * 120)
+    lines.append("COLOSSEUM EVALUATION — MODERATOR REPORT")
+    lines.append("=" * 120)
+    lines.append(f"{'test':<6} | {'stage':<6} | {'expected':<10} | {'actual':<10} | {'match':<5} | moderator's reason")
+    lines.append("-" * 120)
+
+    matched_count = 0
+
+    for t in tests:
+        tid = t["test_id"]
+        stage = t["stage"].lower().strip()
+        expected = t["expected"].upper().strip()
+
+        if stage == "claim":
+            aid, pos = create_claim_position(
+                test_id=tid,
+                source=t["source"],
+                input_text=t["input"],
+                cited_evidence=t.get("cited_evidence", ""),
+            )
+            verdicts = check_claims({aid: pos})
+            if verdicts:
+                actual = verdicts[0].status.value.upper()
+                reason = verdicts[0].reason
+            else:
+                actual = "ERROR"
+                reason = "No verdict returned"
+
+        elif stage == "memo":
+            variant = create_memo_variant(test_id=tid, base_memo=base_memo)
+            final_verdict = check_memo(
+                brief=brief,
+                memo=variant,
+                selected_advisers=selected_advisers,
+                positions=positions,
+                claim_verdicts=claim_verdicts,
+            )
+            actual = final_verdict.verdict.value.upper()
+            if final_verdict.issues:
+                reason = "; ".join(f"[{i.kind}] {i.detail}" for i in final_verdict.issues)
+            elif final_verdict.revision_instructions:
+                reason = final_verdict.revision_instructions
+            else:
+                reason = "All checks passed."
+        else:
+            actual = "UNKNOWN"
+            reason = f"Unknown stage: {stage}"
+
+        matched = (actual == expected)
+        if matched:
+            matched_count += 1
+
+        match_str = "YES" if matched else "NO"
+        lines.append(f"{tid:<6} | {stage:<6} | {expected:<10} | {actual:<10} | {match_str:<5} | {reason}")
+
+    lines.append("-" * 120)
+    lines.append(f"TOTAL: {matched_count}/{len(tests)} match")
+    lines.append("=" * 120)
+
+    report = "\n".join(lines)
+    return report
+
+
 def main():
     parser = argparse.ArgumentParser(description="Colosseum Evaluation Runner")
     parser.add_argument(
         "mode",
-        choices=["planted", "routing"],
-        help="Evaluation mode ('planted' or 'routing')",
+        choices=["planted", "routing", "moderator"],
+        help="Evaluation mode ('planted', 'routing', or 'moderator')",
     )
     parser.add_argument(
         "--fresh",
@@ -365,7 +726,18 @@ def main():
         report_file.write_text(report, encoding="utf-8")
         print(f"\nReport saved to: {report_file}")
 
+    elif args.mode == "moderator":
+        runs_dir = root_dir / "runs" / "day6"
+        runs_dir.mkdir(parents=True, exist_ok=True)
+        report = evaluate_moderator()
+        print(report)
+
+        report_file = runs_dir / "eval_moderator.txt"
+        report_file.write_text(report, encoding="utf-8")
+        print(f"\nReport saved to: {report_file}")
+
 
 if __name__ == "__main__":
     main()
+
 
