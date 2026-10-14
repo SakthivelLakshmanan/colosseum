@@ -105,6 +105,81 @@ def test_get_run_details_success():
         assert data["final_verdict"]["verdict"] == "PASS"
 
 
+def test_get_run_details_guaranteed_shape_and_fallback_mapping():
+    expected_keys = {
+        "run_id",
+        "status",
+        "created_at",
+        "brief",
+        "routing",
+        "positions",
+        "claim_verdicts",
+        "scorecard",
+        "memo",
+        "memo_revisions",
+        "final_verdict",
+        "human_decisions",
+        "error",
+    }
+
+    # Case 1: Fresh queued run with no sections produced yet
+    queued_run = {
+        "run_id": "run_queued_1",
+        "status": "queued",
+        "created_at": "2026-10-14T20:00:00Z",
+    }
+    with patch("core.ledger.get_run", return_value=queued_run):
+        response = client.get("/runs/run_queued_1")
+        assert response.status_code == 200
+        data = response.json()
+        assert set(data.keys()) == expected_keys
+        assert data["run_id"] == "run_queued_1"
+        assert data["status"] == "queued"
+        assert data["created_at"] == "2026-10-14T20:00:00Z"
+        assert data["brief"] is None
+        assert data["routing"] is None
+        assert data["positions"] == []
+        assert data["claim_verdicts"] == []
+        assert data["scorecard"] is None
+        assert data["memo"] is None
+        assert data["memo_revisions"] == []
+        assert data["final_verdict"] is None
+        assert data["human_decisions"] == []
+        assert data["error"] is None
+
+    # Case 2: Run like run_DEC-001_20261014_101635 with memo_versions and final_verdicts
+    legacy_run = {
+        "run_id": "run_DEC-001_20261014_101635",
+        "status": "done",
+        "created_at": "2026-10-14T10:16:35Z",
+        "memo_versions": [
+            {"recommendation": "Phase 1 move 15%", "stance": "conditional"}
+        ],
+        "final_verdicts": [
+            {"verdict": "PASS", "revision_number": 0}
+        ],
+        "human_decision": {
+            "action": "approve",
+            "reason": "OK",
+            "decided_by": "CRO",
+        },
+    }
+    with patch("core.ledger.get_run", return_value=legacy_run):
+        response = client.get("/runs/run_DEC-001_20261014_101635")
+        assert response.status_code == 200
+        data = response.json()
+        assert set(data.keys()) == expected_keys
+        assert data["memo"] == {"recommendation": "Phase 1 move 15%", "stance": "conditional"}
+        assert data["final_verdict"] == {"verdict": "PASS", "revision_number": 0}
+        assert len(data["memo_revisions"]) == 1
+        assert data["memo_revisions"][0]["revision"] == 0
+        assert data["memo_revisions"][0]["memo"] == {"recommendation": "Phase 1 move 15%", "stance": "conditional"}
+        assert data["memo_revisions"][0]["verdict"] == {"verdict": "PASS", "revision_number": 0}
+        assert data["human_decisions"] == [
+            {"action": "approve", "reason": "OK", "decided_by": "CRO"}
+        ]
+
+
 def test_list_recent_runs():
     fake_doc_1 = MagicMock()
     fake_doc_1.id = "run_1"
@@ -143,23 +218,64 @@ def test_list_recent_runs():
 
 
 def test_human_decision_approve():
-    with patch("core.ledger.get_run", return_value={"run_id": "run_123"}), \
-         patch("core.ledger.save_decision") as mock_save_dec, \
-         patch("core.ledger.save_section") as mock_save_sec:
+    fake_run = {"run_id": "run_123", "human_decisions": []}
+    stored_decision_docs = {}
 
-        payload = {
+    def mock_save_decision(doc_id, decision_data, **kwargs):
+        stored_decision_docs[doc_id] = decision_data
+        return doc_id
+
+    def mock_save_human_decision_to_run(run_id, data):
+        fake_run["human_decision"] = data
+        fake_run.setdefault("human_decisions", []).append(data)
+
+    with patch("core.ledger.get_run", return_value=fake_run), \
+         patch("core.ledger.save_decision", side_effect=mock_save_decision) as mock_save_dec, \
+         patch("core.ledger.save_section") as mock_save_sec, \
+         patch("core.ledger.save_human_decision_to_run", side_effect=mock_save_human_decision_to_run):
+
+        # Post first decision (approve)
+        payload_1 = {
             "action": "approve",
             "reason": "Risk acceptable",
             "decided_by": "Chief Risk Officer",
         }
-        response = client.post("/runs/run_123/decision", json=payload)
-        assert response.status_code == 200
-        res = response.json()
-        assert res["status"] == "ok"
-        assert res["decision"]["action"] == "approve"
-        assert res["decision"]["decided_by"] == "Chief Risk Officer"
-        mock_save_dec.assert_called_once()
-        mock_save_sec.assert_called_once()
+        res_1 = client.post("/runs/run_123/decision", json=payload_1)
+        assert res_1.status_code == 200
+        data_1 = res_1.json()
+        assert data_1["status"] == "ok"
+        assert data_1["decision"]["action"] == "approve"
+        assert data_1["decision"]["decided_by"] == "Chief Risk Officer"
+
+        # Post second decision for the same run (override)
+        payload_2 = {
+            "action": "override",
+            "reason": "Executive board override with updated terms",
+            "decided_by": "CEO",
+        }
+        res_2 = client.post("/runs/run_123/decision", json=payload_2)
+        assert res_2.status_code == 200
+        data_2 = res_2.json()
+        assert data_2["status"] == "ok"
+        assert data_2["decision"]["action"] == "override"
+        assert data_2["decision"]["decided_by"] == "CEO"
+
+        # Check that both documents exist in human_decisions and neither was overwritten
+        assert len(stored_decision_docs) == 2, "Both decision documents must exist in human_decisions"
+        doc_ids = list(stored_decision_docs.keys())
+        assert doc_ids[0] != doc_ids[1], "Each decision must have a distinct doc_id"
+        for did in doc_ids:
+            assert did.startswith("run_123_"), f"Doc id '{did}' must match {{run_id}}_{{timestamp}}"
+
+        assert stored_decision_docs[doc_ids[0]]["action"] == "approve"
+        assert stored_decision_docs[doc_ids[1]]["action"] == "override"
+
+        # Check run document: human_decisions list has both appended, human_decision has latest
+        assert len(fake_run["human_decisions"]) == 2
+        assert fake_run["human_decisions"][0]["action"] == "approve"
+        assert fake_run["human_decisions"][1]["action"] == "override"
+        assert fake_run["human_decision"]["action"] == "override"
+        assert fake_run["human_decision"]["decided_by"] == "CEO"
 
 
 def test_human_decision_override_requires_reason():

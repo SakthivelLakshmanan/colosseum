@@ -134,14 +134,57 @@ def save_routing(run_id: str, routing: Any) -> None:
     doc_ref.set(_serialize(routing))
 
 
-def save_decision(run_id: str, decision: Any) -> None:
-    """Write human decision data to the decisions collection."""
+def save_decision(run_id_or_doc_id: str, decision: Any, timestamp: str | None = None) -> str:
+    """Write human decision data to the decisions collection using doc id {run_id}_{timestamp}."""
     db = get_db()
     settings = get_settings()
     collection_name = settings.firestore.collections.decisions
-    doc_ref = db.collection(collection_name).document(run_id)
 
+    if timestamp:
+        doc_id = f"{run_id_or_doc_id}_{timestamp}"
+    elif "_" in run_id_or_doc_id and any(c.isdigit() for c in run_id_or_doc_id.split("_")[-1]):
+        # String already includes a timestamp suffix
+        doc_id = run_id_or_doc_id
+    else:
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+        doc_id = f"{run_id_or_doc_id}_{ts}"
+
+    doc_ref = db.collection(collection_name).document(doc_id)
     doc_ref.set(_serialize(decision))
+    return doc_id
+
+
+def save_memo(run_id: str, memo: Any) -> None:
+    """Save the current drafted memo to the run document under 'memo'."""
+    save_section(run_id, "memo", memo)
+
+
+def save_final_verdict(run_id: str, verdict: Any) -> None:
+    """Save the final check verdict to the run document under 'final_verdict'."""
+    save_section(run_id, "final_verdict", verdict)
+
+
+def save_memo_revisions(run_id: str, revisions: list[Any]) -> None:
+    """Save memo revisions list to the run document under 'memo_revisions'."""
+    save_section(run_id, "memo_revisions", revisions)
+
+
+def save_human_decision_to_run(run_id: str, decision: Any) -> None:
+    """Save human decision to the run document under human_decision and append to human_decisions."""
+    db = get_db()
+    settings = get_settings()
+    collection_name = settings.firestore.collections.runs
+    doc_ref = db.collection(collection_name).document(run_id)
+    serialized = _serialize(decision)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    doc_ref.set(
+        {
+            "human_decision": serialized,
+            "human_decisions": firestore.ArrayUnion([serialized]),
+            "updated_at": now_iso,
+        },
+        merge=True,
+    )
 
 
 def delete_run(run_id: str) -> None:

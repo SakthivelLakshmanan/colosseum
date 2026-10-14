@@ -159,6 +159,7 @@ def run_decision(
         max_revisions = 2
         memo_versions: list[Memo] = []
         final_verdicts: list[FinalVerdict] = []
+        memo_revisions: list[dict[str, Any]] = []
         revision_instructions = ""
         revision_number = 0
 
@@ -179,10 +180,12 @@ def run_decision(
             metrics[f"writing_rev_{revision_number}_time_s"] = round(time.time() - t0, 3)
             memo_versions.append(memo)
 
+            # Scribe's memo must be saved to the run document as memo before the final check runs
             try:
+                ledger.save_memo(run_id, memo)
                 ledger.save_section(run_id, "memo_versions", memo_versions)
             except Exception as exc:
-                logger.warning("Failed to save memo_versions in ledger: %s", exc)
+                logger.warning("Failed to save memo in ledger: %s", exc)
 
             try:
                 ledger.update_status(run_id, "checking", f"Checking memo (revision {revision_number})")
@@ -201,10 +204,20 @@ def run_decision(
             metrics[f"checking_rev_{revision_number}_time_s"] = round(time.time() - t0, 3)
             final_verdicts.append(verdict)
 
+            # Each revision appended to memo_revisions with its verdict
+            revision_entry = {
+                "revision": revision_number,
+                "memo": memo,
+                "verdict": verdict,
+            }
+            memo_revisions.append(revision_entry)
+
             try:
+                ledger.save_final_verdict(run_id, verdict)
                 ledger.save_section(run_id, "final_verdicts", final_verdicts)
+                ledger.save_memo_revisions(run_id, memo_revisions)
             except Exception as exc:
-                logger.warning("Failed to save final_verdicts in ledger: %s", exc)
+                logger.warning("Failed to save final_verdict and revisions in ledger: %s", exc)
 
             if verdict.verdict == MemoVerdictType.pass_:
                 break

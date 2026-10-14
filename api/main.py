@@ -152,23 +152,101 @@ def _extract_final_verdict(run_doc: dict[str, Any]) -> Optional[str]:
 
 @app.get("/runs/{run_id}")
 def get_run_details(run_id: str) -> dict[str, Any]:
-    """Return the run document (status, routing, positions, claim verdicts, scorecard, memo, final verdict)."""
+    """Return the run document with guaranteed shape:
+    run_id, status, created_at, brief, routing, positions, claim_verdicts,
+    scorecard, memo, memo_revisions, final_verdict, human_decisions, error.
+    Use null or empty list when a part does not exist yet.
+    """
     run_doc = ledger.get_run(run_id)
     if not run_doc or not run_doc.get("run_id"):
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
 
-    # Populate memo and final_verdict convenience fields if versions exist
-    if not run_doc.get("memo") and run_doc.get("memo_versions"):
-        memos = run_doc["memo_versions"]
-        if isinstance(memos, list) and memos:
-            run_doc["memo"] = memos[-1]
+    # 1. Resolve memo (from memo, memo_versions, or memo_revisions)
+    memo = run_doc.get("memo")
+    if not memo:
+        memo_versions = run_doc.get("memo_versions")
+        if isinstance(memo_versions, list) and memo_versions:
+            memo = memo_versions[-1]
+        elif isinstance(run_doc.get("memo_revisions"), list) and run_doc["memo_revisions"]:
+            last_rev = run_doc["memo_revisions"][-1]
+            if isinstance(last_rev, dict) and "memo" in last_rev:
+                memo = last_rev["memo"]
+            else:
+                memo = last_rev
+        elif run_doc.get("final_memo"):
+            memo = run_doc.get("final_memo")
+        elif run_doc.get("scribe_memo"):
+            memo = run_doc.get("scribe_memo")
+    if not isinstance(memo, dict):
+        memo = None
 
-    if not run_doc.get("final_verdict") and run_doc.get("final_verdicts"):
-        verdicts = run_doc["final_verdicts"]
-        if isinstance(verdicts, list) and verdicts:
-            run_doc["final_verdict"] = verdicts[-1]
+    # 2. Resolve final_verdict (from final_verdict, final_verdicts, or verdict)
+    final_verdict = run_doc.get("final_verdict")
+    if not final_verdict:
+        final_verdicts = run_doc.get("final_verdicts")
+        if isinstance(final_verdicts, list) and final_verdicts:
+            final_verdict = final_verdicts[-1]
+        elif run_doc.get("verdict"):
+            final_verdict = run_doc.get("verdict")
+    if isinstance(final_verdict, str):
+        final_verdict = {"verdict": final_verdict}
+    elif not isinstance(final_verdict, dict):
+        final_verdict = None
 
-    return run_doc
+    # 3. Resolve memo_revisions (from memo_revisions or reconstructed from versions + verdicts)
+    memo_revisions = run_doc.get("memo_revisions")
+    if not isinstance(memo_revisions, list) or not memo_revisions:
+        memo_versions = run_doc.get("memo_versions")
+        final_verdicts = run_doc.get("final_verdicts")
+        if isinstance(memo_versions, list) and memo_versions:
+            reconstructed = []
+            v_list = final_verdicts if isinstance(final_verdicts, list) else []
+            for idx, m in enumerate(memo_versions):
+                v = v_list[idx] if idx < len(v_list) else None
+                reconstructed.append({
+                    "revision": idx,
+                    "memo": m,
+                    "verdict": v,
+                })
+            memo_revisions = reconstructed
+        else:
+            memo_revisions = []
+
+    # 4. Resolve human_decisions
+    human_decisions = run_doc.get("human_decisions")
+    if not isinstance(human_decisions, list):
+        if run_doc.get("human_decision") and isinstance(run_doc["human_decision"], dict):
+            human_decisions = [run_doc["human_decision"]]
+        else:
+            human_decisions = []
+
+    # 5. Resolve lists
+    positions = run_doc.get("positions") if isinstance(run_doc.get("positions"), list) else []
+    claim_verdicts = run_doc.get("claim_verdicts") if isinstance(run_doc.get("claim_verdicts"), list) else []
+
+    # 6. Resolve dicts or nulls
+    brief = run_doc.get("brief") if isinstance(run_doc.get("brief"), dict) else None
+    routing = run_doc.get("routing") if isinstance(run_doc.get("routing"), dict) else None
+    scorecard = run_doc.get("scorecard") if isinstance(run_doc.get("scorecard"), dict) else None
+
+    # 7. Resolve error
+    error = str(run_doc["error"]) if run_doc.get("error") is not None else None
+
+    return {
+        "run_id": str(run_doc.get("run_id") or run_id),
+        "status": run_doc.get("status"),
+        "created_at": run_doc.get("created_at"),
+        "brief": brief,
+        "routing": routing,
+        "positions": positions,
+        "claim_verdicts": claim_verdicts,
+        "scorecard": scorecard,
+        "memo": memo,
+        "memo_revisions": memo_revisions,
+        "final_verdict": final_verdict,
+        "human_decisions": human_decisions,
+        "error": error,
+    }
 
 
 @app.get("/runs")
@@ -223,7 +301,10 @@ def record_human_decision(run_id: str, payload: DecisionRequest) -> dict[str, An
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
 
     decided_by = (payload.decided_by or "").strip() or "human_approver"
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_utc = datetime.now(timezone.utc)
+    now_iso = now_utc.isoformat()
+    now_ts = now_utc.strftime("%Y%m%d_%H%M%S_%f")
+    doc_id = f"{run_id}_{now_ts}"
 
     decision_record = {
         "run_id": run_id,
@@ -235,8 +316,9 @@ def record_human_decision(run_id: str, payload: DecisionRequest) -> dict[str, An
     }
 
     try:
-        ledger.save_decision(run_id, decision_record)
+        ledger.save_decision(doc_id, decision_record)
         ledger.save_section(run_id, "human_decision", decision_record)
+        ledger.save_human_decision_to_run(run_id, decision_record)
     except Exception as exc:
         logger.error("Failed to save human decision for run %s: %s", run_id, exc)
         raise HTTPException(status_code=500, detail=f"Failed to record decision: {exc}")
