@@ -13,6 +13,10 @@ class ModelsConfig(BaseModel):
     embedding: str = "gemini-embedding-001"
 
 
+class GeminiConfig(BaseModel):
+    max_concurrent: int = 3
+
+
 class BigQueryConfig(BaseModel):
     location: str = "asia-south1"
     dataset: str = "colosseum"
@@ -65,6 +69,7 @@ class Settings(BaseModel):
     project_id: str
     models_location: str = "global"
     models: ModelsConfig = Field(default_factory=ModelsConfig)
+    gemini: GeminiConfig = Field(default_factory=GeminiConfig)
     bigquery: BigQueryConfig = Field(default_factory=BigQueryConfig)
     documents: DocumentsConfig = Field(default_factory=DocumentsConfig)
     firestore: FirestoreConfig = Field(default_factory=FirestoreConfig)

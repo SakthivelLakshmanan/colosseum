@@ -44,23 +44,28 @@ def _serialize(obj: Any) -> Any:
     return obj
 
 
-def create_run(run_id: str, brief: Any) -> None:
-    """Create a new run document in the runs collection with status 'started'."""
+def create_run(run_id: str, brief: Any, initial_status: str = "started") -> None:
+    """Create a new run document in the runs collection."""
     db = get_db()
     settings = get_settings()
     collection_name = settings.firestore.collections.runs
-    now_iso = datetime.now(timezone.utc).isoformat()
+    doc_ref = db.collection(collection_name).document(run_id)
 
+    snapshot = doc_ref.get()
+    if snapshot.exists:
+        return
+
+    now_iso = datetime.now(timezone.utc).isoformat()
     doc_data = {
         "run_id": run_id,
-        "status": "started",
+        "status": initial_status,
         "brief": _serialize(brief),
-        "progress": [],
+        "progress": [{"timestamp": now_iso, "status": initial_status, "note": f"Run {initial_status}"}],
         "created_at": now_iso,
         "updated_at": now_iso,
     }
 
-    db.collection(collection_name).document(run_id).set(doc_data)
+    doc_ref.set(doc_data)
 
 
 def update_status(run_id: str, status: str, progress_note: str | None = None) -> None:

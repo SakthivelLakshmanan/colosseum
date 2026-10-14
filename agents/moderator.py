@@ -29,24 +29,9 @@ from core.schemas import (
     MemoVerdictType,
     Reliability,
 )
+from core.gemini import generate, generate_content, get_genai_client
 from core.settings import get_settings
 from knowledge.fact_store import get_fact, load_all_facts
-
-_genai_client: Optional[genai.Client] = None
-
-
-def get_genai_client() -> genai.Client:
-    """Initialize or return the google-genai Vertex AI client."""
-    global _genai_client
-    if _genai_client is None:
-        settings = get_settings()
-        os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "TRUE"
-        _genai_client = genai.Client(
-            vertexai=True,
-            project=settings.project_id,
-            location=settings.models_location,
-        )
-    return _genai_client
 
 
 def load_moderator_config() -> dict[str, Any]:
@@ -489,34 +474,27 @@ Reply strictly as a JSON array containing one object per claim:
 ]
 """
 
-    client = get_genai_client()
     raw_text = ""
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            response = client.models.generate_content(
-                model=settings.models.reasoning,
-                contents=prompt,
-                config={"temperature": 0.0},
+    try:
+        response = generate(
+            model=settings.models.reasoning,
+            contents=prompt,
+            config={"temperature": 0.0},
+            caller="moderator",
+        )
+        raw_text = response if isinstance(response, str) else (getattr(response, "text", "") or str(response))
+    except Exception as exc:
+        # Fallback soft if reasoning call fails
+        verdicts = []
+        for c in claims:
+            v = ClaimVerdict(
+                claim_id=c.claim_id,
+                status=ClaimStatus.flag,
+                check="moderator_llm_error",
+                reason=f"LLM verification failed: {exc}",
             )
-            raw_text = response.text or ""
-            break
-        except Exception as exc:
-            if ("429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)) and attempt < max_retries - 1:
-                import time
-                time.sleep(2 ** (attempt + 1) * 3)
-                continue
-            # Fallback soft if reasoning call fails
-            verdicts = []
-            for c in claims:
-                v = ClaimVerdict(
-                    claim_id=c.claim_id,
-                    status=ClaimStatus.flag,
-                    check="moderator_llm_error",
-                    reason=f"LLM verification failed: {exc}",
-                )
-                verdicts.append(_protect_if_blocking(v, c, position, can_block))
-            return verdicts
+            verdicts.append(_protect_if_blocking(v, c, position, can_block))
+        return verdicts
 
     # Parse response JSON array
     cleaned = raw_text.strip()
@@ -971,32 +949,25 @@ def check_memo(
         claims="\n".join(accepted_claims_lines),
     )
 
-    client = get_genai_client()
     settings = get_settings()
-    max_retries = 3
     raw_response = ""
 
-    for attempt in range(max_retries):
-        try:
-            resp = client.models.generate_content(
-                model=settings.models.reasoning,
-                contents=prompt,
-                config={"temperature": 0.0},
-            )
-            raw_response = resp.text or ""
-            break
-        except Exception as exc:
-            if ("429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)) and attempt < max_retries - 1:
-                import time
-                time.sleep(2 ** (attempt + 1) * 3)
-                continue
-            # If model call fails, produce an INCOMPLETE verdict with the error
-            return FinalVerdict(
-                verdict=MemoVerdictType.incomplete,
-                issues=code_check_issues + [MemoIssue(kind="moderator_error", detail=f"LLM check failed: {exc}", evidence_ids=[])],
-                revision_instructions="Moderator reasoning model call failed; retry verification.",
-                revision_number=revision_number,
-            )
+    try:
+        resp = generate(
+            model=settings.models.reasoning,
+            contents=prompt,
+            config={"temperature": 0.0},
+            caller="final_check",
+        )
+        raw_response = resp if isinstance(resp, str) else (getattr(resp, "text", "") or str(resp))
+    except Exception as exc:
+        # If model call fails, produce an INCOMPLETE verdict with the error
+        return FinalVerdict(
+            verdict=MemoVerdictType.incomplete,
+            issues=code_check_issues + [MemoIssue(kind="moderator_error", detail=f"LLM check failed: {exc}", evidence_ids=[])],
+            revision_instructions="Moderator reasoning model call failed; retry verification.",
+            revision_number=revision_number,
+        )
 
     # Parse JSON
     cleaned = raw_response.strip()

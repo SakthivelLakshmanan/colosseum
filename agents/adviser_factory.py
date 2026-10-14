@@ -16,6 +16,7 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 from agents.tools import calculate, get_facts, query_table, search_documents
+from core.gemini import ColosseumGemini, get_genai_client
 from core.registry import find_project_root, get_registry
 from core.schemas import AdviserPosition, Claim, DecisionBrief, EvidencePack
 from core.settings import get_settings
@@ -25,7 +26,39 @@ from knowledge.fact_store import load_facts, rank_facts
 logger = logging.getLogger(__name__)
 
 
-def build_adviser(adviser_id: str) -> LlmAgent:
+class ToolCallLimiter:
+    """Limits tool calls to max_calls per adviser run."""
+
+    def __init__(self, adviser_id: str, max_calls: int = 8):
+        self.adviser_id = adviser_id
+        self.max_calls = max_calls
+        self.count = 0
+
+    def before_tool_callback(
+        self, tool: Any, args: Any, tool_context: Any = None
+    ) -> Optional[dict[str, Any]]:
+        self.count += 1
+        if self.count > self.max_calls:
+            logger.info(
+                "Adviser '%s' reached tool call limit (%d calls); instructing model to write position.",
+                self.adviser_id,
+                self.max_calls,
+            )
+            return {
+                "error": "Tool call limit reached",
+                "message": (
+                    f"Tool call limit reached ({self.max_calls} calls). "
+                    "Do not make any further tool calls. "
+                    "Write your position now from the evidence you have as a JSON object adhering to the AdviserPosition schema."
+                ),
+            }
+        return None
+
+
+def build_adviser(
+    adviser_id: str,
+    tool_limiter: Optional[ToolCallLimiter] = None,
+) -> LlmAgent:
     """Build an ADK LlmAgent for the specified adviser.
 
     Configures model via Vertex AI with project and location from settings.
@@ -78,11 +111,21 @@ def build_adviser(adviser_id: str) -> LlmAgent:
     full_instruction = f"{shared_instruction}\n\n---\n\n{adviser_prompt}"
     tools = [get_facts, query_table, search_documents, calculate]
 
+    client = get_genai_client(caller=f"{adv_cfg.id}_adviser")
+    model = ColosseumGemini(
+        caller=f"{adv_cfg.id}_adviser",
+        model=settings.models.adviser,
+        client=client,
+    )
+
+    before_tool_cb = tool_limiter.before_tool_callback if tool_limiter else None
+
     agent = LlmAgent(
         name=f"{adv_cfg.id}_adviser",
-        model=settings.models.adviser,
+        model=model,
         instruction=full_instruction,
         tools=tools,
+        before_tool_callback=before_tool_cb,
     )
     return agent
 
@@ -195,25 +238,24 @@ def _normalize_position_dict(data: Any, adviser_id: str) -> Any:
     return data
 
 
-def run_adviser(
+async def run_adviser_async(
     adviser_id: str,
     brief: DecisionBrief,
     evidence_pack: EvidencePack,
 ) -> AdviserPosition:
-    """Run an adviser against a decision brief and evidence pack.
+    """Run an adviser asynchronously using ADK's native runner.run_async.
 
-    Sends brief and evidence pack JSON to the adviser agent, validates the JSON
-    response against AdviserPosition, retries once on validation failure, and demotes
-    any blocking findings if the adviser does not have blocking permissions.
+    Caps tool calls at 8 via ToolCallLimiter and supports cancellation upon timeout.
     """
-    agent = build_adviser(adviser_id)
+    limiter = ToolCallLimiter(adviser_id=adviser_id, max_calls=8)
+    agent = build_adviser(adviser_id, tool_limiter=limiter)
     registry = get_registry()
     adv_cfg = registry.get(adviser_id)
     can_block = adv_cfg.can_block if adv_cfg else False
 
     session_service = InMemorySessionService()
     session_id = f"adviser_{adviser_id}_{uuid.uuid4().hex[:8]}"
-    session_service.create_session_sync(
+    await session_service.create_session(
         app_name="colosseum",
         user_id="adviser_user",
         session_id=session_id,
@@ -232,13 +274,13 @@ def run_adviser(
     )
 
     content = types.Content(role="user", parts=[types.Part.from_text(text=user_prompt)])
-    events = list(
-        runner.run(
-            user_id="adviser_user",
-            session_id=session_id,
-            new_message=content,
-        )
-    )
+    events: list[Any] = []
+    async for event in runner.run_async(
+        user_id="adviser_user",
+        session_id=session_id,
+        new_message=content,
+    ):
+        events.append(event)
     reply_text = _extract_text_from_events(events)
 
     position: Optional[AdviserPosition] = None
@@ -260,18 +302,21 @@ def run_adviser(
             "Please fix the error and reply with ONLY the valid JSON object adhering to the schema."
         )
         retry_content = types.Content(role="user", parts=[types.Part.from_text(text=retry_prompt)])
-        retry_events = list(
-            runner.run(
-                user_id="adviser_user",
-                session_id=session_id,
-                new_message=retry_content,
-            )
-        )
+        retry_events: list[Any] = []
+        async for event in runner.run_async(
+            user_id="adviser_user",
+            session_id=session_id,
+            new_message=retry_content,
+        ):
+            retry_events.append(event)
         retry_reply_text = _extract_text_from_events(retry_events)
         retry_json_str = _extract_json_string(retry_reply_text)
         data = json.loads(retry_json_str)
         data = _normalize_position_dict(data, adviser_id)
         position = AdviserPosition.model_validate(data)
+
+    # Record tool call count for this adviser
+    _last_adviser_tool_counts[adviser_id] = limiter.count
 
     # If can_block is false, demote any blocking findings to claims
     if not can_block and position.blocking_findings:
@@ -288,13 +333,28 @@ def run_adviser(
     return position
 
 
-# In-memory tracking of execution durations for the last run_advisers call
+def run_adviser(
+    adviser_id: str,
+    brief: DecisionBrief,
+    evidence_pack: EvidencePack,
+) -> AdviserPosition:
+    """Run an adviser against a decision brief and evidence pack (sync wrapper)."""
+    return asyncio.run(run_adviser_async(adviser_id, brief, evidence_pack))
+
+
+# In-memory tracking of execution durations and tool counts for the last run_advisers call
 _last_adviser_durations: dict[str, float] = {}
+_last_adviser_tool_counts: dict[str, int] = {}
 
 
 def get_last_adviser_durations() -> dict[str, float]:
     """Return execution durations in seconds for the most recent run_advisers invocation."""
     return dict(_last_adviser_durations)
+
+
+def get_last_adviser_tool_counts() -> dict[str, int]:
+    """Return tool call counts for the most recent run_advisers invocation."""
+    return dict(_last_adviser_tool_counts)
 
 
 async def run_advisers(
@@ -303,19 +363,9 @@ async def run_advisers(
     packs: dict[str, EvidencePack] | list[EvidencePack] | None = None,
     timeout_s: Optional[float] = None,
 ) -> dict[str, AdviserPosition | str]:
-    """Run multiple advisers concurrently using asyncio, each with a configured timeout.
+    """Run multiple advisers concurrently using ADK run_async wrapped in asyncio.wait_for.
 
     A timeout or error is recorded as a string message for that adviser and never stops the others.
-
-    Args:
-        adviser_ids: List of adviser IDs to execute.
-        brief: The decision brief being evaluated.
-        packs: Mapping or list of EvidencePack objects for each adviser. If missing or None,
-               simple_pack is built for each adviser.
-        timeout_s: Optional timeout in seconds. Defaults to settings.run.adviser_timeout_s.
-
-    Returns:
-        Dictionary mapping adviser_id -> AdviserPosition (on success) or str (on timeout/error).
     """
     settings = get_settings()
     effective_timeout = (
@@ -337,7 +387,7 @@ async def run_advisers(
         start_t = time.time()
         try:
             position = await asyncio.wait_for(
-                asyncio.to_thread(run_adviser, aid, brief, pack),
+                run_adviser_async(aid, brief, pack),
                 timeout=effective_timeout,
             )
             elapsed = time.time() - start_t

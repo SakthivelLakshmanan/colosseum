@@ -7,28 +7,9 @@ import logging
 import os
 from typing import Any
 
-from google import genai
-
+from core.gemini import acquire_gemini_slot_sync, get_genai_client, release_gemini_slot
 from core.ledger import get_db
 from core.settings import get_settings
-
-logger = logging.getLogger(__name__)
-
-_genai_client: genai.Client | None = None
-
-
-def get_genai_client() -> genai.Client:
-    """Initialize or return the google-genai Vertex AI client."""
-    global _genai_client
-    if _genai_client is None:
-        settings = get_settings()
-        os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "TRUE"
-        _genai_client = genai.Client(
-            vertexai=True,
-            project=settings.project_id,
-            location=settings.models_location,
-        )
-    return _genai_client
 
 
 def _compute_cache_key(model: str, task_type: str, text: str) -> str:
@@ -90,11 +71,15 @@ def embed(texts: list[str], task_type: str = "RETRIEVAL_QUERY") -> list[list[flo
             chunk_texts = missing_texts[start_idx : start_idx + chunk_size]
             chunk_keys = missing_keys[start_idx : start_idx + chunk_size]
 
-            resp = client.models.embed_content(
-                model=model,
-                contents=chunk_texts,
-                config={"task_type": task_type},
-            )
+            acquire_gemini_slot_sync()
+            try:
+                resp = client.models.embed_content(
+                    model=model,
+                    contents=chunk_texts,
+                    config={"task_type": task_type},
+                )
+            finally:
+                release_gemini_slot()
 
             for k, text_val, emb_obj in zip(chunk_keys, chunk_texts, resp.embeddings):
                 vector = list(emb_obj.values)

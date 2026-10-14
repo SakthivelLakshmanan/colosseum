@@ -7,27 +7,10 @@ from pathlib import Path
 import re
 from typing import Any
 
-from google import genai
-
+from core.gemini import generate, generate_content, get_genai_client
 from core.registry import find_project_root
 from core.schemas import DecisionBrief
 from core.settings import get_settings
-
-_genai_client: genai.Client | None = None
-
-
-def get_genai_client() -> genai.Client:
-    """Initialize or return the google-genai Vertex AI client."""
-    global _genai_client
-    if _genai_client is None:
-        settings = get_settings()
-        os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "TRUE"
-        _genai_client = genai.Client(
-            vertexai=True,
-            project=settings.project_id,
-            location=settings.models_location,
-        )
-    return _genai_client
 
 
 def _format_brief_readable(brief: DecisionBrief | dict[str, Any] | str) -> str:
@@ -85,14 +68,14 @@ def make_routing_query(brief: DecisionBrief | dict[str, Any] | str) -> str:
     readable_brief = _format_brief_readable(brief)
     full_prompt = prompt_template.replace("{brief}", readable_brief)
 
-    client = get_genai_client()
-    response = client.models.generate_content(
+    response = generate(
         model=settings.models.adviser,
         contents=full_prompt,
         config={"temperature": 0.0},
+        caller="router",
     )
 
-    raw_text = response.text or ""
+    raw_text = response if isinstance(response, str) else (getattr(response, "text", "") or str(response))
 
     # Clean markdown fences or bullet markers
     cleaned = raw_text.strip()

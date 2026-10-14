@@ -6,7 +6,9 @@ import asyncio
 import csv
 import json
 from pathlib import Path
+import re
 import sys
+import time
 from typing import Any, Dict, List, Set
 
 # Ensure project root is on sys.path
@@ -24,8 +26,10 @@ from core.schemas import (
     Memo,
     MemoVerdictType,
 )
+from core.gemini import generate, generate_content, get_genai_client
 from core.settings import get_settings
 from agents.moderator import check_claims, check_memo
+from agents.pipeline import run_decision
 
 
 def load_planted_facts() -> List[Dict[str, Any]]:
@@ -689,17 +693,245 @@ def evaluate_moderator() -> str:
     return report
 
 
+def judge_memo(memo: Memo, expected_outcome_md: str) -> List[Dict[str, Any]]:
+    """Score a final memo against the 8-point checklist using the adviser model."""
+    settings = get_settings()
+    client = get_genai_client(caller="judge")
+
+    memo_summary = f"""Decision ID: {memo.decision_id}
+Recommendation: {memo.recommendation}
+Stance: {memo.stance}
+Confidence: {memo.confidence}
+Conditions:
+{json.dumps(memo.conditions, indent=2)}
+Phased Plan:
+{json.dumps(memo.phased_plan, indent=2)}
+Dissent:
+{json.dumps(memo.dissent, indent=2)}
+Key Numbers:
+{json.dumps([c.model_dump() for c in memo.key_numbers], indent=2)}
+Assumptions:
+{json.dumps(memo.assumptions, indent=2)}
+Numbers to Watch:
+{json.dumps(memo.numbers_to_watch, indent=2)}"""
+
+    prompt = f"""You are an expert evaluator assessing a decision memo produced for decision brief DEC-001.
+
+Here is the reference expected outcome:
+=== EXPECTED OUTCOME ===
+{expected_outcome_md}
+=== END EXPECTED OUTCOME ===
+
+Here is the decision memo to evaluate:
+=== DECISION MEMO ===
+{memo_summary}
+=== END DECISION MEMO ===
+
+Score the memo against this EXACT 8-point checklist. For each item, award 1 point if satisfied or 0 points if not satisfied, and provide a concise one-line reason:
+
+1. stance conditional: Memo stance is conditional (e.g. stance is 'conditional' or recommends conditional/phased move rather than outright move or outright rejection).
+2. phase 1 smaller than 40%, e.g. about 15%: Phase 1 of migration moves volume smaller than 40%, e.g. about 15% (or 10-20%).
+3. India-only processing is a condition: Brevis committing to India-only processing / domestic infrastructure / switching on India-only fraud scoring is specified as an explicit condition.
+4. pen test fix is a condition: Remediating/closing Brevis's open high-severity penetration test finding is specified as an explicit condition.
+5. current SOC 2 report is a condition: Providing a current/valid SOC 2 Type II report is specified as an explicit condition.
+6. contract fixes listed (at least two of audit rights, Indian law, price lock, DPA, 2-hour notification): At least two of the following contract fixes are explicitly listed: audit rights, Indian governing law/jurisdiction, price lock, signed DPA, 2-hour incident notification.
+7. exit fee avoided in phase 1 or correctly costed: The exit fee is either avoided in Phase 1 (e.g. by keeping volume threshold above 80%) or correctly costed/accounted for in the financial calculations.
+8. dissent recorded: Disagreements/dissent from advisers (e.g., Legal, InfoSec, or Business) are recorded.
+
+Respond ONLY with valid JSON in this structure:
+{{
+  "items": [
+    {{"id": 1, "criterion": "stance conditional", "score": 1, "reason": "..."}},
+    {{"id": 2, "criterion": "phase 1 smaller than 40%, e.g. about 15%", "score": 1, "reason": "..."}},
+    {{"id": 3, "criterion": "India-only processing is a condition", "score": 1, "reason": "..."}},
+    {{"id": 4, "criterion": "pen test fix is a condition", "score": 1, "reason": "..."}},
+    {{"id": 5, "criterion": "current SOC 2 report is a condition", "score": 1, "reason": "..."}},
+    {{"id": 6, "criterion": "contract fixes listed (at least two of audit rights, Indian law, price lock, DPA, 2-hour notification)", "score": 1, "reason": "..."}},
+    {{"id": 7, "criterion": "exit fee avoided in phase 1 or correctly costed", "score": 1, "reason": "..."}},
+    {{"id": 8, "criterion": "dissent recorded", "score": 1, "reason": "..."}}
+  ]
+}}
+"""
+
+    try:
+        response = generate(
+            model=settings.models.adviser,
+            contents=prompt,
+            config={"temperature": 0.0},
+            caller="judge",
+        )
+        raw = response if isinstance(response, str) else (getattr(response, "text", "") or str(response))
+        raw = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
+        raw = re.sub(r"\s*```$", "", raw.strip(), flags=re.MULTILINE)
+        data = json.loads(raw)
+        if "items" in data and isinstance(data["items"], list):
+            return data["items"]
+        if isinstance(data, list):
+            return data
+    except Exception as exc:
+        print(f"[evals] Warning: LLM judge failed ({exc}); returning fallback 0 scores.")
+        return [
+            {"id": i, "criterion": f"Criterion {i}", "score": 0, "reason": f"Evaluation error: {exc}"}
+            for i in range(1, 9)
+        ]
+
+    return []
+
+
+def evaluate_outcome(brief_path: Path, num_runs: int, runs_dir: Path, pause_s: int = 0) -> str:
+    """Run the pipeline num_runs times on brief_path and evaluate final memos against the 8-point checklist."""
+    expected_outcome_file = root_dir / "evals" / "expected_outcome.md"
+    expected_outcome_md = expected_outcome_file.read_text(encoding="utf-8") if expected_outcome_file.is_file() else ""
+
+    run_results: List[Dict[str, Any]] = []
+
+    for i in range(1, num_runs + 1):
+        print(f"\n[evals] ========================================================")
+        print(f"[evals] Executing pipeline run {i}/{num_runs} for outcome eval...")
+        print(f"[evals] ========================================================")
+        t0 = time.time()
+        record = run_decision(brief=brief_path)
+        elapsed = time.time() - t0
+
+        final_memo = record.memo_versions[-1]
+        final_verdict = record.final_verdicts[-1].verdict.value if record.final_verdicts else "UNKNOWN"
+        revision_count = max(0, len(record.memo_versions) - 1)
+        verdict_seq = " -> ".join(v.verdict.value for v in record.final_verdicts)
+
+        print(f"[evals] Run {i} finished in {elapsed:.1f}s. Verdict: {final_verdict} ({verdict_seq}), Revisions: {revision_count}")
+        print(f"[evals] Judging final memo against 8-point checklist...")
+        checklist_items = judge_memo(final_memo, expected_outcome_md)
+        total_score = sum(int(item.get("score", 0)) for item in checklist_items)
+
+        run_results.append({
+            "run_num": i,
+            "run_id": record.run_id,
+            "final_verdict": final_verdict,
+            "revision_count": revision_count,
+            "verdict_sequence": verdict_seq,
+            "elapsed_s": elapsed,
+            "items": checklist_items,
+            "total_score": total_score,
+        })
+
+        if pause_s > 0 and i < num_runs:
+            print(f"\n[evals] Pausing for {pause_s}s before next run...")
+            time.sleep(pause_s)
+
+    # Build report text
+    lines: List[str] = []
+    lines.append("=" * 105)
+    lines.append(f"COLOSSEUM EVALUATION — OUTCOME REPORT (DEC-001, {num_runs} RUNS)")
+    lines.append("=" * 105)
+    lines.append("")
+
+    # Detailed per-run tables
+    for res in run_results:
+        lines.append("-" * 105)
+        lines.append(f"RUN #{res['run_num']} — ID: {res['run_id']}")
+        lines.append(f"Final Verdict   : {res['final_verdict']}")
+        lines.append(f"Verdict Sequence: {res['verdict_sequence']}")
+        lines.append(f"Revision Count  : {res['revision_count']}")
+        lines.append(f"Total Score     : {res['total_score']}/8 ({res['total_score'] / 8.0 * 100:.1f}%)")
+        lines.append(f"Execution Time  : {res['elapsed_s']:.1f}s")
+        lines.append("-" * 105)
+        lines.append(f"{'#':<3} | {'Score':<5} | {'Criterion':<32} | Reason")
+        lines.append("-" * 105)
+        for item in res["items"]:
+            cid = item.get("id", "-")
+            sc = item.get("score", 0)
+            crit = item.get("criterion", "")[:32]
+            reason = item.get("reason", "")
+            lines.append(f"{cid:<3} | {sc:<5} | {crit:<32} | {reason}")
+        lines.append("")
+
+    # Summary table across runs
+    lines.append("=" * 105)
+    lines.append("SUMMARY ACROSS ALL RUNS")
+    lines.append("=" * 105)
+    lines.append(f"{'Run':<6} | {'Run ID':<30} | {'Verdict':<10} | {'Revs':<5} | C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8 | {'Total':<6} | %")
+    lines.append("-" * 105)
+
+    c_totals = [0] * 8
+    total_revs = 0
+    total_scores = 0
+
+    for res in run_results:
+        r_id = res["run_id"]
+        if len(r_id) > 30:
+            r_id = r_id[:27] + "..."
+        v = res["final_verdict"]
+        rev = res["revision_count"]
+        total_revs += rev
+        tot = res["total_score"]
+        total_scores += tot
+
+        c_scores = []
+        for idx in range(8):
+            sc = int(res["items"][idx].get("score", 0)) if idx < len(res["items"]) else 0
+            c_totals[idx] += sc
+            c_scores.append(str(sc))
+
+        c_str = " |  ".join(c_scores)
+        pct = (tot / 8.0) * 100
+        lines.append(f"Run {res['run_num']:<2} | {r_id:<30} | {v:<10} | {rev:<5} |  {c_str} | {tot}/8  | {pct:.1f}%")
+
+    lines.append("-" * 105)
+    avg_scores = total_scores / len(run_results) if run_results else 0.0
+    avg_revs = total_revs / len(run_results) if run_results else 0.0
+    avg_c = [c / len(run_results) for c in c_totals] if run_results else [0.0] * 8
+    avg_c_str = " | ".join(f"{c:.1f}" for c in avg_c)
+    avg_pct = (avg_scores / 8.0) * 100
+    lines.append(f"{'AVG':<6} | {'-':<30} | {'-':<10} | {avg_revs:<5.1f} | {avg_c_str} | {avg_scores:.2f}/8 | {avg_pct:.1f}%")
+    lines.append("=" * 105)
+    lines.append("")
+
+    # Average score per checklist criterion
+    lines.append("CHECKLIST CRITERION BREAKDOWN (AVERAGE):")
+    criteria_names = [
+        "(1) stance conditional",
+        "(2) phase 1 smaller than 40%, e.g. about 15%",
+        "(3) India-only processing is a condition",
+        "(4) pen test fix is a condition",
+        "(5) current SOC 2 report is a condition",
+        "(6) contract fixes listed (at least two of audit rights, Indian law, price lock, DPA, 2-hour notification)",
+        "(7) exit fee avoided in phase 1 or correctly costed",
+        "(8) dissent recorded",
+    ]
+    for idx, name in enumerate(criteria_names):
+        avg_sc = avg_c[idx] if idx < len(avg_c) else 0.0
+        pct = (avg_sc / 1.0) * 100
+        lines.append(f"  {name:<100}: {avg_sc:.2f}/1.0 ({pct:.1f}%)")
+    lines.append(f"\nOverall Average Checklist Score: {avg_scores:.2f}/8.0 ({avg_pct:.1f}%)")
+    lines.append("=" * 105)
+
+    report = "\n".join(lines)
+    return report
+
+
 def main():
     parser = argparse.ArgumentParser(description="Colosseum Evaluation Runner")
     parser.add_argument(
         "mode",
-        choices=["planted", "routing", "moderator"],
-        help="Evaluation mode ('planted', 'routing', or 'moderator')",
+        choices=["planted", "routing", "moderator", "outcome"],
+        help="Evaluation mode ('planted', 'routing', 'moderator', or 'outcome')",
     )
     parser.add_argument(
         "--fresh",
         action="store_true",
         help="Rerun all advisers fresh before running evaluation",
+    )
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=3,
+        help="Number of runs to execute for outcome evaluation (default: 3)",
+    )
+    parser.add_argument(
+        "--pause",
+        type=int,
+        default=0,
+        help="Pause in seconds between runs in outcome mode (e.g. --pause 60)",
     )
     args = parser.parse_args()
 
@@ -733,6 +965,22 @@ def main():
         print(report)
 
         report_file = runs_dir / "eval_moderator.txt"
+        report_file.write_text(report, encoding="utf-8")
+        print(f"\nReport saved to: {report_file}")
+
+    elif args.mode == "outcome":
+        runs_dir = root_dir / "runs" / "day6"
+        runs_dir.mkdir(parents=True, exist_ok=True)
+        brief_path = root_dir / "evals" / "brief_DEC-001.json"
+        report = evaluate_outcome(
+            brief_path=brief_path,
+            num_runs=args.runs,
+            runs_dir=runs_dir,
+            pause_s=args.pause,
+        )
+        print(report)
+
+        report_file = runs_dir / "eval_outcome.txt"
         report_file.write_text(report, encoding="utf-8")
         print(f"\nReport saved to: {report_file}")
 

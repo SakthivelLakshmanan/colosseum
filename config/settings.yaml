@@ -6,6 +6,9 @@ models:
   reasoning: gemini-3.1-pro-preview # moderator + scribe (check exact ID in Model Garden)
   embedding: gemini-embedding-001  # harness routing (and fact ranking later)
 
+gemini:
+  max_concurrent: 3
+
 bigquery:
   location: asia-south1
   dataset: colosseum               # agents may read ONLY this dataset

@@ -1,0 +1,58 @@
+{
+  "decision_id": "DEC-001",
+  "question": "Should Legion Capital move 40% of its payment volume (about ₹600 crore a month) from Arvanta Payments to Brevis Pay?",
+  "options": {
+    "A": "Stay with Arvanta Payments for 100% of volume",
+    "B": "Move 40% of volume to Brevis Pay"
+  },
+  "constraints": [
+    "Payment data must be stored and processed only in India",
+    "A decision is needed within 2 weeks",
+    "No more than one gateway migration this financial year",
+    "Overall payment success rate must not fall"
+  ],
+  "criteria": [
+    {
+      "name": "Cost",
+      "weight": 0.25,
+      "owners": [
+        "finance"
+      ],
+      "good_looks_like": "Lower total cost after any fixes needed"
+    },
+    {
+      "name": "Security & compliance",
+      "weight": 0.25,
+      "owners": [
+        "infosec",
+        "legal"
+      ],
+      "good_looks_like": "Meets every data, security and regulatory rule; a blocking finding overrides the score"
+    },
+    {
+      "name": "Reliability",
+      "weight": 0.2,
+      "owners": [
+        "ops"
+      ],
+      "good_looks_like": "No drop in payment success rate or uptime"
+    },
+    {
+      "name": "Growth",
+      "weight": 0.2,
+      "owners": [
+        "business"
+      ],
+      "good_looks_like": "Unlocks new merchants and products; meets the vendor-concentration OKR"
+    },
+    {
+      "name": "Customer impact",
+      "weight": 0.1,
+      "owners": [
+        "customer"
+      ],
+      "good_looks_like": "Fewer complaints, faster settlements and refunds, lower churn"
+    }
+  ],
+  "context": "Legion Capital Ltd: Fictional RBI-registered NBFC (digital personal and SME loans) with a merchant checkout product, Legion Pay. All payment volume currently goes through Arvanta Payments; Brevis Pay has run a 2% pilot since August 2026."
+}

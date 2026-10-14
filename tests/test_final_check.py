@@ -130,8 +130,8 @@ def test_check_memo_cannot_be_pass_if_code_check_fails(sample_brief, sample_memo
         "revision_instructions": "",
     })
 
-    with patch("agents.moderator.get_genai_client") as mock_client:
-        mock_client.return_value.models.generate_content.return_value.text = mock_llm_reply
+    with patch("agents.moderator.generate") as mock_generate:
+        mock_generate.return_value = mock_llm_reply
         verdict = check_memo(
             brief=sample_brief,
             memo=sample_memo,
@@ -164,8 +164,8 @@ def test_check_memo_flags_missing_dissent_when_adviser_disagrees(sample_brief, s
         "revision_instructions": "",
     })
 
-    with patch("agents.moderator.get_genai_client") as mock_client:
-        mock_client.return_value.models.generate_content.return_value.text = mock_llm_reply
+    with patch("agents.moderator.generate") as mock_generate:
+        mock_generate.return_value = mock_llm_reply
         verdict = check_memo(
             brief=sample_brief,
             memo=sample_memo,
@@ -200,8 +200,8 @@ def test_check_memo_passes_when_all_checks_succeed(sample_brief, sample_memo):
         "revision_instructions": "",
     })
 
-    with patch("agents.moderator.get_genai_client") as mock_client:
-        mock_client.return_value.models.generate_content.return_value.text = mock_llm_reply
+    with patch("agents.moderator.generate") as mock_generate:
+        mock_generate.return_value = mock_llm_reply
         verdict = check_memo(
             brief=sample_brief,
             memo=sample_memo,

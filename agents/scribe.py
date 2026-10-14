@@ -24,45 +24,20 @@ from core.schemas import (
     Memo,
     Scorecard,
 )
+from core.gemini import generate, generate_content, get_genai_client
 from core.settings import get_settings
-
-_genai_client: Optional[genai.Client] = None
-
-
-def get_genai_client() -> genai.Client:
-    """Initialize or return the google-genai Vertex AI client."""
-    global _genai_client
-    if _genai_client is None:
-        settings = get_settings()
-        os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "TRUE"
-        _genai_client = genai.Client(
-            vertexai=True,
-            project=settings.project_id,
-            location=settings.models_location,
-        )
-    return _genai_client
 
 
 def _call_reasoning_model(prompt: str) -> str:
-    """Invoke the reasoning model with temperature 0.2 and retry on 429 rate limits."""
+    """Invoke the reasoning model with temperature 0.2 via shared Gemini wrapper."""
     settings = get_settings()
-    client = get_genai_client()
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            response = client.models.generate_content(
-                model=settings.models.reasoning,
-                contents=prompt,
-                config={"temperature": 0.2},
-            )
-            return response.text or ""
-        except Exception as exc:
-            if ("429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)) and attempt < max_retries - 1:
-                import time
-                time.sleep(2 ** (attempt + 1) * 3)
-                continue
-            raise
-    return ""
+    response = generate(
+        model=settings.models.reasoning,
+        contents=prompt,
+        config={"temperature": 0.2},
+        caller="scribe",
+    )
+    return response if isinstance(response, str) else (getattr(response, "text", "") or str(response))
 
 
 def _repair_key_numbers(

@@ -8,3 +8,4 @@ uvicorn
 pydantic
 pyyaml
 pytest
+pytest-timeout

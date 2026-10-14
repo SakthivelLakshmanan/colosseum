@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -46,12 +46,28 @@ class DocumentHit(BaseModel):
     snippet: str
 
 
+class TopicSummary(BaseModel):
+    topic: str
+    summary: str
+    fact_ids: list[str] = []
+    summary_source: str = "llm"  # "llm" | "code"
+
+    def __getitem__(self, item: str) -> Any:
+        return getattr(self, item)
+
+    def __str__(self) -> str:
+        return self.summary
+
+    def __iter__(self):
+        return iter((self.summary, self.summary_source))
+
+
 class EvidencePack(BaseModel):
     """What the harness hands one adviser: the facts most relevant to its lens, already aggregated if large."""
     adviser_id: str
     facts: list[Fact]
-    summaries: list[str] = []         # aggregator summaries; each must mention the fact_ids it covers
-    total_matching_facts: int         # how many facts matched before trimming/aggregation
+    summaries: list[Union[TopicSummary, str, dict[str, Any]]] = []  # aggregator summaries; each must mention the fact_ids it covers
+    total_matching_facts: int                                        # how many facts matched before trimming/aggregation
     truncated: bool = False
 
 

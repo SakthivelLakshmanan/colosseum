@@ -13,7 +13,12 @@ root_dir = str(Path(__file__).resolve().parent.parent)
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
-from agents.adviser_factory import get_last_adviser_durations, run_advisers
+from agents.adviser_factory import (
+    get_last_adviser_durations,
+    get_last_adviser_tool_counts,
+    run_advisers,
+)
+from core.gemini import get_retry_counts
 from core.registry import get_registry
 from core.schemas import AdviserPosition, DecisionBrief
 from harness.context_builder import build_pack
@@ -54,6 +59,8 @@ async def main_async(timeout_override: float | None = None):
     )
     wall_elapsed = time.time() - wall_start
     durations = get_last_adviser_durations()
+    tool_counts = get_last_adviser_tool_counts()
+    retry_counts = get_retry_counts()
 
     # 3. Save each result to runs/day4/<id>.json
     out_dir = root / "runs" / "day4"
@@ -69,21 +76,24 @@ async def main_async(timeout_override: float | None = None):
                 "status": "failed",
                 "error": str(res),
                 "duration_s": durations.get(aid, 0.0),
+                "tool_calls": tool_counts.get(aid, 0),
             }
             out_file.write_text(json.dumps(err_data, indent=2), encoding="utf-8")
 
     # 4. Format and print the summary table
-    print("\n" + "=" * 105)
+    print("\n" + "=" * 115)
     print("ALL ADVISERS EXECUTION SUMMARY")
-    print("=" * 105)
+    print("=" * 115)
 
     headers = [
         "Adviser",
         "Stance",
         "Claims",
-        "Distinct Ev IDs",
+        "Ev IDs",
         "Blockers",
         "Seconds",
+        "Tool Calls",
+        "429 Retries",
         "Error",
     ]
     rows: list[list[str]] = []
@@ -91,6 +101,10 @@ async def main_async(timeout_override: float | None = None):
     for aid in adviser_ids:
         res = results.get(aid)
         sec_str = f"{durations.get(aid, 0.0):.1f}"
+        tools_str = str(tool_counts.get(aid, 0))
+        # Look up retry counts for this adviser (e.g. "finance", "finance_adviser")
+        retries_val = retry_counts.get(aid, 0) + retry_counts.get(f"{aid}_adviser", 0)
+        retries_str = str(retries_val)
 
         if isinstance(res, AdviserPosition):
             distinct_ev: set[str] = set()
@@ -109,6 +123,8 @@ async def main_async(timeout_override: float | None = None):
                     str(len(distinct_ev)),
                     str(len(res.blocking_findings)),
                     sec_str,
+                    tools_str,
+                    retries_str,
                     "-",
                 ]
             )
@@ -121,6 +137,8 @@ async def main_async(timeout_override: float | None = None):
                     "0",
                     "0",
                     sec_str,
+                    tools_str,
+                    retries_str,
                     str(res),
                 ]
             )
