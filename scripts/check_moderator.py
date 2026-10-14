@@ -19,8 +19,9 @@ if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
 from agents.moderator import check_claims
+from agents.scorecard import build_scorecard
 from core.registry import get_registry
-from core.schemas import AdviserPosition, Claim, ClaimStatus, ClaimVerdict
+from core.schemas import AdviserPosition, Claim, ClaimStatus, ClaimVerdict, DecisionBrief
 
 
 def run_part_a(runs_dir: Path):
@@ -133,6 +134,40 @@ def run_part_a(runs_dir: Path):
             print(f"  * Evidence IDs: {', '.join(bf.evidence_ids)}")
             print(f"  * Verdict     : {status_str}")
             print(f"  * Reason      : {reason_str}")
+
+    # Scorecard section
+    brief_file = root_dir / "evals" / "brief_DEC-001.json"
+    if brief_file.is_file():
+        brief_data = json.loads(brief_file.read_text())
+        brief = DecisionBrief(**brief_data)
+        scorecard = build_scorecard(brief=brief, positions=positions, claim_verdicts=verdicts)
+
+        print("\n" + "=" * 85)
+        print("SCORECARD (SYNTHESIS)")
+        print("=" * 85)
+        opt_headers = " | ".join(f"{'Opt ' + opt:<8}" for opt in brief.options)
+        print(f"{'Criterion':<24} | {'Weight':<6} | {opt_headers} | Evidence IDs")
+        print("-" * 85)
+        for row in scorecard.rows:
+            scores_str = " | ".join(f"{row.scores.get(opt, 0.0):<8.2f}" for opt in brief.options)
+            eids_str = ", ".join(row.evidence_ids[:5]) + ("..." if len(row.evidence_ids) > 5 else "")
+            print(f"{row.criterion:<24} | {row.weight:<6.2f} | {scores_str} | {eids_str}")
+        print("-" * 85)
+        totals_str = " | ".join(
+            f"{'Option ' + opt + ': ' + str(round(scorecard.weighted_totals.get(opt, 0.0), 2)):<14}"
+            for opt in brief.options
+        )
+        print(f"WEIGHTED TOTALS: {totals_str}")
+        print("-" * 85)
+
+        print("\nBLOCKED OPTIONS:")
+        if not scorecard.blocked_options:
+            print("  None. No options are currently blocked.")
+        else:
+            for opt, findings in scorecard.blocked_options.items():
+                print(f"  Option {opt} is BLOCKED by {len(findings)} unresolved finding(s):")
+                for f_text in findings:
+                    print(f"    - {f_text}")
 
 
 def run_part_b():

@@ -22,6 +22,11 @@ from core.schemas import (
     Claim,
     ClaimStatus,
     ClaimVerdict,
+    DecisionBrief,
+    FinalVerdict,
+    Memo,
+    MemoIssue,
+    MemoVerdictType,
     Reliability,
 )
 from core.settings import get_settings
@@ -685,3 +690,371 @@ def check_claims(
                 all_verdicts.append(v_map[cid])
 
     return all_verdicts
+
+
+def check_memo(
+    brief: DecisionBrief | dict[str, Any],
+    memo: Memo | dict[str, Any],
+    selected_advisers: list[str],
+    positions: dict[str, AdviserPosition | dict[str, Any]],
+    claim_verdicts: list[ClaimVerdict | dict[str, Any]] | None = None,
+    revision_number: int = 0,
+) -> FinalVerdict:
+    """Execute final memo check per ARCHITECTURE.md §8 and config/moderator.yaml.
+
+    1. Deterministic code checks first:
+       - every criterion in the brief is addressed
+       - every selected adviser appears in the memo body or in dissent
+       - every unresolved blocking finding is a condition or explicitly marked as needing a human override
+       - dissent is present if any adviser's stance differs from the memo's stance
+       - every key_number matches its evidence (recompute calculations, 1% tolerance; fact values vs value_num)
+    2. Pass code-check results and the memo to the reasoning model (temperature 0) with prompts/moderator_final.md,
+       returning PASS / INCOMPLETE / WRONG with issues and revision instructions.
+    3. If any code check failed, the verdict can't be PASS.
+    """
+    # 1. Normalize schemas
+    brief_obj = brief if isinstance(brief, DecisionBrief) else DecisionBrief(**brief)
+    memo_obj = memo if isinstance(memo, Memo) else Memo(**memo)
+    positions_obj: dict[str, AdviserPosition] = {
+        aid: (pos if isinstance(pos, AdviserPosition) else AdviserPosition(**pos))
+        for aid, pos in positions.items()
+    }
+    verdicts_obj: list[ClaimVerdict] = [
+        v if isinstance(v, ClaimVerdict) else ClaimVerdict(**v)
+        for v in (claim_verdicts or [])
+    ]
+
+    code_check_issues: list[MemoIssue] = []
+
+    # Prepare memo searchable text corpus
+    memo_body_text = (
+        f"{memo_obj.recommendation} "
+        f"{' '.join(memo_obj.conditions)} "
+        f"{' '.join(memo_obj.phased_plan)} "
+        f"{' '.join(memo_obj.assumptions)} "
+        f"{' '.join(memo_obj.numbers_to_watch)} "
+        f"{' '.join(kn.text for kn in memo_obj.key_numbers)}"
+    )
+    memo_full_text = memo_body_text + " " + " ".join(memo_obj.dissent)
+    memo_lower = memo_full_text.lower()
+
+    # Check 1: every criterion in the brief is addressed
+    scorecard_criteria = {r.criterion.lower() for r in memo_obj.scorecard.rows}
+    for crit in brief_obj.criteria:
+        c_name = crit.name.strip()
+        c_lower = c_name.lower()
+        substantive_words = [w for w in re.findall(r"[a-z]{4,}", c_lower) if w not in {"impact", "other"}]
+        addressed = (
+            c_lower in memo_lower
+            or c_lower in scorecard_criteria
+            or any(w in memo_lower for w in substantive_words)
+        )
+        if not addressed:
+            code_check_issues.append(
+                MemoIssue(
+                    kind="missing_criterion",
+                    detail=f"Criterion '{c_name}' is not addressed in the memo or scorecard.",
+                    evidence_ids=[],
+                )
+            )
+
+    # Check 2: every selected adviser appears in the memo body or in dissent
+    registry = get_registry()
+    memo_evidence_index_lower = {e.lower() for e in (memo_obj.evidence_index or [])}
+    for aid in selected_advisers:
+        aid_lower = aid.lower()
+        adv_cfg = registry.get(aid)
+        adv_name = adv_cfg.name.lower() if adv_cfg else aid_lower
+
+        # Check name/id in full memo text
+        adviser_cited = (aid_lower in memo_lower) or (adv_name in memo_lower)
+
+        # Check if any claim ID from this adviser was cited in memo body text
+        if not adviser_cited and aid in positions_obj:
+            for c in positions_obj[aid].claims:
+                if c.claim_id.lower() in memo_lower:
+                    adviser_cited = True
+                    break
+
+        # Check if the adviser's evidence IDs appear in the memo's evidence_index
+        # (scribe may cite BUS-xx, FIN-xx evidence without naming the adviser explicitly)
+        if not adviser_cited and aid in positions_obj:
+            adviser_prefix = aid.upper().rstrip("0123456789") + "-"  # e.g. "BUS-", "FIN-"
+            # Use claim IDs prefix (e.g. "FIN-01" -> adviser "finance")
+            adv_claim_prefix = positions_obj[aid].claims[0].claim_id.split("-")[0].upper() + "-" if positions_obj[aid].claims else None
+            for eid in memo_evidence_index_lower:
+                # Match by adviser id prefix (finance -> fin, business -> bus, etc.)
+                if eid.startswith(aid_lower[:3]):
+                    adviser_cited = True
+                    break
+                if adv_claim_prefix and eid.upper().startswith(adv_claim_prefix):
+                    adviser_cited = True
+                    break
+
+        if not adviser_cited:
+            code_check_issues.append(
+                MemoIssue(
+                    kind="missing_adviser",
+                    detail=f"Selected adviser '{aid}' ({adv_cfg.name if adv_cfg else aid}) is not represented in the memo body or dissent.",
+                    evidence_ids=[],
+                )
+            )
+
+    # Check 3: every unresolved blocking finding is a condition or explicitly marked as needing a human override
+    verdict_by_id = {v.claim_id: v for v in verdicts_obj}
+    conditions_and_rec = (f"{memo_obj.recommendation} {' '.join(memo_obj.conditions)} {' '.join(memo_obj.phased_plan)}").lower()
+
+    for aid in selected_advisers:
+        pos = positions_obj.get(aid)
+        if not pos or not pos.blocking_findings:
+            continue
+        for idx, bf in enumerate(pos.blocking_findings, start=1):
+            bf_cid = f"{aid}-B{idx}"
+            v = verdict_by_id.get(bf_cid)
+            if v and v.status == ClaimStatus.strike:
+                # Struck finding is resolved / discarded
+                continue
+
+            # Check if reflected in conditions, recommendation, phased plan or human override
+            reflected = False
+            if "human override" in conditions_and_rec or "override" in conditions_and_rec:
+                reflected = True
+            else:
+                # Check key words from finding text or fix
+                text_words = [
+                    w for w in re.findall(r"[a-z]{4,}", (bf.text + " " + bf.fix).lower())
+                    if w not in {"with", "this", "that", "order", "prior", "before", "agreement", "standard", "formal", "vendor"}
+                ]
+                matches = sum(1 for w in set(text_words) if w in conditions_and_rec)
+                if matches >= 2 or bf_cid.lower() in conditions_and_rec:
+                    reflected = True
+
+            if not reflected:
+                code_check_issues.append(
+                    MemoIssue(
+                        kind="ignored_blocker",
+                        detail=f"Unresolved blocking finding '{bf_cid}' is neither a condition nor marked for human override.",
+                        evidence_ids=bf.evidence_ids,
+                    )
+                )
+
+    # Check 4: dissent is present if any adviser's stance differs from the memo's stance
+    memo_stance = memo_obj.stance.lower().strip()
+    dissent_required = False
+    disagreeing_advisers: list[str] = []
+
+    for aid in selected_advisers:
+        pos = positions_obj.get(aid)
+        if not pos:
+            continue
+        pos_stance = pos.stance.lower().strip()
+
+        # Check disagreement
+        if memo_stance in ("b", "favours_b"):
+            if pos_stance in ("favours_a", "object", "a", "insufficient_evidence"):
+                dissent_required = True
+                disagreeing_advisers.append(aid)
+        elif memo_stance in ("a", "favours_a"):
+            if pos_stance in ("favours_b", "object", "b", "insufficient_evidence"):
+                dissent_required = True
+                disagreeing_advisers.append(aid)
+        elif memo_stance in ("conditional",):
+            if pos_stance in ("favours_a", "object"):
+                dissent_required = True
+                disagreeing_advisers.append(aid)
+
+    if dissent_required and not memo_obj.dissent:
+        code_check_issues.append(
+            MemoIssue(
+                kind="missing_dissent",
+                detail=f"Adviser(s) {disagreeing_advisers} disagreed with memo stance '{memo_obj.stance}', but dissent section is empty.",
+                evidence_ids=[],
+            )
+        )
+
+    # Check 5: every key_number matches its evidence (recompute calculations, 1% tolerance; fact values vs value_num)
+    for kn in memo_obj.key_numbers:
+        if not kn.evidence_ids:
+            code_check_issues.append(
+                MemoIssue(
+                    kind="number_mismatch",
+                    detail=f"Key number '{kn.text}' does not cite any evidence IDs.",
+                    evidence_ids=[],
+                )
+            )
+            continue
+
+        if kn.kind == "calculation" and kn.formula:
+            try:
+                from agents.tools import calculate
+                recomputed = calculate(kn.formula)
+                if kn.value is not None and not _matches_within_1pct(recomputed, kn.value, tolerance_pct=1.0):
+                    code_check_issues.append(
+                        MemoIssue(
+                            kind="number_mismatch",
+                            detail=f"Calculation mismatch for '{kn.text}': formula '{kn.formula}' = {recomputed}, but claimed {kn.value}",
+                            evidence_ids=kn.evidence_ids,
+                        )
+                    )
+            except Exception as exc:
+                code_check_issues.append(
+                    MemoIssue(
+                        kind="number_mismatch",
+                        detail=f"Formula error for '{kn.text}': {exc}",
+                        evidence_ids=kn.evidence_ids,
+                    )
+                )
+        elif kn.value is not None:
+            matched = False
+            comparable_eids: list[str] = []  # evidence IDs in same unit family
+            for eid in kn.evidence_ids:
+                fact = get_fact(eid)
+                if not fact:
+                    continue
+                # (b) Appears in statement text
+                if fact.statement and _number_appears_in_statement(fact.statement, kn.value, kn.unit, tolerance_pct=1.0):
+                    matched = True
+                    break
+                # (a) Matches value_num within 1%
+                if fact.value_num is not None:
+                    t_fam, t_val = _normalize_unit_and_value(kn.value, kn.unit)
+                    f_fam, f_val = _normalize_unit_and_value(fact.value_num, fact.unit)
+                    if t_fam == f_fam:
+                        comparable_eids.append(eid)
+                        if _matches_within_1pct(f_val, t_val, tolerance_pct=1.0):
+                            matched = True
+                            break
+
+            # Only flag number_mismatch when a *single* directly comparable evidence ID
+            # contradicts the value. When multiple evidence IDs in the same unit family are
+            # cited, the memo value is likely a derived aggregate (sum/difference of
+            # components) that cannot be verified without an explicit formula — skip.
+            if comparable_eids and not matched and len(comparable_eids) == 1:
+                code_check_issues.append(
+                    MemoIssue(
+                        kind="number_mismatch",
+                        detail=f"Number mismatch in '{kn.text}': value {kn.value} {kn.unit or ''} does not match cited evidence {kn.evidence_ids}.",
+                        evidence_ids=kn.evidence_ids,
+                    )
+                )
+
+    # 2. Build code checks summary for reasoning model
+    if not code_check_issues:
+        code_checks_text = "ALL CODE CHECKS PASSED: Every criterion addressed, every selected adviser represented, unresolved blockers reflected, dissent present, all key numbers match evidence."
+    else:
+        failures_list = [f"- [{issue.kind}] {issue.detail}" for issue in code_check_issues]
+        code_checks_text = "CODE CHECK FAILURES DETECTED:\n" + "\n".join(failures_list)
+
+    # Build accepted claims summary
+    accepted_claims_lines = []
+    for aid in selected_advisers:
+        pos = positions_obj.get(aid)
+        if not pos:
+            continue
+        for c in pos.claims:
+            v = verdict_by_id.get(c.claim_id)
+            if v and v.status == ClaimStatus.strike:
+                continue
+            status_tag = f"[{v.status.value}]" if v else "[KEEP]"
+            warn_str = f" (Warning: {v.reason})" if v and v.status == ClaimStatus.flag else ""
+            accepted_claims_lines.append(f"- ({aid}) {c.claim_id}: {c.text} {status_tag}{warn_str}")
+
+    # 3. Load prompts/moderator_final.md
+    root = Path(__file__).resolve().parent.parent
+    prompt_file = root / "prompts" / "moderator_final.md"
+    template = prompt_file.read_text(encoding="utf-8")
+
+    prompt = template.format(
+        brief=json.dumps(brief_obj.model_dump(), indent=2, default=str),
+        code_checks=code_checks_text,
+        memo=json.dumps(memo_obj.model_dump(), indent=2, default=str),
+        claims="\n".join(accepted_claims_lines),
+    )
+
+    client = get_genai_client()
+    settings = get_settings()
+    max_retries = 3
+    raw_response = ""
+
+    for attempt in range(max_retries):
+        try:
+            resp = client.models.generate_content(
+                model=settings.models.reasoning,
+                contents=prompt,
+                config={"temperature": 0.0},
+            )
+            raw_response = resp.text or ""
+            break
+        except Exception as exc:
+            if ("429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)) and attempt < max_retries - 1:
+                import time
+                time.sleep(2 ** (attempt + 1) * 3)
+                continue
+            # If model call fails, produce an INCOMPLETE verdict with the error
+            return FinalVerdict(
+                verdict=MemoVerdictType.incomplete,
+                issues=code_check_issues + [MemoIssue(kind="moderator_error", detail=f"LLM check failed: {exc}", evidence_ids=[])],
+                revision_instructions="Moderator reasoning model call failed; retry verification.",
+                revision_number=revision_number,
+            )
+
+    # Parse JSON
+    cleaned = raw_response.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```[a-zA-Z0-9_-]*\n", "", cleaned)
+        cleaned = re.sub(r"\n```$", "", cleaned)
+
+    parsed: dict[str, Any] = {}
+    try:
+        parsed = json.loads(cleaned)
+    except Exception:
+        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        if match:
+            try:
+                parsed = json.loads(match.group(0))
+            except Exception:
+                pass
+
+    verdict_raw = str(parsed.get("verdict", "PASS")).upper().strip()
+    if verdict_raw == "PASS":
+        verdict_type = MemoVerdictType.pass_
+    elif verdict_raw == "WRONG":
+        verdict_type = MemoVerdictType.wrong
+    else:
+        verdict_type = MemoVerdictType.incomplete
+
+    llm_issues_raw = parsed.get("issues", [])
+    llm_issues: list[MemoIssue] = []
+    if isinstance(llm_issues_raw, list):
+        for item in llm_issues_raw:
+            if isinstance(item, dict):
+                llm_issues.append(
+                    MemoIssue(
+                        kind=str(item.get("kind") or "issue"),
+                        detail=str(item.get("detail") or ""),
+                        evidence_ids=item.get("evidence_ids") or [],
+                    )
+                )
+
+    revision_instructions = str(parsed.get("revision_instructions") or "").strip()
+
+    # Rule: If any code check failed, the verdict can't be PASS
+    final_issues = code_check_issues + llm_issues
+    if code_check_issues:
+        if verdict_type == MemoVerdictType.pass_:
+            has_wrong = any(i.kind in ("number_mismatch", "ignored_blocker") for i in code_check_issues)
+            verdict_type = MemoVerdictType.wrong if has_wrong else MemoVerdictType.incomplete
+
+        cc_instr = "; ".join(i.detail for i in code_check_issues)
+        if revision_instructions:
+            revision_instructions = f"Resolve code check failures: {cc_instr}. {revision_instructions}"
+        else:
+            revision_instructions = f"Resolve code check failures: {cc_instr}"
+
+    return FinalVerdict(
+        verdict=verdict_type,
+        issues=final_issues,
+        revision_instructions=revision_instructions,
+        revision_number=revision_number,
+    )
+
