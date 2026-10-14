@@ -123,10 +123,71 @@ def load_facts(domains: list[str], include_superseded: bool = False) -> list[Fac
     return [_row_to_fact(row) for row in results]
 
 
+_fact_cache: dict[str, Fact] = {}
+_all_facts_loaded: bool = False
+
+
+def load_all_facts(include_superseded: bool = True) -> list[Fact]:
+    """Retrieve all facts from the fact store and populate cache."""
+    global _fact_cache, _all_facts_loaded
+    settings = get_settings()
+    client = get_client()
+    table_id = f"`{settings.project_id}.{settings.bigquery.dataset}.facts`"
+
+    superseded_clause = ""
+    if not include_superseded:
+        superseded_clause = "WHERE (superseded_by IS NULL OR TRIM(superseded_by) = '')"
+
+    query = f"""
+        SELECT *
+        FROM {table_id}
+        {superseded_clause}
+    """
+    try:
+        query_job = client.query(query)
+        facts = [_row_to_fact(row) for row in query_job.result()]
+        for f in facts:
+            _fact_cache[f.fact_id] = f
+        _all_facts_loaded = True
+        return facts
+    except Exception:
+        # Fallback to local CSV if BQ fails
+        from pathlib import Path
+        import csv
+        root = Path(__file__).resolve().parent.parent
+        csv_file = root / "data" / "facts.csv"
+        if csv_file.is_file():
+            facts = []
+            with open(csv_file, "r", encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    fact = _row_to_fact(row)
+                    _fact_cache[fact.fact_id] = fact
+                    if include_superseded or not fact.superseded_by:
+                        facts.append(fact)
+            _all_facts_loaded = True
+            return facts
+        return []
+
+
 def get_fact(fact_id: str) -> Fact | None:
-    """Retrieve a single fact by fact_id from the fact store."""
+    """Retrieve a single fact by fact_id from the fact store (with in-memory cache)."""
     if not fact_id:
         return None
+
+    clean_id = str(fact_id).strip()
+    if clean_id in _fact_cache:
+        return _fact_cache[clean_id]
+
+    if _all_facts_loaded:
+        return None
+
+    # If cache is empty, load all facts to avoid repeated network round-trips
+    if not _fact_cache:
+        load_all_facts(include_superseded=True)
+        if clean_id in _fact_cache:
+            return _fact_cache[clean_id]
+        if _all_facts_loaded:
+            return None
 
     settings = get_settings()
     client = get_client()
@@ -141,15 +202,31 @@ def get_fact(fact_id: str) -> Fact | None:
 
     job_config = bigquery.QueryJobConfig(
         query_parameters=[
-            bigquery.ScalarQueryParameter("fact_id", "STRING", fact_id),
+            bigquery.ScalarQueryParameter("fact_id", "STRING", clean_id),
         ]
     )
 
-    query_job = client.query(query, job_config=job_config)
-    results = list(query_job.result())
-    if not results:
+    try:
+        query_job = client.query(query, job_config=job_config)
+        results = list(query_job.result())
+        if not results:
+            return None
+        fact = _row_to_fact(results[0])
+        _fact_cache[clean_id] = fact
+        return fact
+    except Exception:
+        # Check local CSV fallback
+        from pathlib import Path
+        import csv
+        root = Path(__file__).resolve().parent.parent
+        csv_file = root / "data" / "facts.csv"
+        if csv_file.is_file():
+            with open(csv_file, "r", encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    f_obj = _row_to_fact(row)
+                    _fact_cache[f_obj.fact_id] = f_obj
+            return _fact_cache.get(clean_id)
         return None
-    return _row_to_fact(results[0])
 
 
 def rank_facts(
