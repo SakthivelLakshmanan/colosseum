@@ -3,13 +3,15 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import hashlib
-import logging
 import os
 from typing import Any
 
 from core.gemini import acquire_gemini_slot_sync, get_genai_client, release_gemini_slot
 from core.ledger import get_db
 from core.settings import get_settings
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 def _compute_cache_key(model: str, task_type: str, text: str) -> str:

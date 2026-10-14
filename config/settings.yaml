@@ -7,7 +7,13 @@ models:
   embedding: gemini-embedding-001  # harness routing (and fact ranking later)
 
 gemini:
-  max_concurrent: 3
+  max_concurrent: 6
+  timeout_s: 60
+  max_retries: 3
+  retry_backoff: [2, 8, 20]
+
+advisers:
+  timeout_s: 420
 
 bigquery:
   location: asia-south1
@@ -42,5 +48,5 @@ aggregation:
 
 run:
   parallel_advisers: true
-  adviser_timeout_s: 300
+  adviser_timeout_s: 420
   continue_if_adviser_fails: true  # one failing adviser must not break the run

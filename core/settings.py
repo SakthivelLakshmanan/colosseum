@@ -14,7 +14,14 @@ class ModelsConfig(BaseModel):
 
 
 class GeminiConfig(BaseModel):
-    max_concurrent: int = 3
+    max_concurrent: int = 6
+    timeout_s: float = 60.0
+    max_retries: int = 3
+    retry_backoff: list[float] = Field(default_factory=lambda: [2.0, 8.0, 20.0])
+
+
+class AdvisersSettingsConfig(BaseModel):
+    timeout_s: float = 420.0
 
 
 class BigQueryConfig(BaseModel):
@@ -61,7 +68,7 @@ class AggregationConfig(BaseModel):
 
 class RunConfig(BaseModel):
     parallel_advisers: bool = True
-    adviser_timeout_s: int = 60
+    adviser_timeout_s: int = 420
     continue_if_adviser_fails: bool = True
 
 
@@ -70,6 +77,7 @@ class Settings(BaseModel):
     models_location: str = "global"
     models: ModelsConfig = Field(default_factory=ModelsConfig)
     gemini: GeminiConfig = Field(default_factory=GeminiConfig)
+    advisers: AdvisersSettingsConfig = Field(default_factory=AdvisersSettingsConfig)
     bigquery: BigQueryConfig = Field(default_factory=BigQueryConfig)
     documents: DocumentsConfig = Field(default_factory=DocumentsConfig)
     firestore: FirestoreConfig = Field(default_factory=FirestoreConfig)

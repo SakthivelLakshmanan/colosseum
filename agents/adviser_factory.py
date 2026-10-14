@@ -7,7 +7,7 @@ import logging
 import os
 from pathlib import Path
 import time
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 import uuid
 
 from google.adk import Runner
@@ -58,6 +58,7 @@ class ToolCallLimiter:
 def build_adviser(
     adviser_id: str,
     tool_limiter: Optional[ToolCallLimiter] = None,
+    on_first_slot: Optional[Callable[[], None]] = None,
 ) -> LlmAgent:
     """Build an ADK LlmAgent for the specified adviser.
 
@@ -116,6 +117,7 @@ def build_adviser(
         caller=f"{adv_cfg.id}_adviser",
         model=settings.models.adviser,
         client=client,
+        on_first_slot=on_first_slot,
     )
 
     before_tool_cb = tool_limiter.before_tool_callback if tool_limiter else None
@@ -242,13 +244,14 @@ async def run_adviser_async(
     adviser_id: str,
     brief: DecisionBrief,
     evidence_pack: EvidencePack,
+    on_first_slot: Optional[Callable[[], None]] = None,
 ) -> AdviserPosition:
     """Run an adviser asynchronously using ADK's native runner.run_async.
 
     Caps tool calls at 8 via ToolCallLimiter and supports cancellation upon timeout.
     """
     limiter = ToolCallLimiter(adviser_id=adviser_id, max_calls=8)
-    agent = build_adviser(adviser_id, tool_limiter=limiter)
+    agent = build_adviser(adviser_id, tool_limiter=limiter, on_first_slot=on_first_slot)
     registry = get_registry()
     adv_cfg = registry.get(adviser_id)
     can_block = adv_cfg.can_block if adv_cfg else False
@@ -337,14 +340,16 @@ def run_adviser(
     adviser_id: str,
     brief: DecisionBrief,
     evidence_pack: EvidencePack,
+    on_first_slot: Optional[Callable[[], None]] = None,
 ) -> AdviserPosition:
     """Run an adviser against a decision brief and evidence pack (sync wrapper)."""
-    return asyncio.run(run_adviser_async(adviser_id, brief, evidence_pack))
+    return asyncio.run(run_adviser_async(adviser_id, brief, evidence_pack, on_first_slot=on_first_slot))
 
 
-# In-memory tracking of execution durations and tool counts for the last run_advisers call
+# In-memory tracking of execution durations, tool counts, and slot wait times for the last run_advisers call
 _last_adviser_durations: dict[str, float] = {}
 _last_adviser_tool_counts: dict[str, int] = {}
+_last_adviser_slot_waits: dict[str, float] = {}
 
 
 def get_last_adviser_durations() -> dict[str, float]:
@@ -357,22 +362,28 @@ def get_last_adviser_tool_counts() -> dict[str, int]:
     return dict(_last_adviser_tool_counts)
 
 
+def get_last_adviser_slot_waits() -> dict[str, float]:
+    """Return slot wait durations in seconds for the most recent run_advisers invocation."""
+    return dict(_last_adviser_slot_waits)
+
+
 async def run_advisers(
     adviser_ids: list[str],
     brief: DecisionBrief,
     packs: dict[str, EvidencePack] | list[EvidencePack] | None = None,
     timeout_s: Optional[float] = None,
 ) -> dict[str, AdviserPosition | str]:
-    """Run multiple advisers concurrently using ADK run_async wrapped in asyncio.wait_for.
+    """Run multiple advisers concurrently with timeout clock starting when first slot is acquired.
 
     A timeout or error is recorded as a string message for that adviser and never stops the others.
     """
     settings = get_settings()
-    effective_timeout = (
-        float(timeout_s)
-        if timeout_s is not None
-        else float(settings.run.adviser_timeout_s)
-    )
+    if timeout_s is not None:
+        effective_timeout = float(timeout_s)
+    elif hasattr(settings, "advisers") and hasattr(settings.advisers, "timeout_s"):
+        effective_timeout = float(settings.advisers.timeout_s)
+    else:
+        effective_timeout = float(settings.run.adviser_timeout_s)
 
     # Normalize packs mapping
     if isinstance(packs, dict):
@@ -382,36 +393,89 @@ async def run_advisers(
     else:
         pack_map = {}
 
-    async def _execute_single(aid: str) -> tuple[str, AdviserPosition | str, float]:
+    async def _execute_single(aid: str) -> tuple[str, AdviserPosition | str, float, float]:
         pack = pack_map.get(aid) or build_pack(aid, brief)
-        start_t = time.time()
+        launch_t = time.time()
+        slot_event = asyncio.Event()
+        slot_time: list[float] = []
+        loop = asyncio.get_running_loop()
+
+        def _on_slot():
+            if not slot_time:
+                slot_time.append(time.time())
+                loop.call_soon_threadsafe(slot_event.set)
+
+        adviser_task = asyncio.create_task(
+            run_adviser_async(aid, brief, pack, on_first_slot=_on_slot)
+        )
+        wait_slot_task = asyncio.create_task(slot_event.wait())
+
         try:
-            position = await asyncio.wait_for(
-                run_adviser_async(aid, brief, pack),
-                timeout=effective_timeout,
+            done, _ = await asyncio.wait(
+                [adviser_task, wait_slot_task],
+                return_when=asyncio.FIRST_COMPLETED,
             )
-            elapsed = time.time() - start_t
-            return aid, position, elapsed
+
+            if adviser_task in done:
+                position = await adviser_task
+            else:
+                # First slot acquired; timeout clock starts now
+                position = await asyncio.wait_for(
+                    adviser_task,
+                    timeout=effective_timeout,
+                )
+
+            total_t = time.time() - launch_t
+            waited_s = (slot_time[0] - launch_t) if slot_time else 0.0
+            tool_count = _last_adviser_tool_counts.get(aid, 0)
+
+            log_msg = (
+                f"[adviser] {aid} done in {int(round(total_t))}s "
+                f"(waited {int(round(waited_s))}s), tool_calls={tool_count}"
+            )
+            print(log_msg, flush=True)
+            logger.info(log_msg)
+
+            return aid, position, total_t, waited_s
+
         except (asyncio.TimeoutError, TimeoutError):
-            elapsed = time.time() - start_t
+            if not adviser_task.done():
+                adviser_task.cancel()
+            total_t = time.time() - launch_t
+            waited_s = (slot_time[0] - launch_t) if slot_time else 0.0
+            tool_count = _last_adviser_tool_counts.get(aid, 0)
             msg = f"Timeout after {effective_timeout:.0f}s"
-            logger.warning("Adviser '%s' timed out after %.2fs", aid, elapsed)
-            return aid, msg, elapsed
+            logger.warning(
+                "Adviser '%s' timed out after %.2fs (waited %.2fs)",
+                aid,
+                total_t,
+                waited_s,
+            )
+            return aid, msg, total_t, waited_s
         except Exception as exc:
-            elapsed = time.time() - start_t
+            if not adviser_task.done():
+                adviser_task.cancel()
+            total_t = time.time() - launch_t
+            waited_s = (slot_time[0] - launch_t) if slot_time else 0.0
+            tool_count = _last_adviser_tool_counts.get(aid, 0)
             msg = f"Error: {exc}"
             logger.error("Adviser '%s' encountered error: %s", aid, exc)
-            return aid, msg, elapsed
+            return aid, msg, total_t, waited_s
+        finally:
+            if not wait_slot_task.done():
+                wait_slot_task.cancel()
 
     tasks = [_execute_single(aid) for aid in adviser_ids]
     completed = await asyncio.gather(*tasks)
 
     results: dict[str, AdviserPosition | str] = {}
     _last_adviser_durations.clear()
+    _last_adviser_slot_waits.clear()
 
-    for aid, pos_or_err, elapsed in completed:
+    for aid, pos_or_err, total_t, waited_s in completed:
         results[aid] = pos_or_err
-        _last_adviser_durations[aid] = elapsed
+        _last_adviser_durations[aid] = total_t
+        _last_adviser_slot_waits[aid] = waited_s
 
     return results
 
