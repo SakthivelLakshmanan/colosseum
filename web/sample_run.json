@@ -1,0 +1,343 @@
+{
+  "run_id": "run_DEC-001_20261015_121258",
+  "status": "done",
+  "created_at": "2026-10-15T12:12:58Z",
+  "brief": {
+    "decision_id": "DEC-001",
+    "question": "Should Legion Capital move 40% of its payment volume (about ₹600 crore a month) from Arvanta Payments to Brevis Pay?",
+    "options": {
+      "A": "Stay with Arvanta Payments for 100% of volume",
+      "B": "Move 40% of volume to Brevis Pay"
+    },
+    "constraints": [
+      "Payment data must be stored and processed only in India",
+      "A decision is needed within 2 weeks",
+      "No more than one gateway migration this financial year",
+      "Overall payment success rate must not fall"
+    ],
+    "criteria": [
+      {
+        "name": "Cost",
+        "weight": 0.25,
+        "owners": [
+          "finance"
+        ],
+        "good_looks_like": "Lower total cost after any fixes needed"
+      },
+      {
+        "name": "Security & compliance",
+        "weight": 0.25,
+        "owners": [
+          "infosec",
+          "legal"
+        ],
+        "good_looks_like": "Meets every data, security and regulatory rule; a blocking finding overrides the score"
+      },
+      {
+        "name": "Reliability",
+        "weight": 0.2,
+        "owners": [
+          "ops"
+        ],
+        "good_looks_like": "No drop in payment success rate or uptime"
+      },
+      {
+        "name": "Growth",
+        "weight": 0.2,
+        "owners": [
+          "business"
+        ],
+        "good_looks_like": "Unlocks new merchants and products; meets the vendor-concentration OKR"
+      },
+      {
+        "name": "Customer impact",
+        "weight": 0.1,
+        "owners": [
+          "customer"
+        ],
+        "good_looks_like": "Fewer complaints, faster settlements and refunds, lower churn"
+      }
+    ],
+    "context": "Legion Capital Ltd: Fictional RBI-registered NBFC (digital personal and SME loans) with a merchant checkout product, Legion Pay. All payment volume currently goes through Arvanta Payments; Brevis Pay has run a 2% pilot since August 2026."
+  },
+  "routing": {
+    "decision_id": "DEC-001",
+    "routing_query": "Legion Capital payment gateway migration 40% volume cost reliability regulation compliance",
+    "scores": [
+      {
+        "adviser_id": "ops",
+        "similarity": 0.88,
+        "best_matching_capability": "Payment gateway reliability, failover, migration operations",
+        "selected": true,
+        "reason": "above margin (0.88 >= 0.72)"
+      },
+      {
+        "adviser_id": "finance",
+        "similarity": 0.84,
+        "best_matching_capability": "Processing fees, MDR, interchange, transition CAPEX and OPEX",
+        "selected": true,
+        "reason": "above margin (0.84 >= 0.72)"
+      },
+      {
+        "adviser_id": "infosec",
+        "similarity": 0.81,
+        "best_matching_capability": "RBI data localisation circulars, card tokenisation, PCI DSS",
+        "selected": true,
+        "reason": "always-include rule: data"
+      },
+      {
+        "adviser_id": "legal",
+        "similarity": 0.76,
+        "best_matching_capability": "Vendor contracts, SLA terms, liability and RBI regulation",
+        "selected": true,
+        "reason": "above margin (0.76 >= 0.72)"
+      },
+      {
+        "adviser_id": "business",
+        "similarity": 0.73,
+        "best_matching_capability": "Merchant checkout conversion, payment options, merchant onboarding",
+        "selected": true,
+        "reason": "above margin (0.73 >= 0.72)"
+      },
+      {
+        "adviser_id": "customer",
+        "similarity": 0.62,
+        "best_matching_capability": "Borrower checkout experience, refund latency, complaint rate",
+        "selected": false,
+        "reason": "below floor (0.62 < 0.70)"
+      }
+    ],
+    "selected": [
+      "ops",
+      "finance",
+      "infosec",
+      "legal",
+      "business"
+    ],
+    "created_at": "2026-10-15T12:13:05Z"
+  },
+  "positions": [
+    {
+      "adviser_id": "ops",
+      "stance": "conditional",
+      "summary": "Ops supports 15% phase 1 with dual active routing to verify failover before 40% migration.",
+      "conditions": [
+        "Maintain dual-routing active gateway failover for first 60 days"
+      ],
+      "claims": [],
+      "criterion_scores": [],
+      "blocking_findings": [],
+      "handoffs": [],
+      "confidence": 0.85
+    },
+    {
+      "adviser_id": "finance",
+      "stance": "favours_B",
+      "summary": "18 bps lower blended MDR on Brevis Pay yields ₹1.08 Cr monthly net savings.",
+      "conditions": [],
+      "claims": [],
+      "criterion_scores": [],
+      "blocking_findings": [],
+      "handoffs": [],
+      "confidence": 0.92
+    },
+    {
+      "adviser_id": "infosec",
+      "stance": "favours_A",
+      "summary": "Brevis Pay Frankfurt disaster recovery replication violates RBI circular on local payment storage.",
+      "conditions": [],
+      "claims": [],
+      "blocking_findings": [
+        {
+          "text": "Brevis Pay EU backup datacenter lacks RBI India localisation signoff",
+          "evidence_ids": [
+            "EVD-SEC-01"
+          ],
+          "fix": "Restrict primary and secondary database backups strictly to AWS ap-south-1 Mumbai"
+        }
+      ],
+      "handoffs": [],
+      "confidence": 0.95
+    },
+    {
+      "adviser_id": "legal",
+      "stance": "conditional",
+      "summary": "Brevis master services agreement requires addendum stipulating Indian jurisdiction for dispute resolution.",
+      "conditions": [
+        "Include mandatory Indian arbitration venue clause in final MSA"
+      ],
+      "claims": [],
+      "criterion_scores": [],
+      "blocking_findings": [],
+      "handoffs": [],
+      "confidence": 0.8
+    },
+    {
+      "adviser_id": "business",
+      "stance": "favours_B",
+      "summary": "Brevis UPI autopay and card checkout improves conversion by estimated 1.4%.",
+      "conditions": [],
+      "claims": [],
+      "criterion_scores": [],
+      "blocking_findings": [],
+      "handoffs": [],
+      "confidence": 0.88
+    }
+  ],
+  "claim_verdicts": [],
+  "scorecard": {
+    "rows": [
+      {
+        "criterion": "Cost",
+        "weight": 0.25,
+        "scores": {
+          "A": 3.0,
+          "B": 4.5
+        },
+        "evidence_ids": [
+          "EVD-FIN-01"
+        ],
+        "missing_owners": []
+      },
+      {
+        "criterion": "Security & compliance",
+        "weight": 0.25,
+        "scores": {
+          "A": 4.5,
+          "B": 2.0
+        },
+        "evidence_ids": [
+          "EVD-SEC-01"
+        ],
+        "missing_owners": []
+      },
+      {
+        "criterion": "Reliability",
+        "weight": 0.2,
+        "scores": {
+          "A": 4.2,
+          "B": 3.8
+        },
+        "evidence_ids": [
+          "EVD-OPS-01"
+        ],
+        "missing_owners": []
+      },
+      {
+        "criterion": "Growth",
+        "weight": 0.2,
+        "scores": {
+          "A": 2.5,
+          "B": 4.8
+        },
+        "evidence_ids": [
+          "EVD-BIZ-01"
+        ],
+        "missing_owners": []
+      },
+      {
+        "criterion": "Customer impact",
+        "weight": 0.1,
+        "scores": {
+          "A": 3.5,
+          "B": 4.0
+        },
+        "evidence_ids": [
+          "EVD-CUST-01"
+        ],
+        "missing_owners": []
+      }
+    ],
+    "weighted_totals": {
+      "A": 3.49,
+      "B": 3.73
+    },
+    "blocked_options": {
+      "B": [
+        "Brevis Pay EU backup datacenter lacks RBI India localisation signoff"
+      ]
+    },
+    "has_missing_scores": false
+  },
+  "memo": {
+    "decision_id": "DEC-001",
+    "recommendation": "Adopt Option B conditionally with phased rollout starting at 15% volume, subject to InfoSec data residency certification.",
+    "stance": "conditional",
+    "confidence": 0.85,
+    "conditions": [
+      "Brevis Pay must certify India-only data storage before volume exceeds 5%",
+      "Dual-routing failover must be maintained for 60 days"
+    ],
+    "phased_plan": [
+      "Phase 1: 15% volume migration with active failover to Arvanta",
+      "Phase 2: Expand to 40% volume once RBI localization audit completes"
+    ],
+    "key_numbers": [
+      {
+        "claim_id": "finance-1",
+        "text": "Monthly savings of ₹1.08 Cr at 40% volume",
+        "evidence_ids": [
+          "EVD-FIN-01"
+        ],
+        "kind": "calculation",
+        "value": 1.08,
+        "unit": "Cr"
+      }
+    ],
+    "blocking_findings": [
+      {
+        "text": "Brevis Pay EU backup datacenter lacks RBI India localisation signoff",
+        "evidence_ids": [
+          "EVD-SEC-01"
+        ],
+        "fix": "Restrict primary and secondary database backups strictly to AWS ap-south-1 Mumbai"
+      }
+    ],
+    "dissent": [
+      "InfoSec: Objects to Option B until RBI data localization is audited and certified."
+    ],
+    "assumptions": [
+      "Payment failure rates remain below 0.3%"
+    ],
+    "numbers_to_watch": [
+      "Monthly MDR delta: 18 bps"
+    ],
+    "evidence_index": [
+      "EVD-FIN-01",
+      "EVD-SEC-01",
+      "EVD-OPS-01",
+      "EVD-LEG-01",
+      "EVD-BIZ-01"
+    ]
+  },
+  "memo_revisions": [
+    {
+      "revision": 0,
+      "memo": {
+        "recommendation": "Adopt Option B conditionally with phased rollout starting at 15% volume, subject to InfoSec data residency certification.",
+        "stance": "conditional"
+      },
+      "verdict": {
+        "verdict": "PASS",
+        "issues": [],
+        "revision_instructions": "",
+        "revision_number": 0
+      }
+    }
+  ],
+  "final_verdict": {
+    "verdict": "PASS",
+    "issues": [],
+    "revision_instructions": "",
+    "revision_number": 0
+  },
+  "human_decisions": [
+    {
+      "action": "approve",
+      "reason": "Approved with conditions as advised by InfoSec and Ops.",
+      "decided_by": "Chief Risk Officer",
+      "decided_at": "2026-10-15T12:20:00Z"
+    }
+  ],
+  "error": null
+}
