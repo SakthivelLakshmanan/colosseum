@@ -13,6 +13,7 @@ from agents.moderator import check_claims, check_memo
 from agents.scorecard import build_scorecard
 from agents.scribe import write_memo
 from core import ledger
+from core.gemini import get_model_used
 from core.schemas import (
     AdviserPosition,
     DecisionBrief,
@@ -23,6 +24,7 @@ from core.schemas import (
     RoutingDecision,
     RunRecord,
 )
+from core.settings import get_settings
 from harness.context_builder import build_pack
 from harness.router import route_decision
 
@@ -44,6 +46,8 @@ def run_decision(
     7. Scribe memo generation ⇄ Moderator final check loop (max 2 revisions).
     8. Record step timings in metrics and save all sections to ledger.
     """
+    settings = get_settings()
+
     # Normalize brief
     if isinstance(brief, (str, Path)):
         brief_path = Path(brief)
@@ -60,6 +64,16 @@ def run_decision(
         run_id = f"run_{brief_obj.decision_id}_{now_str}"
 
     metrics: dict[str, float] = {}
+    model_used: dict[str, str] = {}
+    routing: Optional[RoutingDecision] = None
+    evidence_packs: list[EvidencePack] = []
+    positions: dict[str, AdviserPosition] = {}
+    claim_verdicts: list[ClaimVerdict] = []
+    scorecard: Optional[Scorecard] = None
+    memo_versions: list[Memo] = []
+    final_verdicts: list[FinalVerdict] = []
+    memo_revisions: list[dict[str, Any]] = []
+    current_stage = "init"
     start_total_t = time.time()
 
     # Create run in ledger
@@ -70,6 +84,7 @@ def run_decision(
 
     try:
         # Step 1: Routing
+        current_stage = "routing"
         try:
             ledger.update_status(run_id, "routing", "Routing decision brief to advisers")
         except Exception as exc:
@@ -78,29 +93,41 @@ def run_decision(
         t0 = time.time()
         routing = route_decision(brief_obj)
         metrics["routing_time_s"] = round(time.time() - t0, 3)
+        router_model = get_model_used("router") or getattr(settings.models, "adviser", "gemini-3.8-flash")
+        model_used["routing"] = router_model
 
         try:
             ledger.save_routing(run_id, routing)
             ledger.save_section(run_id, "routing", routing)
+            ledger.save_section(run_id, "model_used", model_used)
         except Exception as exc:
             logger.warning("Failed to save routing in ledger: %s", exc)
 
         selected_advisers = routing.selected
 
         # Step 2: Evidence packs
+        current_stage = "evidence_packs"
+        try:
+            ledger.update_status(run_id, "evidence_packs", "Building evidence packs")
+        except Exception as exc:
+            logger.warning("Failed to update status in ledger: %s", exc)
+
         t0 = time.time()
-        evidence_packs: list[EvidencePack] = []
+        evidence_packs = []
         for aid in selected_advisers:
             pack = build_pack(adviser_id=aid, brief=brief_obj, routing_query=routing.routing_query)
             evidence_packs.append(pack)
         metrics["evidence_packs_time_s"] = round(time.time() - t0, 3)
+        model_used["evidence_packs"] = get_model_used("aggregator") or "none"
 
         try:
             ledger.save_section(run_id, "evidence_packs", evidence_packs)
+            ledger.save_section(run_id, "model_used", model_used)
         except Exception as exc:
             logger.warning("Failed to save evidence_packs in ledger: %s", exc)
 
         # Step 3: Advisers in parallel
+        current_stage = "advisers"
         try:
             ledger.update_status(run_id, "advisers", f"Running {len(selected_advisers)} advisers in parallel")
         except Exception as exc:
@@ -109,8 +136,9 @@ def run_decision(
         t0 = time.time()
         positions_map = run_advisers_sync(selected_advisers, brief=brief_obj, packs=evidence_packs)
         metrics["advisers_time_s"] = round(time.time() - t0, 3)
+        model_used["advisers"] = getattr(settings.models, "adviser", "gemini-3.8-flash")
 
-        positions: dict[str, AdviserPosition] = {}
+        positions = {}
         for aid in selected_advisers:
             pos = positions_map.get(aid)
             if isinstance(pos, AdviserPosition):
@@ -122,10 +150,12 @@ def run_decision(
 
         try:
             ledger.save_section(run_id, "positions", list(positions.values()))
+            ledger.save_section(run_id, "model_used", model_used)
         except Exception as exc:
             logger.warning("Failed to save positions in ledger: %s", exc)
 
         # Step 4: Claim checks (moderating)
+        current_stage = "moderating"
         try:
             ledger.update_status(run_id, "moderating", "Checking claims and blocking findings")
         except Exception as exc:
@@ -134,13 +164,17 @@ def run_decision(
         t0 = time.time()
         claim_verdicts = check_claims(positions=positions)
         metrics["moderating_time_s"] = round(time.time() - t0, 3)
+        mod_model = get_model_used("moderator") or getattr(settings.models, "reasoning", "gemini-3.1-pro-preview")
+        model_used["moderating"] = mod_model
 
         try:
             ledger.save_section(run_id, "claim_verdicts", claim_verdicts)
+            ledger.save_section(run_id, "model_used", model_used)
         except Exception as exc:
             logger.warning("Failed to save claim_verdicts in ledger: %s", exc)
 
         # Step 5: Scorecard (scoring)
+        current_stage = "scoring"
         try:
             ledger.update_status(run_id, "scoring", "Computing scorecard synthesis")
         except Exception as exc:
@@ -149,21 +183,24 @@ def run_decision(
         t0 = time.time()
         scorecard = build_scorecard(brief=brief_obj, positions=positions, claim_verdicts=claim_verdicts)
         metrics["scoring_time_s"] = round(time.time() - t0, 3)
+        model_used["scoring"] = "none"
 
         try:
             ledger.save_section(run_id, "scorecard", scorecard)
+            ledger.save_section(run_id, "model_used", model_used)
         except Exception as exc:
             logger.warning("Failed to save scorecard in ledger: %s", exc)
 
         # Step 6: Scribe ⇄ final check loop (max 2 revisions)
         max_revisions = 2
-        memo_versions: list[Memo] = []
-        final_verdicts: list[FinalVerdict] = []
-        memo_revisions: list[dict[str, Any]] = []
+        memo_versions = []
+        final_verdicts = []
+        memo_revisions = []
         revision_instructions = ""
         revision_number = 0
 
         while True:
+            current_stage = "writing"
             try:
                 ledger.update_status(run_id, "writing", f"Drafting memo (revision {revision_number})")
             except Exception as exc:
@@ -179,14 +216,19 @@ def run_decision(
             )
             metrics[f"writing_rev_{revision_number}_time_s"] = round(time.time() - t0, 3)
             memo_versions.append(memo)
+            scribe_model = get_model_used("scribe") or getattr(settings.models, "reasoning", "gemini-3.1-pro-preview")
+            model_used["writing"] = scribe_model
+            model_used["scribe"] = scribe_model
 
             # Scribe's memo must be saved to the run document as memo before the final check runs
             try:
                 ledger.save_memo(run_id, memo)
                 ledger.save_section(run_id, "memo_versions", memo_versions)
+                ledger.save_section(run_id, "model_used", model_used)
             except Exception as exc:
                 logger.warning("Failed to save memo in ledger: %s", exc)
 
+            current_stage = "checking"
             try:
                 ledger.update_status(run_id, "checking", f"Checking memo (revision {revision_number})")
             except Exception as exc:
@@ -203,6 +245,9 @@ def run_decision(
             )
             metrics[f"checking_rev_{revision_number}_time_s"] = round(time.time() - t0, 3)
             final_verdicts.append(verdict)
+            check_model = get_model_used("final_check") or getattr(settings.models, "reasoning", "gemini-3.1-pro-preview")
+            model_used["checking"] = check_model
+            model_used["final_check"] = check_model
 
             # Each revision appended to memo_revisions with its verdict
             revision_entry = {
@@ -216,6 +261,7 @@ def run_decision(
                 ledger.save_final_verdict(run_id, verdict)
                 ledger.save_section(run_id, "final_verdicts", final_verdicts)
                 ledger.save_memo_revisions(run_id, memo_revisions)
+                ledger.save_section(run_id, "model_used", model_used)
             except Exception as exc:
                 logger.warning("Failed to save final_verdict and revisions in ledger: %s", exc)
 
@@ -233,6 +279,7 @@ def run_decision(
         try:
             ledger.update_status(run_id, "done", "Decision pipeline completed successfully")
             ledger.save_section(run_id, "metrics", metrics)
+            ledger.save_section(run_id, "model_used", model_used)
         except Exception as exc:
             logger.warning("Failed to update status in ledger: %s", exc)
 
@@ -246,14 +293,34 @@ def run_decision(
             memo_versions=memo_versions,
             final_verdicts=final_verdicts,
             metrics=metrics,
+            status="done",
+            model_used=model_used,
         )
 
     except Exception as exc:
         metrics["total_time_s"] = round(time.time() - start_total_t, 3)
+        error_msg = f"Stage '{current_stage}' failed: {exc}"
+        logger.error("Pipeline run %s failed at stage '%s': %s", run_id, current_stage, exc, exc_info=True)
         try:
-            ledger.update_status(run_id, "failed", f"Failed: {exc}")
-            ledger.save_section(run_id, "error", str(exc))
+            ledger.update_status(run_id, "failed", error_msg)
+            ledger.save_section(run_id, "error", error_msg)
+            ledger.save_section(run_id, "failed_stage", current_stage)
+            ledger.save_section(run_id, "model_used", model_used)
             ledger.save_section(run_id, "metrics", metrics)
         except Exception as log_err:
             logger.warning("Failed to record failure in ledger: %s", log_err)
-        raise
+
+        return RunRecord(
+            run_id=run_id,
+            brief=brief_obj,
+            routing=routing,
+            evidence_packs=evidence_packs,
+            positions=list(positions.values()),
+            claim_verdicts=claim_verdicts,
+            memo_versions=memo_versions,
+            final_verdicts=final_verdicts,
+            metrics=metrics,
+            status="failed",
+            error=error_msg,
+            model_used=model_used,
+        )

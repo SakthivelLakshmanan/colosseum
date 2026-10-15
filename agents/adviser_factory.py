@@ -16,7 +16,13 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 from agents.tools import calculate, get_facts, query_table, search_documents
-from core.gemini import ColosseumGemini, get_genai_client
+from core.gemini import (
+    ColosseumGemini,
+    generate,
+    get_caller_stats,
+    get_genai_client,
+    reset_caller_stats,
+)
 from core.registry import find_project_root, get_registry
 from core.schemas import AdviserPosition, Claim, DecisionBrief, EvidencePack
 from core.settings import get_settings
@@ -27,31 +33,40 @@ logger = logging.getLogger(__name__)
 
 
 class ToolCallLimiter:
-    """Limits tool calls to max_calls per adviser run."""
+    """Limits tool calls to max_calls per adviser run and disables tools when budget reached."""
 
-    def __init__(self, adviser_id: str, max_calls: int = 8):
+    def __init__(self, adviser_id: str, max_calls: int = 4, agent: Optional[Any] = None):
         self.adviser_id = adviser_id
         self.max_calls = max_calls
         self.count = 0
+        self.agent = agent
+
+    def disable_tools(self) -> None:
+        """Turn off tools on the adviser agent."""
+        if self.agent and hasattr(self.agent, "tools"):
+            self.agent.tools = []
 
     def before_tool_callback(
         self, tool: Any, args: Any, tool_context: Any = None
     ) -> Optional[dict[str, Any]]:
         self.count += 1
         if self.count > self.max_calls:
+            self.disable_tools()
             logger.info(
-                "Adviser '%s' reached tool call limit (%d calls); instructing model to write position.",
+                "Adviser '%s' reached tool call limit (%d calls); disabling tools and instructing model to write position.",
                 self.adviser_id,
                 self.max_calls,
             )
             return {
-                "error": "Tool call limit reached",
+                "error": "Tool limit reached",
                 "message": (
-                    f"Tool call limit reached ({self.max_calls} calls). "
+                    f"Tool limit reached ({self.max_calls} calls). Tools are now turned off. "
                     "Do not make any further tool calls. "
                     "Write your position now from the evidence you have as a JSON object adhering to the AdviserPosition schema."
                 ),
             }
+        if self.count >= self.max_calls:
+            self.disable_tools()
         return None
 
 
@@ -129,6 +144,8 @@ def build_adviser(
         tools=tools,
         before_tool_callback=before_tool_cb,
     )
+    if tool_limiter:
+        tool_limiter.agent = agent
     return agent
 
 
@@ -250,7 +267,9 @@ async def run_adviser_async(
 
     Caps tool calls at 8 via ToolCallLimiter and supports cancellation upon timeout.
     """
-    limiter = ToolCallLimiter(adviser_id=adviser_id, max_calls=8)
+    settings = get_settings()
+    max_tool_calls = int(getattr(getattr(settings, "advisers", None), "max_tool_calls", 4))
+    limiter = ToolCallLimiter(adviser_id=adviser_id, max_calls=max_tool_calls)
     agent = build_adviser(adviser_id, tool_limiter=limiter, on_first_slot=on_first_slot)
     registry = get_registry()
     adv_cfg = registry.get(adviser_id)
@@ -313,10 +332,23 @@ async def run_adviser_async(
         ):
             retry_events.append(event)
         retry_reply_text = _extract_text_from_events(retry_events)
-        retry_json_str = _extract_json_string(retry_reply_text)
-        data = json.loads(retry_json_str)
-        data = _normalize_position_dict(data, adviser_id)
-        position = AdviserPosition.model_validate(data)
+        try:
+            retry_json_str = _extract_json_string(retry_reply_text)
+            data = json.loads(retry_json_str)
+            data = _normalize_position_dict(data, adviser_id)
+            position = AdviserPosition.model_validate(data)
+        except Exception as retry_err:
+            logger.warning(
+                "Adviser %s retry response invalid (%s). Requesting final position without tools...",
+                adviser_id,
+                retry_err,
+            )
+            position = await _request_final_position_without_tools(
+                aid=adviser_id,
+                brief=brief,
+                pack=evidence_pack,
+                timeout_s=30.0,
+            )
 
     # Record tool call count for this adviser
     _last_adviser_tool_counts[adviser_id] = limiter.count
@@ -326,6 +358,86 @@ async def run_adviser_async(
         for idx, bf in enumerate(position.blocking_findings, 1):
             demoted_claim = Claim(
                 claim_id=f"{adviser_id}-claim-{len(position.claims) + idx}",
+                text=f"{bf.text} (Fix: {bf.fix})",
+                evidence_ids=bf.evidence_ids,
+                kind="judgement",
+            )
+            position.claims.append(demoted_claim)
+        position.blocking_findings = []
+
+    return position
+
+
+async def _request_final_position_without_tools(
+    aid: str,
+    brief: DecisionBrief,
+    pack: EvidencePack,
+    timeout_s: float,
+) -> AdviserPosition:
+    """Request final position JSON straight away from evidence pack, with tools turned off."""
+    settings = get_settings()
+    registry = get_registry()
+    adv_cfg = registry.get(aid)
+    can_block = adv_cfg.can_block if adv_cfg else False
+
+    root = find_project_root()
+    shared_path = root / "prompts" / "advisers" / "_shared.md"
+    shared_template = shared_path.read_text(encoding="utf-8")
+    if adv_cfg and adv_cfg.can_block:
+        blocking_rule = (
+            "You may raise blocking findings: only for a breach of a mandatory rule "
+            "(policy, law or regulation). Cite the rule and the evidence, and give the fix."
+        )
+    else:
+        blocking_rule = (
+            "You can’t raise blocking findings. If you see a serious risk, state it "
+            "as a claim and add a handoff."
+        )
+    criteria_str = ", ".join(adv_cfg.criteria_owned) if adv_cfg else ""
+    shared_instruction = shared_template.format(
+        name=adv_cfg.name if adv_cfg else aid,
+        company="Legion Capital",
+        lens=adv_cfg.lens if adv_cfg else aid,
+        criteria=criteria_str,
+        blocking_rule=blocking_rule,
+        id=aid,
+    )
+
+    adviser_prompt_file = root / (adv_cfg.instructions if adv_cfg else "")
+    adviser_prompt = (
+        adviser_prompt_file.read_text(encoding="utf-8")
+        if adviser_prompt_file.is_file()
+        else (adv_cfg.instructions_content or "") if adv_cfg else ""
+    )
+
+    final_user_prompt = (
+        f"{shared_instruction}\n\n---\n\n{adviser_prompt}\n\n---\n\n"
+        "Here is the decision brief and your evidence pack:\n\n"
+        f"## Decision Brief\n```json\n{brief.model_dump_json(indent=2)}\n```\n\n"
+        f"## Evidence Pack\n```json\n{pack.model_dump_json(indent=2)}\n```\n\n"
+        "Time/tool limit reached. Tools are now turned off. "
+        "Return your final position now straight away from the evidence you already have, "
+        "as a JSON object adhering exactly to the AdviserPosition schema."
+    )
+
+    resp = await asyncio.to_thread(
+        generate,
+        model=settings.models.adviser,
+        contents=final_user_prompt,
+        config={"temperature": 0.0},
+        caller=f"{aid}_adviser",
+        timeout_s=timeout_s,
+    )
+    raw_text = resp if isinstance(resp, str) else (getattr(resp, "text", "") or str(resp))
+    json_str = _extract_json_string(raw_text)
+    data = json.loads(json_str)
+    data = _normalize_position_dict(data, aid)
+    position = AdviserPosition.model_validate(data)
+
+    if not can_block and position.blocking_findings:
+        for idx, bf in enumerate(position.blocking_findings, 1):
+            demoted_claim = Claim(
+                claim_id=f"{aid}-claim-{len(position.claims) + idx}",
                 text=f"{bf.text} (Fix: {bf.fix})",
                 evidence_ids=bf.evidence_ids,
                 kind="judgement",
@@ -375,7 +487,8 @@ async def run_advisers(
 ) -> dict[str, AdviserPosition | str]:
     """Run multiple advisers concurrently with timeout clock starting when first slot is acquired.
 
-    A timeout or error is recorded as a string message for that adviser and never stops the others.
+    Enforces graceful deadline: at 75% of timeout, tools are turned off and the final position JSON
+    is requested straight away from existing evidence. An adviser counts as failed only if that final call fails.
     """
     settings = get_settings()
     if timeout_s is not None:
@@ -400,6 +513,8 @@ async def run_advisers(
         slot_time: list[float] = []
         loop = asyncio.get_running_loop()
 
+        reset_caller_stats(f"{aid}_adviser")
+
         def _on_slot():
             if not slot_time:
                 slot_time.append(time.time())
@@ -420,18 +535,41 @@ async def run_advisers(
                 position = await adviser_task
             else:
                 # First slot acquired; timeout clock starts now
-                position = await asyncio.wait_for(
-                    adviser_task,
-                    timeout=effective_timeout,
-                )
+                # Phase 1 runs up to 75% of timeout
+                phase1_limit = 0.75 * effective_timeout
+                try:
+                    position = await asyncio.wait_for(
+                        adviser_task,
+                        timeout=phase1_limit,
+                    )
+                except (asyncio.TimeoutError, TimeoutError):
+                    # 75% of timeout reached: turn off tools and ask it to return final position JSON straight away
+                    logger.info("Adviser '%s' reached 75%% timeout; requesting final position with tools disabled.", aid)
+                    if not adviser_task.done():
+                        adviser_task.cancel()
+
+                    elapsed_after_slot = time.time() - slot_time[0]
+                    remaining_t = max(0.1, effective_timeout - elapsed_after_slot)
+                    try:
+                        position = await asyncio.wait_for(
+                            _request_final_position_without_tools(
+                                aid=aid,
+                                brief=brief,
+                                pack=pack,
+                                timeout_s=remaining_t,
+                            ),
+                            timeout=remaining_t,
+                        )
+                    except Exception as final_exc:
+                        raise TimeoutError(f"Timeout after {effective_timeout:.0f}s: final call failed ({final_exc})") from final_exc
 
             total_t = time.time() - launch_t
             waited_s = (slot_time[0] - launch_t) if slot_time else 0.0
-            tool_count = _last_adviser_tool_counts.get(aid, 0)
+            call_count, total_gemini_s, slowest_s = get_caller_stats(f"{aid}_adviser")
 
             log_msg = (
-                f"[adviser] {aid} done in {int(round(total_t))}s "
-                f"(waited {int(round(waited_s))}s), tool_calls={tool_count}"
+                f"[adviser] {aid} done in {int(round(total_t))}s, "
+                f"gemini_calls={call_count}, slowest={int(round(slowest_s))}s"
             )
             print(log_msg, flush=True)
             logger.info(log_msg)
@@ -443,13 +581,15 @@ async def run_advisers(
                 adviser_task.cancel()
             total_t = time.time() - launch_t
             waited_s = (slot_time[0] - launch_t) if slot_time else 0.0
-            tool_count = _last_adviser_tool_counts.get(aid, 0)
+            call_count, total_gemini_s, slowest_s = get_caller_stats(f"{aid}_adviser")
             msg = f"Timeout after {effective_timeout:.0f}s"
             logger.warning(
-                "Adviser '%s' timed out after %.2fs (waited %.2fs)",
+                "Adviser '%s' timed out after %.2fs (waited %.2fs, gemini_calls=%d, slowest=%.1fs)",
                 aid,
                 total_t,
                 waited_s,
+                call_count,
+                slowest_s,
             )
             return aid, msg, total_t, waited_s
         except Exception as exc:
@@ -457,7 +597,7 @@ async def run_advisers(
                 adviser_task.cancel()
             total_t = time.time() - launch_t
             waited_s = (slot_time[0] - launch_t) if slot_time else 0.0
-            tool_count = _last_adviser_tool_counts.get(aid, 0)
+            call_count, total_gemini_s, slowest_s = get_caller_stats(f"{aid}_adviser")
             msg = f"Error: {exc}"
             logger.error("Adviser '%s' encountered error: %s", aid, exc)
             return aid, msg, total_t, waited_s

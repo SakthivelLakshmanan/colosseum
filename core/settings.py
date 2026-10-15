@@ -13,15 +13,27 @@ class ModelsConfig(BaseModel):
     embedding: str = "gemini-embedding-001"
 
 
+class GeminiTimeoutConfig(BaseModel):
+    flash: float = 90.0
+    pro: float = 240.0
+
+
+class GeminiThinkingConfig(BaseModel):
+    flash: str = "low"
+    pro: str = "medium"
+
+
 class GeminiConfig(BaseModel):
     max_concurrent: int = 6
-    timeout_s: float = 60.0
+    timeout_s: GeminiTimeoutConfig | float = Field(default_factory=GeminiTimeoutConfig)
+    thinking: GeminiThinkingConfig = Field(default_factory=GeminiThinkingConfig)
     max_retries: int = 3
     retry_backoff: list[float] = Field(default_factory=lambda: [2.0, 8.0, 20.0])
 
 
 class AdvisersSettingsConfig(BaseModel):
     timeout_s: float = 420.0
+    max_tool_calls: int = 4
 
 
 class BigQueryConfig(BaseModel):

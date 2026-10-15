@@ -793,6 +793,29 @@ def evaluate_outcome(brief_path: Path, num_runs: int, runs_dir: Path, pause_s: i
         record = run_decision(brief=brief_path)
         elapsed = time.time() - t0
 
+        is_failed = getattr(record, "status", "") == "failed" or not getattr(record, "memo_versions", None)
+        if is_failed:
+            err_msg = getattr(record, "error", "") or "Pipeline run failed without memo"
+            print(f"[evals] Run {i} FAILED in {elapsed:.1f}s: {err_msg}")
+            failed_items = [
+                {"id": idx, "criterion": f"Criterion {idx}", "score": 0, "reason": f"Run failed: {err_msg}"}
+                for idx in range(1, 9)
+            ]
+            run_results.append({
+                "run_num": i,
+                "run_id": getattr(record, "run_id", f"run_{i}"),
+                "final_verdict": "FAILED",
+                "revision_count": 0,
+                "verdict_sequence": "FAILED",
+                "elapsed_s": elapsed,
+                "items": failed_items,
+                "total_score": 0,
+            })
+            if pause_s > 0 and i < num_runs:
+                print(f"\n[evals] Pausing for {pause_s}s before next run...")
+                time.sleep(pause_s)
+            continue
+
         final_memo = record.memo_versions[-1]
         final_verdict = record.final_verdicts[-1].verdict.value if record.final_verdicts else "UNKNOWN"
         revision_count = max(0, len(record.memo_versions) - 1)

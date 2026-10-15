@@ -8,12 +8,18 @@ models:
 
 gemini:
   max_concurrent: 6
-  timeout_s: 60
+  timeout_s:
+    flash: 90
+    pro: 240
+  thinking:
+    flash: low
+    pro: medium
   max_retries: 3
   retry_backoff: [2, 8, 20]
 
 advisers:
   timeout_s: 420
+  max_tool_calls: 4
 
 bigquery:
   location: asia-south1

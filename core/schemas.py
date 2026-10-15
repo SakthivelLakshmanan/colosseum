@@ -222,11 +222,14 @@ class HumanDecision(BaseModel):
 class RunRecord(BaseModel):
     run_id: str
     brief: DecisionBrief
-    routing: RoutingDecision
-    evidence_packs: list[EvidencePack]
-    positions: list[AdviserPosition]
-    claim_verdicts: list[ClaimVerdict]
-    memo_versions: list[Memo]
-    final_verdicts: list[FinalVerdict]
+    routing: Optional[RoutingDecision] = None
+    evidence_packs: list[EvidencePack] = Field(default_factory=list)
+    positions: list[AdviserPosition] = Field(default_factory=list)
+    claim_verdicts: list[ClaimVerdict] = Field(default_factory=list)
+    memo_versions: list[Memo] = Field(default_factory=list)
+    final_verdicts: list[FinalVerdict] = Field(default_factory=list)
     human_decision: Optional[HumanDecision] = None
-    metrics: dict[str, float] = {}    # latency_s, facts_considered, tokens, etc.
+    metrics: dict[str, float] = Field(default_factory=dict)    # latency_s, facts_considered, tokens, etc.
+    status: str = "done"
+    error: Optional[str] = None
+    model_used: dict[str, str] = Field(default_factory=dict)

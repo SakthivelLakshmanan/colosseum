@@ -124,10 +124,180 @@ _sync_executor = concurrent.futures.ThreadPoolExecutor(
 )
 
 
+# Tracking of models actually used per caller
+_models_used: dict[str, str] = {}
+_models_used_lock = threading.Lock()
+
+
+class CallerStats:
+    """Per-caller Gemini execution statistics."""
+
+    def __init__(self) -> None:
+        self.call_count: int = 0
+        self.total_time_s: float = 0.0
+        self.slowest_time_s: float = 0.0
+
+
+_caller_stats: dict[str, CallerStats] = defaultdict(CallerStats)
+_caller_stats_lock = threading.Lock()
+
+
+def record_call_timing(caller: str, duration_s: float) -> None:
+    """Record duration of a Gemini call for a caller."""
+    if caller:
+        with _caller_stats_lock:
+            st = _caller_stats[caller]
+            st.call_count += 1
+            st.total_time_s += duration_s
+            if duration_s > st.slowest_time_s:
+                st.slowest_time_s = duration_s
+
+
+def get_caller_stats(caller: str) -> tuple[int, float, float]:
+    """Return (call_count, total_time_s, slowest_time_s) for a caller."""
+    with _caller_stats_lock:
+        st = _caller_stats.get(caller)
+        if st is None:
+            return 0, 0.0, 0.0
+        return st.call_count, st.total_time_s, st.slowest_time_s
+
+
+def reset_caller_stats(caller: Optional[str] = None) -> None:
+    """Reset caller stats for one or all callers."""
+    with _caller_stats_lock:
+        if caller:
+            _caller_stats.pop(caller, None)
+        else:
+            _caller_stats.clear()
+
+
+def record_model_used(caller: str, model: str) -> None:
+    """Record which model was actually used by a caller."""
+    if caller:
+        with _models_used_lock:
+            _models_used[caller] = model
+
+
+def get_model_used(caller: str) -> Optional[str]:
+    """Get the model last used by a caller."""
+    with _models_used_lock:
+        return _models_used.get(caller)
+
+
+def get_all_models_used() -> dict[str, str]:
+    """Return dictionary of caller -> model for all recorded calls."""
+    with _models_used_lock:
+        return dict(_models_used)
+
+
+def reset_models_used() -> None:
+    """Reset the recorded models dictionary."""
+    with _models_used_lock:
+        _models_used.clear()
+
+
+def _build_thinking_config(level: str) -> Optional[Any]:
+    """Build types.ThinkingConfig if supported by the installed google-genai version."""
+    if not hasattr(types, "ThinkingConfig"):
+        return None
+    lvl_lower = (level or "").lower().strip()
+    try:
+        try:
+            return types.ThinkingConfig(thinking_level=lvl_lower)
+        except (TypeError, ValueError):
+            pass
+
+        budget_map = {"low": 1024, "medium": 4096, "high": 8192, "off": 0}
+        budget = budget_map.get(lvl_lower, 1024)
+        try:
+            return types.ThinkingConfig(thinking_budget=budget)
+        except (TypeError, ValueError):
+            pass
+
+        try:
+            return types.ThinkingConfig(budget=budget)
+        except (TypeError, ValueError):
+            pass
+
+        return None
+    except Exception as exc:
+        logger.debug("ThinkingConfig not supported: %s", exc)
+        return None
+
+
+def get_thinking_config(caller: str = "", model: str = "", settings: Optional[Any] = None) -> Optional[Any]:
+    """Return ThinkingConfig for the caller/model based on settings."""
+    if settings is None:
+        settings = get_settings()
+
+    thinking_cfg = getattr(settings.gemini, "thinking", None)
+    if thinking_cfg is None:
+        return None
+
+    caller_lower = (caller or "").lower()
+    model_lower = (model or "").lower()
+    reasoning_model = getattr(getattr(settings, "models", None), "reasoning", "")
+    is_pro = "pro" in model_lower or (bool(reasoning_model) and model == reasoning_model)
+
+    # medium for moderator, Scribe and final check
+    is_medium = (
+        is_pro
+        or "moderator" in caller_lower
+        or "scribe" in caller_lower
+        or "final_check" in caller_lower
+        or "checking" in caller_lower
+    )
+    # low for adviser, routing and summary calls
+    level = getattr(thinking_cfg, "pro", "medium") if is_medium else getattr(thinking_cfg, "flash", "low")
+    return _build_thinking_config(level)
+
+
+def get_model_timeout_s(model: str = "", settings: Optional[Any] = None) -> float:
+    """Return the timeout in seconds for a model (flash: 90s, pro: 240s)."""
+    if settings is None:
+        settings = get_settings()
+
+    timeout_cfg = getattr(settings.gemini, "timeout_s", None)
+    if isinstance(timeout_cfg, (int, float)):
+        return float(timeout_cfg)
+
+    m_lower = (model or "").lower()
+    reasoning_model = getattr(getattr(settings, "models", None), "reasoning", "")
+    is_pro = "pro" in m_lower or (bool(reasoning_model) and model == reasoning_model)
+
+    if hasattr(timeout_cfg, "pro") and hasattr(timeout_cfg, "flash"):
+        return float(timeout_cfg.pro if is_pro else timeout_cfg.flash)
+    elif isinstance(timeout_cfg, dict):
+        return float(timeout_cfg.get("pro", 240.0) if is_pro else timeout_cfg.get("flash", 90.0))
+
+    return 240.0 if is_pro else 90.0
+
+
+def _build_http_options(timeout_s: float) -> types.HttpOptions:
+    """Build HttpOptions with millisecond timeout and 1 attempt (disabling SDK internal retries)."""
+    timeout_ms = int(timeout_s * 1000)
+    retry_options = None
+    if hasattr(types, "HttpRetryOptions"):
+        try:
+            retry_options = types.HttpRetryOptions(attempts=1)
+        except Exception:
+            pass
+    if retry_options is not None:
+        return types.HttpOptions(timeout=timeout_ms, retry_options=retry_options)
+    return types.HttpOptions(timeout=timeout_ms)
+
+
+def reset_genai_client() -> None:
+    """Reset the shared client instance (useful in tests)."""
+    global _genai_client
+    with _client_lock:
+        _genai_client = None
+
+
 def get_genai_client(caller: Optional[str] = None) -> genai.Client:
     """Initialize or return the shared google-genai Vertex AI client.
     
-    Sets timeout from settings (default 60s) and disables SDK internal silent retries
+    Sets timeout from settings and disables SDK internal silent retries
     so rate limits are surfaced to our shared wrapper.
     """
     global _genai_client
@@ -138,11 +308,8 @@ def get_genai_client(caller: Optional[str] = None) -> genai.Client:
             os.environ["GOOGLE_CLOUD_PROJECT"] = settings.project_id
             os.environ["GOOGLE_CLOUD_LOCATION"] = settings.models_location
 
-            timeout_s = getattr(settings.gemini, "timeout_s", 60.0)
-            http_opts = types.HttpOptions(
-                timeout=int(timeout_s * 1000),
-                retry_options=types.HttpRetryOptions(attempts=1),
-            )
+            default_timeout = get_model_timeout_s("", settings)
+            http_opts = _build_http_options(default_timeout)
             _genai_client = genai.Client(
                 vertexai=True,
                 project=settings.project_id,
@@ -166,35 +333,50 @@ def generate(
     """Shared Gemini generate wrapper.
     
     Calls client.models.generate_content and holds retry, backoff, timeout,
-    semaphore and logging logic. Every caller uses this function.
+    fallback, semaphore and logging logic. Every caller uses this function.
     """
     settings = get_settings()
-    eff_timeout_s = timeout_s if timeout_s is not None else float(getattr(settings.gemini, "timeout_s", 60.0))
+    eff_timeout_s = timeout_s if timeout_s is not None else get_model_timeout_s(model, settings)
     eff_max_retries = max_retries if max_retries is not None else int(getattr(settings.gemini, "max_retries", 3))
     delays = getattr(settings.gemini, "retry_backoff", [2.0, 8.0, 20.0])
 
     call_name = caller or current_caller.get()
     client = get_genai_client(caller=call_name)
 
+    http_opts = _build_http_options(eff_timeout_s)
     call_config = config
-    http_opts = types.HttpOptions(
-        timeout=int(eff_timeout_s * 1000),
-        retry_options=types.HttpRetryOptions(attempts=1),
-    )
     if isinstance(config, dict):
         call_config = dict(config)
         call_config["http_options"] = http_opts
     elif hasattr(config, "http_options"):
-        config.http_options = http_opts
-        call_config = config
+        try:
+            config.http_options = http_opts
+            call_config = config
+        except Exception:
+            pass
     elif config is None:
         call_config = types.GenerateContentConfig(http_options=http_opts)
 
+    # Attach thinking config based on caller/model if supported
+    thinking_cfg = get_thinking_config(caller=call_name, model=model, settings=settings)
+    if thinking_cfg is not None:
+        if isinstance(call_config, dict) and "thinking_config" not in call_config:
+            call_config["thinking_config"] = thinking_cfg
+        elif hasattr(call_config, "thinking_config"):
+            if getattr(call_config, "thinking_config", None) is None:
+                try:
+                    call_config.thinking_config = thinking_cfg
+                except Exception:
+                    pass
+
     attempt = 0
+    reasoning_model = getattr(getattr(settings, "models", None), "reasoning", "")
+    is_pro = "pro" in (model or "").lower() or (bool(reasoning_model) and model == reasoning_model)
 
     while True:
         acquire_gemini_slot_sync()
         slot_held = True
+        t_call_start = time.time()
         try:
             future = _sync_executor.submit(
                 client.models.generate_content,
@@ -203,6 +385,9 @@ def generate(
                 config=call_config,
             )
             res = future.result(timeout=eff_timeout_s)
+            call_dur = time.time() - t_call_start
+            record_call_timing(call_name, call_dur)
+            record_model_used(call_name, model)
             return res
         except Exception as exc:
             retryable, err_code = is_retryable_error(exc)
@@ -216,6 +401,58 @@ def generate(
                 slot_held = False
                 time.sleep(delay)
                 continue
+            elif retryable and is_pro:
+                release_gemini_slot()
+                slot_held = False
+                flash_model = getattr(getattr(settings, "models", None), "adviser", "gemini-3.8-flash")
+                print(f"[gemini] fallback pro->flash caller={call_name}", flush=True)
+                logger.warning("[gemini] fallback pro->flash caller=%s", call_name)
+
+                fallback_timeout_s = get_model_timeout_s(flash_model, settings)
+                fallback_http_opts = _build_http_options(fallback_timeout_s)
+                fallback_config = config
+                if isinstance(config, dict):
+                    fallback_config = dict(config)
+                    fallback_config["http_options"] = fallback_http_opts
+                elif hasattr(config, "http_options"):
+                    try:
+                        fallback_config = config
+                        fallback_config.http_options = fallback_http_opts
+                    except Exception:
+                        pass
+                elif config is None:
+                    fallback_config = types.GenerateContentConfig(http_options=fallback_http_opts)
+
+                fb_thinking = get_thinking_config(caller=call_name, model=flash_model, settings=settings)
+                if fb_thinking is not None:
+                    if isinstance(fallback_config, dict) and "thinking_config" not in fallback_config:
+                        fallback_config["thinking_config"] = fb_thinking
+                    elif hasattr(fallback_config, "thinking_config"):
+                        if getattr(fallback_config, "thinking_config", None) is None:
+                            try:
+                                fallback_config.thinking_config = fb_thinking
+                            except Exception:
+                                pass
+
+                acquire_gemini_slot_sync()
+                slot_held = True
+                t_fb_start = time.time()
+                try:
+                    fb_future = _sync_executor.submit(
+                        client.models.generate_content,
+                        model=flash_model,
+                        contents=contents,
+                        config=fallback_config,
+                    )
+                    fb_res = fb_future.result(timeout=fallback_timeout_s)
+                    fb_dur = time.time() - t_fb_start
+                    record_call_timing(call_name, fb_dur)
+                    record_model_used(call_name, flash_model)
+                    return fb_res
+                except Exception as fb_exc:
+                    raise RuntimeError(
+                        f"Gemini call failed after {eff_max_retries} retries and fallback to {flash_model} failed [caller={call_name}]: {fb_exc}"
+                    ) from fb_exc
             elif retryable:
                 raise RuntimeError(
                     f"Gemini call failed after {eff_max_retries} retries due to {err_code} [caller={call_name}]: {exc}"
@@ -269,10 +506,19 @@ class ColosseumGemini(Gemini):
     ) -> AsyncGenerator[Any, None]:
         caller = self._caller
         settings = get_settings()
-        eff_timeout_s = float(getattr(settings.gemini, "timeout_s", 60.0))
+        eff_timeout_s = get_model_timeout_s(getattr(self, "model", ""), settings)
         eff_max_retries = int(getattr(settings.gemini, "max_retries", 3))
         delays = getattr(settings.gemini, "retry_backoff", [2.0, 8.0, 20.0])
         attempt = 0
+
+        # Attach low thinking config for adviser calls if supported
+        thinking_cfg = get_thinking_config(caller=caller, model=getattr(self, "model", ""), settings=settings)
+        if thinking_cfg is not None and hasattr(llm_request, "config") and llm_request.config is not None:
+            if hasattr(llm_request.config, "thinking_config") and getattr(llm_request.config, "thinking_config", None) is None:
+                try:
+                    llm_request.config.thinking_config = thinking_cfg
+                except Exception:
+                    pass
 
         while True:
             await acquire_gemini_slot_async()
@@ -284,6 +530,7 @@ class ColosseumGemini(Gemini):
                     except Exception as e:
                         logger.warning("Error in on_first_slot callback: %s", e)
             slot_held = True
+            t_call_start = time.time()
             try:
                 collected = []
                 async def _run_stream():
@@ -293,6 +540,10 @@ class ColosseumGemini(Gemini):
                         collected.append(r)
 
                 await asyncio.wait_for(_run_stream(), timeout=eff_timeout_s)
+                call_dur = time.time() - t_call_start
+                record_call_timing(caller, call_dur)
+                adv_model = getattr(self, "model", getattr(settings.models, "adviser", "gemini-3.8-flash"))
+                record_model_used(caller, adv_model)
                 for r in collected:
                     yield r
                 return

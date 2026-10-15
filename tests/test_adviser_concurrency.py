@@ -25,15 +25,31 @@ from core.schemas import AdviserPosition, DecisionBrief, EvidencePack
 from core.settings import get_settings, load_settings
 
 
+def _norm(cfg):
+    if cfg is None:
+        return None
+    lvl = getattr(cfg, "thinking_level", None)
+    if lvl is not None:
+        return str(getattr(lvl, "value", lvl)).lower()
+    budget = getattr(cfg, "thinking_budget", None)
+    if budget is None:
+        budget = getattr(cfg, "budget", None)
+    return None if budget is None else int(budget)
+
+
 def test_settings_concurrency_and_timeouts():
     """Verify that settings.yaml has max_concurrent=6, advisers.timeout_s=420, etc."""
     settings = load_settings()
     assert settings.gemini.max_concurrent == 6
     assert settings.advisers.timeout_s == 420.0
-    assert settings.gemini.timeout_s == 60.0
+    assert settings.gemini.timeout_s.flash == 90.0
+    assert settings.gemini.timeout_s.pro == 240.0
     assert settings.gemini.max_retries == 3
     assert settings.gemini.retry_backoff == [2.0, 8.0, 20.0]
     assert settings.run.adviser_timeout_s == 420
+    assert settings.advisers.max_tool_calls == 4
+    assert settings.gemini.thinking.flash == "low"
+    assert settings.gemini.thinking.pro == "medium"
 
 
 @pytest.mark.asyncio
@@ -118,11 +134,11 @@ async def test_run_advisers_timeout_starts_at_slot_acquisition(capsys):
     assert "finance" in results
     assert isinstance(results["finance"], AdviserPosition)
 
-    # Check stdout log format: [adviser] finance done in 1s (waited 0s), tool_calls=0
+    # Check stdout log format: [adviser] finance done in 1s, gemini_calls=0, slowest=0s
     captured = capsys.readouterr().out
     assert "[adviser] finance done in" in captured
-    assert "(waited 0s)" in captured
-    assert "tool_calls=0" in captured
+    assert "gemini_calls=" in captured
+    assert "slowest=" in captured
 
 
 @pytest.mark.asyncio
@@ -282,3 +298,126 @@ def test_gemini_retries_capped_at_three():
 
         # Retried exactly 3 times
         assert mock_sleep.call_count == 3
+
+
+def test_tool_call_limiter_turns_off_tools_at_budget():
+    """Verify that ToolCallLimiter turns off agent tools at max_calls and blocks further calls."""
+    from agents.adviser_factory import ToolCallLimiter
+
+    mock_agent = MagicMock()
+    mock_agent.tools = ["tool1", "tool2", "tool3", "tool4"]
+    limiter = ToolCallLimiter(adviser_id="finance", max_calls=4, agent=mock_agent)
+
+    # First 3 calls succeed
+    for _ in range(3):
+        res = limiter.before_tool_callback("tool1", {})
+        assert res is None
+        assert len(mock_agent.tools) == 4
+
+    # 4th call reaches budget and turns off tools
+    res4 = limiter.before_tool_callback("tool1", {})
+    assert res4 is None
+    assert mock_agent.tools == []
+
+    # 5th call exceeds budget and returns instruction dict
+    res5 = limiter.before_tool_callback("tool1", {})
+    assert isinstance(res5, dict)
+    assert res5.get("error") == "Tool limit reached"
+    assert "Tools are now turned off" in res5.get("message", "")
+
+
+@pytest.mark.asyncio
+async def test_adviser_graceful_deadline_at_75_percent(capsys):
+    """When an adviser reaches 75% of its timeout, tools are turned off and final position is returned."""
+    from core.gemini import record_call_timing, reset_caller_stats
+
+    brief = DecisionBrief(
+        decision_id="DEC-TEST-GRACE",
+        question="Migrate?",
+        options={"A": "A", "B": "B"},
+        constraints=[],
+        criteria=[],
+    )
+    fake_pack = EvidencePack(adviser_id="finance", facts=[], summaries=[], total_matching_facts=0, truncated=False)
+    grace_pos = AdviserPosition(
+        adviser_id="finance",
+        stance="conditional",
+        summary="Graceful position from existing evidence",
+        claims=[],
+        criterion_scores=[],
+        confidence=0.85,
+    )
+
+    async def mock_slow_initial_adviser(aid, br, pk, on_first_slot=None):
+        if on_first_slot:
+            on_first_slot()
+        # Takes longer than 75% of 0.4s (0.3s)
+        await asyncio.sleep(1.0)
+        return MagicMock()
+
+    async def mock_grace_final_call(aid, brief, pack, timeout_s):
+        # Record a gemini call timing
+        record_call_timing(f"{aid}_adviser", 0.05)
+        return grace_pos
+
+    mock_settings = MagicMock()
+    mock_settings.advisers.timeout_s = 0.4
+    mock_settings.run.adviser_timeout_s = 0.4
+
+    with patch("agents.adviser_factory.get_settings", return_value=mock_settings), \
+         patch("agents.adviser_factory.build_pack", return_value=fake_pack), \
+         patch("agents.adviser_factory.run_adviser_async", side_effect=mock_slow_initial_adviser), \
+         patch("agents.adviser_factory._request_final_position_without_tools", side_effect=mock_grace_final_call):
+
+        t0 = time.time()
+        results = await run_advisers(["finance"], brief=brief, packs={"finance": fake_pack})
+        elapsed = time.time() - t0
+
+    assert elapsed < 1.0, f"Expected under 1s, got {elapsed}s"
+    assert "finance" in results
+    assert isinstance(results["finance"], AdviserPosition)
+    assert results["finance"].summary == "Graceful position from existing evidence"
+
+    # Verify log format: [adviser] finance done in Xs, gemini_calls=1, slowest=0s
+    captured = capsys.readouterr().out
+    assert "[adviser] finance done in" in captured
+    assert "gemini_calls=1" in captured
+    assert "slowest=" in captured
+
+
+def test_thinking_levels_configuration():
+    """Verify low thinking level for adviser, routing, summary; medium for moderator, Scribe, final check."""
+    from google.genai import types
+    from core.gemini import get_thinking_config
+
+    # Low thinking level for adviser, router, aggregator/summary
+    adv_cfg = get_thinking_config(caller="finance_adviser", model="gemini-3.8-flash")
+    router_cfg = get_thinking_config(caller="router", model="gemini-3.8-flash")
+    summary_cfg = get_thinking_config(caller="aggregator_finance", model="gemini-3.8-flash")
+
+    # Medium thinking level for moderator, Scribe, final check
+    mod_cfg = get_thinking_config(caller="moderator", model="gemini-3.1-pro-preview")
+    scribe_cfg = get_thinking_config(caller="scribe", model="gemini-3.1-pro-preview")
+    check_cfg = get_thinking_config(caller="final_check", model="gemini-3.1-pro-preview")
+
+    # If google-genai supports ThinkingConfig, configs must be present
+    if hasattr(types, "ThinkingConfig"):
+        assert adv_cfg is not None
+        assert mod_cfg is not None
+
+    # Low budget is 1024, medium budget is 4096 (as defined in core/gemini.py)
+    if adv_cfg is not None:
+        assert _norm(adv_cfg) in ("low", 1024)
+        assert _norm(router_cfg) in ("low", 1024)
+        assert _norm(summary_cfg) in ("low", 1024)
+        # Verify test fails if an adviser gets medium thinking
+        assert _norm(adv_cfg) not in ("medium", 4096)
+
+    if mod_cfg is not None:
+        assert _norm(mod_cfg) in ("medium", 4096)
+        assert _norm(scribe_cfg) in ("medium", 4096)
+        assert _norm(check_cfg) in ("medium", 4096)
+        # Verify test fails if Scribe gets low thinking
+        assert _norm(scribe_cfg) not in ("low", 1024)
+
+
