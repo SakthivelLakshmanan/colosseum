@@ -14,6 +14,8 @@ Verdict:
 - **INCOMPLETE**: nothing wrong, but something required is missing.
 - **WRONG**: a number, a fact or the logic is wrong, or a blocker is ignored.
 
+The scorecard numbers and adviser scores come from code and advisers; the Scribe cannot change them. Report such problems with kind: upstream_gap and leave them out of revision_instructions.
+
 For anything other than PASS, give revision instructions the Scribe can follow in one pass.
 
 Decision brief:

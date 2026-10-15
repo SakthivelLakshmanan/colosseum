@@ -6,6 +6,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import time
 from typing import Any, Callable, Optional
 import uuid
@@ -24,7 +25,7 @@ from core.gemini import (
     reset_caller_stats,
 )
 from core.registry import find_project_root, get_registry
-from core.schemas import AdviserPosition, Claim, DecisionBrief, EvidencePack
+from core.schemas import AdviserPosition, Claim, CriterionScore, DecisionBrief, EvidencePack
 from core.settings import get_settings
 from harness.context_builder import build_pack
 from knowledge.fact_store import load_facts, rank_facts
@@ -365,7 +366,169 @@ async def run_adviser_async(
             position.claims.append(demoted_claim)
         position.blocking_findings = []
 
+    # Completeness check: check that criterion_scores cover every criterion it owns × every option
+    position = await repair_adviser_criterion_scores(adviser_id, brief, position)
+
     return position
+
+
+def _norm_criterion(name: str) -> str:
+    """Normalize criterion name case-insensitively and ignoring punctuation."""
+    return re.sub(r"[\W_]+", "", str(name)).lower()
+
+
+async def repair_adviser_criterion_scores(
+    aid: str,
+    brief: DecisionBrief,
+    position: AdviserPosition,
+) -> AdviserPosition:
+    """Check that criterion_scores cover every criterion owned by aid × every option.
+
+    Match criterion names case-insensitively and ignoring punctuation. If any are missing,
+    make one short repair call (no tools, outside tool budget) and merge the result.
+    Log [adviser] ops repaired scores: Reliability.
+    """
+    registry = get_registry()
+    adv_cfg = registry.get(aid)
+
+    # 1. Determine criteria owned by this adviser in the brief
+    owned_criteria: list[Any] = []
+    for crit in brief.criteria:
+        is_owner = False
+        if crit.owners and aid in crit.owners:
+            is_owner = True
+        elif adv_cfg and adv_cfg.criteria_owned:
+            crit_norm = _norm_criterion(crit.name)
+            if any(_norm_criterion(c_owned) == crit_norm for c_owned in adv_cfg.criteria_owned):
+                is_owner = True
+        if is_owner:
+            owned_criteria.append(crit)
+
+    if not owned_criteria:
+        return position
+
+    # 2. Check for missing (criterion, option) combinations
+    existing_pairs = {
+        (_norm_criterion(cs.criterion), cs.option.strip().upper())
+        for cs in position.criterion_scores
+    }
+
+    missing_criteria_dict: dict[str, Any] = {}
+    missing_pairs: list[tuple[str, str]] = []
+
+    for crit in owned_criteria:
+        crit_norm = _norm_criterion(crit.name)
+        for opt_key in brief.options.keys():
+            if (crit_norm, opt_key.strip().upper()) not in existing_pairs:
+                missing_pairs.append((crit.name, opt_key))
+                missing_criteria_dict[crit.name] = crit
+
+    if not missing_pairs:
+        return position
+
+    # 3. Make one short repair call (no tools, outside tool budget)
+    settings = get_settings()
+    claims_text = "\n".join(
+        f"- [{c.claim_id}] {c.text} (evidence: {c.evidence_ids})"
+        for c in position.claims
+    )
+    if not claims_text:
+        claims_text = "No explicit claims recorded."
+
+    options_text = "\n".join(
+        f"- Option {opt}: {desc}"
+        for opt, desc in brief.options.items()
+    )
+
+    criteria_text = "\n".join(
+        f"- Criterion: '{c.name}' (Good looks like: {c.good_looks_like})"
+        for c in missing_criteria_dict.values()
+    )
+
+    repair_prompt = (
+        f"You are the {adv_cfg.name if adv_cfg else aid} adviser for Legion Capital.\n"
+        f"Your evaluation stance was: {position.stance}. Summary: {position.summary}\n\n"
+        f"Your claims:\n{claims_text}\n\n"
+        f"Decision options:\n{options_text}\n\n"
+        "Score these criteria for these options, using your own claims:\n"
+        f"{criteria_text}\n\n"
+        "Return ONLY a JSON object adhering to this schema:\n"
+        "```json\n"
+        "{\n"
+        '  "criterion_scores": [\n'
+        "    {\n"
+        '      "criterion": "<criterion name>",\n'
+        '      "option": "<option key e.g. A or B>",\n'
+        '      "score": <float 1.0 to 5.0>,\n'
+        '      "reason": "<brief justification based on your claims>",\n'
+        '      "evidence_ids": ["<evidence id>"]\n'
+        "    }\n"
+        "  ]\n"
+        "}\n"
+        "```"
+    )
+
+    try:
+        resp = await asyncio.to_thread(
+            generate,
+            model=settings.models.adviser,
+            contents=repair_prompt,
+            config={"temperature": 0.0},
+            caller=f"{aid}_adviser",
+        )
+        raw_text = resp if isinstance(resp, str) else (getattr(resp, "text", "") or str(resp))
+        json_str = _extract_json_string(raw_text)
+        data = json.loads(json_str)
+
+        new_scores = data.get("criterion_scores", [])
+        repaired_names: list[str] = []
+        for s in new_scores:
+            if not isinstance(s, dict):
+                continue
+            try:
+                if "score" in s:
+                    s["score"] = max(1.0, min(5.0, float(s["score"])))
+                s_norm = _norm_criterion(s.get("criterion", ""))
+                for orig_name in missing_criteria_dict:
+                    if _norm_criterion(orig_name) == s_norm:
+                        s["criterion"] = orig_name
+                        break
+                cs_obj = CriterionScore(**s)
+                position.criterion_scores.append(cs_obj)
+                if cs_obj.criterion not in repaired_names:
+                    repaired_names.append(cs_obj.criterion)
+            except Exception as parse_err:
+                logger.debug("Failed parsing repaired criterion score: %s", parse_err)
+
+        if not repaired_names:
+            repaired_names = list(missing_criteria_dict.keys())
+
+        log_msg = f"[adviser] {aid} repaired scores: {', '.join(repaired_names)}"
+        print(log_msg, flush=True)
+        logger.info(log_msg)
+
+    except Exception as exc:
+        logger.warning("Adviser %s score repair call failed: %s", aid, exc)
+
+    return position
+
+
+def repair_adviser_criterion_scores_sync(
+    aid: str,
+    brief: DecisionBrief,
+    position: AdviserPosition,
+) -> AdviserPosition:
+    """Synchronous wrapper for repair_adviser_criterion_scores."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, repair_adviser_criterion_scores(aid, brief, position)).result()
+    return asyncio.run(repair_adviser_criterion_scores(aid, brief, position))
 
 
 async def _request_final_position_without_tools(
@@ -444,6 +607,9 @@ async def _request_final_position_without_tools(
             )
             position.claims.append(demoted_claim)
         position.blocking_findings = []
+
+    # Completeness check: check that criterion_scores cover every criterion it owns × every option
+    position = await repair_adviser_criterion_scores(aid, brief, position)
 
     return position
 

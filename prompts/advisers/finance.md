@@ -20,3 +20,4 @@ Loaded on top of `_shared.md` (the adviser factory fills in name, lens, criteria
 - Gross saving, then net monthly benefit after all recurring adjustments.
 - Total one-time cost and payback in months.
 - The same for any smaller first phase, noting costs that don't scale down (flat fees).
+- If any fact sets a contract threshold, such as a minimum volume commitment, calculate the largest first phase that stays within it, and that phase’s net monthly benefit.

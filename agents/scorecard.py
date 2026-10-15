@@ -54,6 +54,11 @@ def _map_finding_to_option(finding_text: str, brief: DecisionBrief) -> str:
     return next(iter(brief.options.keys()))
 
 
+def normalize_criterion_name(name: str) -> str:
+    """Normalize criterion name case-insensitively and ignoring punctuation."""
+    return re.sub(r"[\W_]+", "", str(name)).lower()
+
+
 def build_scorecard(
     brief: DecisionBrief | dict[str, Any],
     positions: dict[str, AdviserPosition | dict[str, Any]],
@@ -137,16 +142,16 @@ def build_scorecard(
     rows: list[ScorecardRow] = []
 
     for criterion in brief_obj.criteria:
-        # Determine owners for this criterion
+        # Determine owners for this criterion (matching case-insensitively and ignoring punctuation)
         owners: list[str] = list(criterion.owners) if criterion.owners else []
+        norm_crit = normalize_criterion_name(criterion.name)
         if registry:
-            crit_lower = criterion.name.strip().lower()
             for adv in registry.advisers:
                 for owned in adv.criteria_owned:
-                    if owned.strip().lower() == crit_lower and adv.id not in owners:
+                    if normalize_criterion_name(owned) == norm_crit and adv.id not in owners:
                         owners.append(adv.id)
 
-        scores_by_option: dict[str, float] = {}
+        scores_by_option: dict[str, Optional[float]] = {}
         row_evidence_ids: list[str] = []
 
         for opt_key in brief_obj.options:
@@ -158,7 +163,7 @@ def build_scorecard(
                     continue
                 for cs in pos.criterion_scores:
                     if (
-                        cs.criterion.strip().lower() == criterion.name.strip().lower()
+                        normalize_criterion_name(cs.criterion) == norm_crit
                         and cs.option.strip().upper() == opt_key.strip().upper()
                     ):
                         if _should_ignore_score(cs):
@@ -172,7 +177,17 @@ def build_scorecard(
             if collected_scores:
                 scores_by_option[opt_key] = round(sum(collected_scores) / len(collected_scores), 4)
             else:
-                scores_by_option[opt_key] = 0.0
+                # Missing criterion gets None (never 0)
+                scores_by_option[opt_key] = None
+
+        # Determine missing owners for this criterion
+        missing_owners = [
+            o for o in owners
+            if not (
+                o in positions_obj
+                and any(normalize_criterion_name(cs.criterion) == norm_crit for cs in positions_obj[o].criterion_scores)
+            )
+        ]
 
         rows.append(
             ScorecardRow(
@@ -180,14 +195,23 @@ def build_scorecard(
                 weight=criterion.weight,
                 scores=scores_by_option,
                 evidence_ids=row_evidence_ids,
+                missing_owners=sorted(list(set(missing_owners))),
             )
         )
 
-    # Step 3: Compute weighted totals per option
+    # Step 3: Compute weighted totals per option over scored criteria with re-normalized weights
     weighted_totals: dict[str, float] = {}
     for opt_key in brief_obj.options:
-        total = sum(row.weight * row.scores.get(opt_key, 0.0) for row in rows)
-        weighted_totals[opt_key] = round(total, 4)
+        scored_rows = [r for r in rows if r.scores.get(opt_key) is not None]
+        if scored_rows:
+            total_weight = sum(r.weight for r in scored_rows)
+            if total_weight > 0:
+                total = sum((r.weight / total_weight) * float(r.scores[opt_key]) for r in scored_rows)
+            else:
+                total = 0.0
+            weighted_totals[opt_key] = round(total, 4)
+        else:
+            weighted_totals[opt_key] = 0.0
 
     # Step 4: Map unresolved blocking findings to blocked_options
     blocked_options: dict[str, list[str]] = {}
@@ -204,8 +228,11 @@ def build_scorecard(
             opt_key = _map_finding_to_option(bf.text, brief_obj)
             blocked_options.setdefault(opt_key, []).append(bf.text)
 
+    has_missing_scores = any(None in r.scores.values() for r in rows)
+
     return Scorecard(
         rows=rows,
         weighted_totals=weighted_totals,
         blocked_options=blocked_options,
+        has_missing_scores=has_missing_scores,
     )

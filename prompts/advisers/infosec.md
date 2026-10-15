@@ -19,4 +19,4 @@ Loaded on top of `_shared.md` (the adviser factory fills in name, lens, criteria
 ## What to produce
 - A risk rating (low/medium/high) for each area, with evidence.
 - **Blocking findings:** a finding that breaks a mandatory rule. Each must cite the rule and the evidence, and state the fix that would clear it.
-- Conditions that must be met before go-live.
+- Conditions that must be met before go-live. List each remediation as a separate item in conditions, with evidence IDs: data location, open penetration-test findings, and certifications that are out of date.

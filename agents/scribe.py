@@ -75,11 +75,14 @@ def _repair_key_numbers(
                         cid = ac.claim_id
                     break
 
-        # 3. If still empty, extract any evidence patterns (e.g. ABC-12, doc.pdf) from item text
+        # 3. If still empty, check for BRIEF citation or extract evidence patterns from item text
         if not eids:
-            found_eids = re.findall(r"\b[A-Z]{2,6}-\d+\b", str(item.get("text") or ""))
-            if found_eids:
-                eids = found_eids
+            if re.search(r"\bbrief\b", str(item.get("text") or ""), re.IGNORECASE):
+                eids = ["BRIEF"]
+            else:
+                found_eids = re.findall(r"\b[A-Z]{2,6}-\d+\b", str(item.get("text") or ""))
+                if found_eids:
+                    eids = found_eids
 
         # 4. Fallback if still empty: attach first available accepted evidence ID
         if not eids and accepted_claims_list:
@@ -249,7 +252,24 @@ def write_memo(
                 bf_dict["moderator_warning"] = v.reason
             blocking_list.append(bf_dict)
 
-    # 4. Read prompt template from prompts/scribe.md
+    # 4. Format selected adviser inputs (stance, conditions, blocking findings with fixes, handoffs)
+    adviser_inputs: dict[str, dict[str, Any]] = {}
+    for aid, pos in positions_obj.items():
+        adviser_inputs[aid] = {
+            "stance": pos.stance,
+            "conditions": list(pos.conditions),
+            "blocking_findings": [
+                {
+                    "text": bf.text,
+                    "evidence_ids": list(bf.evidence_ids),
+                    "fix": bf.fix,
+                }
+                for bf in pos.blocking_findings
+            ],
+            "handoffs": list(pos.handoffs),
+        }
+
+    # 5. Read prompt template from prompts/scribe.md
     root = Path(__file__).resolve().parent.parent
     prompt_path = root / "prompts" / "scribe.md"
     template = prompt_path.read_text(encoding="utf-8")
@@ -257,13 +277,20 @@ def write_memo(
     scorecard_dump = scorecard_obj.model_dump()
     brief_dump = brief_obj.model_dump()
 
-    base_prompt = template.format(
-        brief=json.dumps(brief_dump, indent=2, default=str),
-        scorecard=json.dumps(scorecard_dump, indent=2, default=str),
-        claims=json.dumps(accepted_claims_by_adviser, indent=2, default=str),
-        blocking=json.dumps(blocking_list, indent=2, default=str),
-        revision_instructions=revision_instructions or "None",
-    )
+    format_kwargs = {
+        "brief": json.dumps(brief_dump, indent=2, default=str),
+        "scorecard": json.dumps(scorecard_dump, indent=2, default=str),
+        "adviser_inputs": json.dumps(adviser_inputs, indent=2, default=str),
+        "claims": json.dumps(accepted_claims_by_adviser, indent=2, default=str),
+        "blocking": json.dumps(blocking_list, indent=2, default=str),
+        "revision_instructions": revision_instructions or "None",
+    }
+    try:
+        base_prompt = template.format(**format_kwargs)
+    except KeyError:
+        base_prompt = template
+        for k, v in format_kwargs.items():
+            base_prompt = base_prompt.replace(f"{{{k}}}", v)
 
     schema_guide = """
 Please reply strictly with a JSON object matching this schema:

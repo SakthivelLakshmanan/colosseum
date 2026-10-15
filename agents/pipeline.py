@@ -8,7 +8,7 @@ from pathlib import Path
 import time
 from typing import Any, Optional
 
-from agents.adviser_factory import run_advisers_sync
+from agents.adviser_factory import repair_adviser_criterion_scores_sync, run_advisers_sync
 from agents.moderator import check_claims, check_memo
 from agents.scorecard import build_scorecard
 from agents.scribe import write_memo
@@ -23,6 +23,8 @@ from core.schemas import (
     MemoVerdictType,
     RoutingDecision,
     RunRecord,
+    ClaimVerdict,
+    Scorecard,
 )
 from core.settings import get_settings
 from harness.context_builder import build_pack
@@ -180,6 +182,14 @@ def run_decision(
         except Exception as exc:
             logger.warning("Failed to update status in ledger: %s", exc)
 
+        # Completeness check: ensure every adviser position covers criteria it owns before scorecard is built
+        for aid in list(positions.keys()):
+            pos = positions[aid]
+            try:
+                positions[aid] = repair_adviser_criterion_scores_sync(aid, brief_obj, pos)
+            except Exception as exc:
+                logger.warning("Failed repairing adviser completeness for %s: %s", aid, exc)
+
         t0 = time.time()
         scorecard = build_scorecard(brief=brief_obj, positions=positions, claim_verdicts=claim_verdicts)
         metrics["scoring_time_s"] = round(time.time() - t0, 3)
@@ -265,6 +275,25 @@ def run_decision(
             except Exception as exc:
                 logger.warning("Failed to save final_verdict and revisions in ledger: %s", exc)
 
+            # If the only remaining issues are upstream_gap, stop revising and set verdict to INCOMPLETE
+            if verdict.issues and all(getattr(i, "kind", "") == "upstream_gap" for i in verdict.issues):
+                logger.info("Pipeline: only remaining issues are upstream_gap; stopping revisions and setting verdict to INCOMPLETE.")
+                verdict = FinalVerdict(
+                    verdict=MemoVerdictType.incomplete,
+                    issues=verdict.issues,
+                    revision_instructions="",
+                    revision_number=revision_number,
+                )
+                final_verdicts[-1] = verdict
+                memo_revisions[-1]["verdict"] = verdict
+                try:
+                    ledger.save_final_verdict(run_id, verdict)
+                    ledger.save_section(run_id, "final_verdicts", final_verdicts)
+                    ledger.save_memo_revisions(run_id, memo_revisions)
+                except Exception as exc:
+                    logger.warning("Failed to update final_verdict in ledger: %s", exc)
+                break
+
             if verdict.verdict == MemoVerdictType.pass_:
                 break
 
@@ -276,8 +305,12 @@ def run_decision(
 
         # Step 7: Done
         metrics["total_time_s"] = round(time.time() - start_total_t, 3)
+        final_status = "done"
+        if final_verdicts and final_verdicts[-1].verdict == MemoVerdictType.incomplete:
+            final_status = "INCOMPLETE"
         try:
-            ledger.update_status(run_id, "done", "Decision pipeline completed successfully")
+            status_note = "Decision pipeline stopped: upstream_gap in scorecard" if final_status == "INCOMPLETE" else "Decision pipeline completed successfully"
+            ledger.update_status(run_id, final_status, status_note)
             ledger.save_section(run_id, "metrics", metrics)
             ledger.save_section(run_id, "model_used", model_used)
         except Exception as exc:
@@ -286,14 +319,18 @@ def run_decision(
         return RunRecord(
             run_id=run_id,
             brief=brief_obj,
-            routing=routing,
+            routing=routing if isinstance(routing, RoutingDecision) else None,
             evidence_packs=evidence_packs,
             positions=list(positions.values()),
             claim_verdicts=claim_verdicts,
+            scorecard=scorecard,
+            memo=memo_versions[-1] if memo_versions else None,
             memo_versions=memo_versions,
+            final_verdict=final_verdicts[-1] if final_verdicts else None,
             final_verdicts=final_verdicts,
+            memo_revisions=memo_revisions,
             metrics=metrics,
-            status="done",
+            status=final_status,
             model_used=model_used,
         )
 
@@ -313,14 +350,19 @@ def run_decision(
         return RunRecord(
             run_id=run_id,
             brief=brief_obj,
-            routing=routing,
+            routing=routing if isinstance(routing, RoutingDecision) else None,
             evidence_packs=evidence_packs,
             positions=list(positions.values()),
             claim_verdicts=claim_verdicts,
+            scorecard=scorecard,
+            memo=memo_versions[-1] if memo_versions else None,
             memo_versions=memo_versions,
+            final_verdict=final_verdicts[-1] if final_verdicts else None,
             final_verdicts=final_verdicts,
+            memo_revisions=memo_revisions,
             metrics=metrics,
             status="failed",
             error=error_msg,
+            failed_stage=current_stage,
             model_used=model_used,
         )

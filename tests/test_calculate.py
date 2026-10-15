@@ -47,3 +47,36 @@ def test_calculate_rejects_exponent_abuse():
 def test_calculate_rejects_zero_division():
     with pytest.raises(ValueError, match="Division by zero"):
         calculate("10 / 0")
+
+
+def test_calculate_batch_named_expressions():
+    results = calculate({
+        "first_phase_benefit": "1500 * 0.40",
+        "net_saving": "600 - 120",
+        "payback": "120 / 14.4",
+    })
+    assert isinstance(results, dict)
+    assert abs(results["first_phase_benefit"] - 600.0) < 1e-9
+    assert abs(results["net_saving"] - 480.0) < 1e-9
+    assert abs(results["payback"] - (120 / 14.4)) < 1e-9
+
+
+def test_calculate_batch_via_kwargs_and_expressions():
+    res1 = calculate(expressions={"a": "10 + 20", "b": "30 * 2"})
+    assert res1 == {"a": 30.0, "b": 60.0}
+
+    res2 = calculate(x="5 * 5", y="100 / 4")
+    assert res2 == {"x": 25.0, "y": 25.0}
+
+
+def test_calculate_batch_json_string():
+    results = calculate('{"first_phase": "1500 * 0.40", "saving": "600 - 120"}')
+    assert results == {"first_phase": 600.0, "saving": 480.0}
+
+
+def test_calculate_batch_empty_and_error():
+    with pytest.raises(ValueError, match="Expression cannot be empty"):
+        calculate({})
+
+    with pytest.raises(ValueError, match="Division by zero"):
+        calculate({"ok": "10 + 2", "bad": "5 / 0"})

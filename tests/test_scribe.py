@@ -216,3 +216,75 @@ def test_write_memo_repairs_key_numbers_missing_evidence(
 
     assert len(memo.key_numbers) == 1
     assert memo.key_numbers[0].evidence_ids == ["FIN-02", "FIN-03"], "Should recover evidence_ids from accepted claim"
+
+
+def test_write_memo_passes_adviser_inputs_and_prompt_rules(
+    sample_brief, sample_positions, sample_verdicts, sample_scorecard
+):
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    prompt_text = (root / "prompts" / "scribe.md").read_text(encoding="utf-8")
+
+    # Verify new scribe rules in prompts/scribe.md
+    assert "Name every selected adviser at least once" in prompt_text
+    assert "include every specific condition from conditional or objecting advisers" in prompt_text
+    assert "For every brief constraint that the evidence shows is at risk" in prompt_text
+    assert "stays within the threshold" in prompt_text
+    assert "Every derived number needs its formula" in prompt_text
+    assert "Numbers taken from the brief cite BRIEF" in prompt_text
+
+    # Populate conditions and handoffs on sample position
+    sample_positions["finance"].conditions = ["Activate India hosting add-on"]
+    sample_positions["finance"].handoffs = ["legal: review draft agreement clause 12"]
+
+    captured_prompts = []
+
+    def mock_model(prompt: str) -> str:
+        captured_prompts.append(prompt)
+        return json.dumps({
+            "decision_id": "DEC-TEST",
+            "recommendation": "Adopt Option B conditionally.",
+            "stance": "conditional",
+            "confidence": 0.85,
+            "conditions": ["Activate India hosting add-on"],
+            "phased_plan": ["Phase 1"],
+            "key_numbers": [
+                {
+                    "claim_id": "fin-1",
+                    "text": "Option B saves 14.4 lakh",
+                    "evidence_ids": ["FIN-02"],
+                    "kind": "fact",
+                    "value": 14.4,
+                    "unit": "INR lakh",
+                }
+            ],
+            "blocking_findings": [
+                {
+                    "text": "Brevis violates data localisation",
+                    "evidence_ids": ["SEC-01"],
+                    "fix": "Order India hosting add-on",
+                }
+            ],
+            "dissent": [],
+            "assumptions": [],
+            "numbers_to_watch": [],
+            "evidence_index": ["FIN-02", "SEC-01"],
+        })
+
+    with patch("agents.scribe._call_reasoning_model", side_effect=mock_model):
+        memo = write_memo(
+            brief=sample_brief,
+            positions=sample_positions,
+            claim_verdicts=sample_verdicts,
+            scorecard=sample_scorecard,
+        )
+
+    assert len(captured_prompts) == 1
+    prompt = captured_prompts[0]
+
+    # Verify adviser inputs passed into prompt
+    assert "Selected adviser positions" in prompt
+    assert "conditional" in prompt
+    assert "Activate India hosting add-on" in prompt
+    assert "Order India hosting add-on" in prompt
+    assert "legal: review draft agreement clause 12" in prompt

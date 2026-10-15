@@ -9,7 +9,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Any, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ---------- Knowledge layer ----------
@@ -122,9 +122,9 @@ class Claim(BaseModel):
 class CriterionScore(BaseModel):
     criterion: str
     option: str                       # "A" | "B" | other option keys
-    score: int = Field(ge=1, le=5)
+    score: float = Field(ge=1, le=5)
     reason: str
-    evidence_ids: list[str]
+    evidence_ids: list[str] = Field(default_factory=list)
 
 
 class BlockingFinding(BaseModel):
@@ -184,14 +184,17 @@ class FinalVerdict(BaseModel):
 class ScorecardRow(BaseModel):
     criterion: str
     weight: float
-    scores: dict[str, float]          # option -> average score from owner advisers
+    scores: dict[str, Optional[float]]          # option -> average score from owner advisers (None if missing)
     evidence_ids: list[str]
+    missing_owners: list[str] = Field(default_factory=list)
 
 
 class Scorecard(BaseModel):
-    rows: list[ScorecardRow]
-    weighted_totals: dict[str, float] # option -> weighted total (1-5)
-    blocked_options: dict[str, list[str]]  # option -> blocking finding texts
+    rows: list[ScorecardRow] = Field(default_factory=list)
+    weighted_totals: dict[str, Optional[float]] = Field(default_factory=dict) # option -> weighted total (1-5, None if missing)
+    blocked_options: dict[str, list[str]] = Field(default_factory=dict)  # option -> blocking finding texts
+    has_missing_scores: bool = False  # visible flag indicating missing criterion scores
+
 
 
 class Memo(BaseModel):
@@ -220,16 +223,27 @@ class HumanDecision(BaseModel):
 
 
 class RunRecord(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
+
     run_id: str
     brief: DecisionBrief
-    routing: Optional[RoutingDecision] = None
+    routing: Optional[Any] = None
     evidence_packs: list[EvidencePack] = Field(default_factory=list)
     positions: list[AdviserPosition] = Field(default_factory=list)
     claim_verdicts: list[ClaimVerdict] = Field(default_factory=list)
+    scorecard: Optional[Scorecard] = None
+    memo: Optional[Memo] = None
     memo_versions: list[Memo] = Field(default_factory=list)
+    final_verdict: Optional[FinalVerdict] = None
     final_verdicts: list[FinalVerdict] = Field(default_factory=list)
+    memo_revisions: list[dict[str, Any]] = Field(default_factory=list)
     human_decision: Optional[HumanDecision] = None
+    human_decisions: list[Any] = Field(default_factory=list)
     metrics: dict[str, float] = Field(default_factory=dict)    # latency_s, facts_considered, tokens, etc.
     status: str = "done"
     error: Optional[str] = None
+    failed_stage: Optional[str] = None
     model_used: dict[str, str] = Field(default_factory=dict)
+    progress: list[dict[str, Any]] = Field(default_factory=list)
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None

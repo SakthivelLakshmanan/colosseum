@@ -8,6 +8,7 @@ from __future__ import annotations
 import ast
 from datetime import date, datetime, timezone
 from decimal import Decimal
+import json
 import operator
 from typing import Any, Optional
 
@@ -219,60 +220,111 @@ def search_documents(
     return results
 
 
-def calculate(expression: str) -> float:
-    """Safely calculate exact arithmetic expressions without arbitrary code execution.
+def _evaluate_ast_node(node: ast.AST) -> float:
+    if isinstance(node, ast.Expression):
+        return _evaluate_ast_node(node.body)
 
-    Supports numbers (integers and floats), basic arithmetic operators (+, -, *, /),
-    unary minus (-x), and parentheses. Never use this for string or logic operations.
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
+            raise ValueError(f"Unsupported constant type in expression: {type(node.value).__name__}")
+        return float(node.value)
 
-    Args:
-        expression: Mathematical expression string, e.g. '(1500 * 0.40) * (0.20 - 0.176) / 100'.
+    if isinstance(node, ast.UnaryOp):
+        op_type = type(node.op)
+        if op_type not in _SAFE_OPERATORS:
+            raise ValueError(f"Unsupported unary operator: {op_type.__name__}")
+        operand = _evaluate_ast_node(node.operand)
+        return float(_SAFE_OPERATORS[op_type](operand))
 
-    Returns:
-        Computed numeric result as a float.
+    if isinstance(node, ast.BinOp):
+        op_type = type(node.op)
+        if op_type not in _SAFE_OPERATORS:
+            raise ValueError(f"Unsupported binary operator: {op_type.__name__}")
+        left = _evaluate_ast_node(node.left)
+        right = _evaluate_ast_node(node.right)
+        if isinstance(node.op, ast.Div) and right == 0.0:
+            raise ValueError("Division by zero in calculate()")
+        return float(_SAFE_OPERATORS[op_type](left, right))
 
-    Raises:
-        ValueError: If the expression contains invalid characters, unsupported operations,
-                    variables, functions, syntax errors, or division by zero.
-    """
-    if not expression or not expression.strip():
+    raise ValueError(f"Unsupported syntax in calculate expression: {type(node).__name__}")
+
+
+def _eval_single_expr(expression_str: Any) -> float:
+    if expression_str is None or (isinstance(expression_str, str) and not expression_str.strip()):
         raise ValueError("Expression cannot be empty")
-
-    clean_expr = expression.strip()
+    clean_expr = str(expression_str).strip()
     try:
         parsed_node = ast.parse(clean_expr, mode="eval")
     except SyntaxError as e:
         raise ValueError(f"Invalid arithmetic expression: {e}") from e
 
-    def _evaluate(node: ast.AST) -> float:
-        if isinstance(node, ast.Expression):
-            return _evaluate(node.body)
+    return _evaluate_ast_node(parsed_node)
 
-        if isinstance(node, ast.Constant):
-            if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
-                raise ValueError(f"Unsupported constant type in expression: {type(node.value).__name__}")
-            return float(node.value)
 
-        if isinstance(node, ast.UnaryOp):
-            op_type = type(node.op)
-            if op_type not in _SAFE_OPERATORS:
-                raise ValueError(f"Unsupported unary operator: {op_type.__name__}")
-            operand = _evaluate(node.operand)
-            return float(_SAFE_OPERATORS[op_type](operand))
+def calculate(
+    expression: str | dict[str, str] | None = None,
+    expressions: dict[str, str] | None = None,
+    **kwargs: Any,
+) -> float | dict[str, float]:
+    """Safely calculate exact arithmetic expressions without arbitrary code execution.
 
-        if isinstance(node, ast.BinOp):
-            op_type = type(node.op)
-            if op_type not in _SAFE_OPERATORS:
-                raise ValueError(f"Unsupported binary operator: {op_type.__name__}")
-            left = _evaluate(node.left)
-            right = _evaluate(node.right)
-            if isinstance(node.op, ast.Div) and right == 0.0:
-                raise ValueError("Division by zero in calculate()")
-            return float(_SAFE_OPERATORS[op_type](left, right))
+    Supports numbers (integers and floats), basic arithmetic operators (+, -, *, /),
+    unary minus (-x), and parentheses. Never use this for string or logic operations.
+    Accepts a single expression string or a batch dictionary of named expressions
+    ({"name": "expression", ...}) to evaluate multiple calculations in a single call.
 
-        raise ValueError(f"Unsupported syntax in calculate expression: {type(node).__name__}")
+    Args:
+        expression: Mathematical expression string, e.g. '(1500 * 0.40) * (0.20 - 0.176) / 100',
+            or a dictionary of named expressions (e.g. {'phase1_benefit': '1500 * 0.40'}).
+        expressions: Optional dictionary of named expressions for batch calculation.
+        **kwargs: Additional named expressions passed as keyword arguments.
 
-    result = _evaluate(parsed_node)
+    Returns:
+        Computed numeric result as a float if a single expression was provided,
+        or a dictionary mapping expression names to float results if batch expressions were provided.
+
+    Raises:
+        ValueError: If the expression contains invalid characters, unsupported operations,
+                    variables, functions, syntax errors, or division by zero.
+    """
+    if isinstance(expression, dict) and not expression and not expressions and not kwargs:
+        raise ValueError("Expression cannot be empty")
+    if isinstance(expressions, dict) and not expressions and not expression and not kwargs:
+        raise ValueError("Expression cannot be empty")
+
+    # Collect batch expressions if provided
+    batch: dict[str, str] = {}
+    if isinstance(expressions, dict):
+        batch.update(expressions)
+    if isinstance(expression, dict):
+        batch.update(expression)
+    elif isinstance(expression, str) and expression.strip().startswith("{") and expression.strip().endswith("}"):
+        try:
+            parsed = json.loads(expression.strip())
+            if isinstance(parsed, dict):
+                batch.update(parsed)
+        except Exception:
+            pass
+    if kwargs:
+        batch.update(kwargs)
+
+    if batch:
+        results: dict[str, float] = {}
+        for name, expr in batch.items():
+            results[name] = _eval_single_expr(expr)
+        record_tool_call(
+            tool_name="calculate",
+            arguments={"expressions": batch},
+            result_count=len(results),
+        )
+        return results
+
+    if expression is None:
+        raise ValueError("Expression cannot be empty")
+    if not isinstance(expression, str):
+        raise ValueError(f"Invalid expression type: {type(expression).__name__}")
+
+    result = _eval_single_expr(expression)
 
     record_tool_call(
         tool_name="calculate",

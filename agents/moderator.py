@@ -736,44 +736,78 @@ def check_memo(
                 )
             )
 
-    # Check 2: every selected adviser appears in the memo body or in dissent
+    # Check 2: every selected adviser is represented
+    # An adviser counts as represented if its id or display name appears anywhere in the memo text
+    # (recommendation, conditions, phased_plan, dissent, assumptions), or any key number cites
+    # one of its claims or evidence IDs.
     registry = get_registry()
-    memo_evidence_index_lower = {e.lower() for e in (memo_obj.evidence_index or [])}
+    memo_repr_text = " ".join([
+        memo_obj.recommendation or "",
+        " ".join(memo_obj.conditions or []),
+        " ".join(memo_obj.phased_plan or []),
+        " ".join(memo_obj.dissent or []),
+        " ".join(memo_obj.assumptions or []),
+    ]).lower()
+    memo_evidence_index_lower = [str(eid).strip().lower() for eid in (memo_obj.evidence_index or []) if str(eid).strip()]
+
     for aid in selected_advisers:
         aid_lower = aid.lower()
         adv_cfg = registry.get(aid)
-        adv_name = adv_cfg.name.lower() if adv_cfg else aid_lower
+        adv_name = adv_cfg.name.lower() if adv_cfg and adv_cfg.name else aid_lower
 
-        # Check name/id in full memo text
-        adviser_cited = (aid_lower in memo_lower) or (adv_name in memo_lower)
+        # 1. Check if id or display name appears anywhere in the memo text
+        adviser_represented = (aid_lower in memo_repr_text) or (adv_name in memo_repr_text)
 
-        # Check if any claim ID from this adviser was cited in memo body text
-        if not adviser_cited and aid in positions_obj:
-            for c in positions_obj[aid].claims:
-                if c.claim_id.lower() in memo_lower:
-                    adviser_cited = True
+        # 2. Check if any key number cites one of its claims or evidence IDs
+        if not adviser_represented:
+            adv_claims = set()
+            adv_eids = set()
+            if aid in positions_obj:
+                pos = positions_obj[aid]
+                for c in pos.claims:
+                    adv_claims.add(c.claim_id.lower().strip())
+                    for eid in c.evidence_ids:
+                        adv_eids.add(str(eid).strip().lower())
+                for idx, bf in enumerate(pos.blocking_findings, 1):
+                    adv_claims.add(f"{aid}-b{idx}".lower())
+                    for eid in bf.evidence_ids:
+                        adv_eids.add(str(eid).strip().lower())
+                for cs in pos.criterion_scores:
+                    for eid in cs.evidence_ids:
+                        adv_eids.add(str(eid).strip().lower())
+
+            for kn in memo_obj.key_numbers:
+                if kn.claim_id:
+                    cid_clean = kn.claim_id.lower().strip()
+                    if cid_clean in adv_claims or cid_clean.startswith(f"{aid_lower}-") or cid_clean.startswith(f"{aid_lower}_"):
+                        adviser_represented = True
+                        break
+                for eid in kn.evidence_ids:
+                    eid_clean = str(eid).lower().strip()
+                    if (
+                        eid_clean in adv_eids
+                        or eid_clean in adv_claims
+                        or eid_clean.startswith(f"{aid_lower}-")
+                        or eid_clean.startswith(f"{aid_lower}_")
+                    ):
+                        adviser_represented = True
+                        break
+                if adviser_represented:
                     break
 
-        # Check if the adviser's evidence IDs appear in the memo's evidence_index
-        # (scribe may cite BUS-xx, FIN-xx evidence without naming the adviser explicitly)
-        if not adviser_cited and aid in positions_obj:
-            adviser_prefix = aid.upper().rstrip("0123456789") + "-"  # e.g. "BUS-", "FIN-"
-            # Use claim IDs prefix (e.g. "FIN-01" -> adviser "finance")
+        # 3. Fallback: also check evidence_index
+        if not adviser_represented and aid in positions_obj:
             adv_claim_prefix = positions_obj[aid].claims[0].claim_id.split("-")[0].upper() + "-" if positions_obj[aid].claims else None
             for eid in memo_evidence_index_lower:
-                # Match by adviser id prefix (finance -> fin, business -> bus, etc.)
-                if eid.startswith(aid_lower[:3]):
-                    adviser_cited = True
-                    break
-                if adv_claim_prefix and eid.upper().startswith(adv_claim_prefix):
-                    adviser_cited = True
+                if eid.startswith(aid_lower[:3]) or (adv_claim_prefix and eid.upper().startswith(adv_claim_prefix)):
+                    adviser_represented = True
                     break
 
-        if not adviser_cited:
+        if not adviser_represented:
             code_check_issues.append(
                 MemoIssue(
                     kind="missing_adviser",
-                    detail=f"Selected adviser '{aid}' ({adv_cfg.name if adv_cfg else aid}) is not represented in the memo body or dissent.",
+                    detail=f"Selected adviser '{aid}' ({adv_cfg.name if adv_cfg else aid}) is not represented in the memo text or key numbers.",
                     evidence_ids=[],
                 )
             )
@@ -850,8 +884,23 @@ def check_memo(
             )
         )
 
+    # Prepare decision brief text for brief number matching
+    brief_full_text = " ".join([
+        brief_obj.question or "",
+        " ".join(brief_obj.options.values()),
+        " ".join(brief_obj.constraints or []),
+        " ".join(c.name for c in brief_obj.criteria),
+        " ".join(c.good_looks_like for c in brief_obj.criteria),
+    ])
+
     # Check 5: every key_number matches its evidence (recompute calculations, 1% tolerance; fact values vs value_num)
     for kn in memo_obj.key_numbers:
+        # Check if number appears in the decision brief (the Scribe cites BRIEF as the evidence ID)
+        cites_brief = any("brief" in str(eid).lower() for eid in kn.evidence_ids)
+        if kn.value is not None and _number_appears_in_statement(brief_full_text, kn.value, kn.unit, tolerance_pct=1.0):
+            if cites_brief or not kn.evidence_ids:
+                continue
+
         if not kn.evidence_ids:
             code_check_issues.append(
                 MemoIssue(
@@ -886,6 +935,12 @@ def check_memo(
             matched = False
             comparable_eids: list[str] = []  # evidence IDs in same unit family
             for eid in kn.evidence_ids:
+                if "brief" in str(eid).lower():
+                    if _number_appears_in_statement(brief_full_text, kn.value, kn.unit, tolerance_pct=1.0):
+                        matched = True
+                        break
+                    continue
+
                 fact = get_fact(eid)
                 if not fact:
                     continue
@@ -1012,7 +1067,10 @@ def check_memo(
     # Rule: If any code check failed, the verdict can't be PASS.
     # Furthermore, if an unresolved blocker is ignored, the verdict must be WRONG per ARCHITECTURE §8.
     final_issues = code_check_issues + llm_issues
-    if any(i.kind == "ignored_blocker" for i in code_check_issues):
+    if final_issues and all(i.kind == "upstream_gap" for i in final_issues):
+        verdict_type = MemoVerdictType.incomplete
+        revision_instructions = ""
+    elif any(i.kind == "ignored_blocker" for i in code_check_issues):
         verdict_type = MemoVerdictType.wrong
     elif code_check_issues:
         if verdict_type == MemoVerdictType.pass_:
