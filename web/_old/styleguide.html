@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Colosseum Design System — Decision Command Room</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Styleguide specific layout adjustments */
+    .sg-header {
+      padding: 2.5rem 0 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      margin-bottom: 2.5rem;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+
+    .sg-header-brand {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .sg-header-controls {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .sg-section {
+      margin-bottom: 3.5rem;
+    }
+
+    .sg-section-header {
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .sg-grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .sg-grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .sg-grid-4 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+
+    .component-card {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .component-label {
+      font-family: var(--font-heading);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .arena-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+      margin-top: 1rem;
+    }
+
+    .counter-display {
+      font-family: var(--font-mono);
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      line-height: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+
+    <!-- Header & Theme Switcher -->
+    <header class="sg-header animate-rise" style="--delay: 1;">
+      <div class="sg-header-brand">
+        <span class="eyebrow">Design System & Component Harness</span>
+        <h1>Colosseum Command Room</h1>
+        <p>Executive Decision Intelligence Platform & UI Styleguide</p>
+      </div>
+      <div class="sg-header-controls">
+        <button id="themeToggleBtn" class="btn btn-secondary" aria-label="Toggle Theme">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"></circle>
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+          </svg>
+          <span id="themeLabel">Light Mode</span>
+        </button>
+        <button class="btn btn-primary" onclick="triggerToast('pass', 'Command Room Ready', 'All advisers synchronized with ledger.')">
+          System Status
+        </button>
+      </div>
+    </header>
+
+    <!-- SECTION 1: THE ARENA (Signature Element) -->
+    <section class="sg-section animate-rise" style="--delay: 2;">
+      <div class="sg-section-header">
+        <div>
+          <span class="eyebrow">Signature Element</span>
+          <h2>The Arena</h2>
+          <p>Council of 6 domain advisers arranged in an executive semicircle around the Decision Node.</p>
+        </div>
+      </div>
+
+      <div class="glass-panel arena-wrapper">
+        <svg class="arena-svg" viewBox="0 0 800 380" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <!-- Radial gradient for center node -->
+            <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="var(--accent-cyan-dim)" stop-opacity="0.8"/>
+              <stop offset="100%" stop-color="transparent" stop-opacity="0"/>
+            </radialGradient>
+            
+            <!-- Shield icon definition for blocking adviser -->
+            <g id="shieldIcon">
+              <path d="M-6 -6 L6 -6 L6 1 C6 5 0 8 0 8 C0 8 -6 5 -6 1 Z" fill="var(--color-strike)" stroke="white" stroke-width="1.2"/>
+            </g>
+          </defs>
+
+          <!-- Connecting Lines to Center (400, 290) -->
+          <path id="conn-finance" class="arena-connector" d="M 195 235 L 360 280" />
+          <path id="conn-business" class="arena-connector" d="M 250 145 L 370 270" />
+          <path id="conn-customer" class="arena-connector" d="M 345 95 L 390 260" />
+          <path id="conn-legal" class="arena-connector" d="M 455 95 L 410 260" />
+          <path id="conn-infosec" class="arena-connector" d="M 550 145 L 430 270" />
+          <path id="conn-ops" class="arena-connector" d="M 605 235 L 440 280" />
+
+          <!-- Central Decision Node -->
+          <g class="center-decision-node" transform="translate(400, 290)">
+            <circle class="center-disc" r="68" />
+            <circle class="center-ring" r="76" />
+            <text class="center-title" y="-32">DECISION NODE</text>
+            <text class="center-question" y="-12" font-size="11">Should Legion migrate</text>
+            <text class="center-question" y="6" font-size="11">core payments to Brevis?</text>
+            <g transform="translate(0, 28)">
+              <rect x="-38" y="-9" width="76" height="18" rx="9" fill="var(--accent-cyan-dim)" stroke="var(--accent-cyan-border)" stroke-width="1"/>
+              <text font-family="var(--font-mono)" font-size="9" font-weight="600" fill="var(--accent-cyan)" text-anchor="middle" y="4">DEC-001</text>
+            </g>
+          </g>
+
+          <!-- Seat 1: Finance (195, 235) -->
+          <g id="seat-finance" class="arena-seat state-selected" transform="translate(195, 235)" onclick="toggleSeatState('finance')">
+            <circle class="seat-ring" r="32" />
+            <circle class="seat-disc" r="26" />
+            <!-- Bank/Vault Icon -->
+            <path class="seat-icon" transform="translate(-10, -10) scale(0.85)" d="M2 10 L12 2 L22 10 L20 10 L20 20 L4 20 L4 10 Z M6 18 L8 18 L8 11 L6 11 Z M11 18 L13 18 L13 11 L11 11 Z M16 18 L18 18 L18 11 L16 11 Z"/>
+            <text class="seat-label" y="46">Finance</text>
+            <text class="seat-score-badge" y="58">0.94</text>
+          </g>
+
+          <!-- Seat 2: Business (250, 145) -->
+          <g id="seat-business" class="arena-seat state-scored" transform="translate(250, 145)" onclick="toggleSeatState('business')">
+            <circle class="seat-ring" r="32" />
+            <circle class="seat-disc" r="26" />
+            <!-- Briefcase Icon -->
+            <path class="seat-icon" transform="translate(-10, -10) scale(0.85)" d="M4 6 L20 6 C21.1 6 22 6.9 22 8 L22 18 C22 19.1 21.1 20 20 20 L4 20 C2.9 20 2 19.1 2 18 L2 8 C2 6.9 2.9 6 4 6 Z M9 6 L9 4 C9 2.9 9.9 2 11 2 L13 2 C14.1 2 15 2.9 15 4 L15 6 Z"/>
+            <text class="seat-label" y="46">Business</text>
+            <text class="seat-score-badge" y="58">0.82</text>
+          </g>
+
+          <!-- Seat 3: Customer (345, 95) -->
+          <g id="seat-customer" class="arena-seat state-idle" transform="translate(345, 95)" onclick="toggleSeatState('customer')">
+            <circle class="seat-ring" r="32" />
+            <circle class="seat-disc" r="26" />
+            <!-- Users Icon -->
+            <path class="seat-icon" transform="translate(-10, -10) scale(0.85)" d="M12 12 C14.2 12 16 10.2 16 8 C16 5.8 14.2 4 12 4 C9.8 4 8 5.8 8 8 C8 10.2 9.8 12 12 12 Z M4 20 C4 16.7 8 15 12 15 C16 15 20 16.7 20 20 Z"/>
+            <text class="seat-label" y="46">Customer</text>
+            <text class="seat-score-badge" y="58">0.45</text>
+          </g>
+
+          <!-- Seat 4: Legal (455, 95) -->
+          <g id="seat-legal" class="arena-seat state-done-pass" transform="translate(455, 95)" onclick="toggleSeatState('legal')">
+            <circle class="seat-ring" r="32" />
+            <circle class="seat-disc" r="26" />
+            <!-- Scales / Gavel Icon -->
+            <path class="seat-icon" transform="translate(-10, -10) scale(0.85)" d="M12 2 L3 7 L12 12 L21 7 Z M5 10 L5 16 C5 19.9 8.1 23 12 23 C15.9 23 19 19.9 19 16 L19 10 L12 14 Z"/>
+            <text class="seat-label" y="46">Legal</text>
+            <text class="seat-score-badge" y="58">0.78</text>
+          </g>
+
+          <!-- Seat 5: InfoSec (550, 145) -->
+          <g id="seat-infosec" class="arena-seat state-blocking" transform="translate(550, 145)" onclick="toggleSeatState('infosec')">
+            <circle class="seat-ring" r="32" />
+            <circle class="seat-disc" r="26" />
+            <!-- Shield Icon -->
+            <path class="seat-icon" transform="translate(-10, -10) scale(0.85)" d="M12 2 L4 5 L4 11 C4 16.5 7.4 21.7 12 23 C16.6 21.7 20 16.5 20 11 L20 5 Z"/>
+            <use href="#shieldIcon" x="18" y="-14" />
+            <text class="seat-label" y="46">InfoSec</text>
+            <text class="seat-score-badge" y="58">0.96</text>
+          </g>
+
+          <!-- Seat 6: Ops (605, 235) -->
+          <g id="seat-ops" class="arena-seat state-working" transform="translate(605, 235)" onclick="toggleSeatState('ops')">
+            <circle class="seat-ring" r="32" />
+            <circle class="seat-disc" r="26" />
+            <!-- Layers / Cog Icon -->
+            <path class="seat-icon" transform="translate(-10, -10) scale(0.85)" d="M12 2 L2 7 L12 12 L22 7 Z M2 12 L12 17 L22 12 M2 17 L12 22 L22 17"/>
+            <text class="seat-label" y="46">Ops</text>
+            <text class="seat-score-badge" y="58">0.89</text>
+          </g>
+        </svg>
+
+        <!-- Interactive Arena Controls -->
+        <div class="arena-controls">
+          <button class="btn btn-secondary btn-sm" onclick="setArenaPreset('idle')">1. All Idle</button>
+          <button class="btn btn-secondary btn-sm" onclick="setArenaPreset('scored')">2. Routing Scored</button>
+          <button class="btn btn-secondary btn-sm" onclick="setArenaPreset('selected')">3. Selected Council</button>
+          <button class="btn btn-secondary btn-sm" onclick="setArenaPreset('working')">4. Reasoning / Working</button>
+          <button class="btn btn-secondary btn-sm" onclick="setArenaPreset('done')">5. Done Stances</button>
+          <button class="btn btn-secondary btn-sm" onclick="setArenaPreset('blocking')">6. InfoSec Blocking Veto</button>
+        </div>
+        <p class="text-small text-muted" style="margin-top: 0.5rem; text-align: center;">Tip: Click any adviser seat to cycle its individual state.</p>
+      </div>
+    </section>
+
+    <!-- SECTION 2: EXECUTIVE VERDICT SEALS -->
+    <section class="sg-section animate-rise" style="--delay: 3;">
+      <div class="sg-section-header">
+        <div>
+          <span class="eyebrow">Decision Verification</span>
+          <h2>Verdict Seals</h2>
+          <p>Authoritative executive badges rendered at the head of every decision memo.</p>
+        </div>
+      </div>
+
+      <div class="sg-grid-2">
+        <!-- PASS Seal -->
+        <div class="verdict-seal seal-pass">
+          <div class="verdict-seal-emblem">✓</div>
+          <div class="verdict-seal-body">
+            <span class="verdict-seal-title">PASS — DECISION VERIFIED</span>
+            <span class="verdict-seal-subtitle">Zero blocking objections. 8/8 claim verification checks passed.</span>
+          </div>
+        </div>
+
+        <!-- FLAG Seal -->
+        <div class="verdict-seal seal-flag">
+          <div class="verdict-seal-emblem">!</div>
+          <div class="verdict-seal-body">
+            <span class="verdict-seal-title">FLAG — CONDITIONAL ADOPTION</span>
+            <span class="verdict-seal-subtitle">Approval subject to 2 mitigations before contract signing.</span>
+          </div>
+        </div>
+
+        <!-- STRIKE Seal -->
+        <div class="verdict-seal seal-strike">
+          <div class="verdict-seal-emblem">✕</div>
+          <div class="verdict-seal-body">
+            <span class="verdict-seal-title">STRIKE — BLOCKED BY INFOSEC</span>
+            <span class="verdict-seal-subtitle">Veto: Option B violates India RBI cloud localization circular.</span>
+          </div>
+        </div>
+
+        <!-- HUMAN OVERRIDE Seal -->
+        <div class="verdict-seal seal-human">
+          <div class="verdict-seal-emblem">⚖</div>
+          <div class="verdict-seal-body">
+            <span class="verdict-seal-title">EXECUTIVE OVERRIDE RECORDED</span>
+            <span class="verdict-seal-subtitle">Chief Risk Officer approved with mandatory India hosting add-on.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: PIPELINE STEPPER & SCORECARDS -->
+    <section class="sg-section animate-rise" style="--delay: 4;">
+      <div class="sg-section-header">
+        <div>
+          <span class="eyebrow">Execution Tracking</span>
+          <h2>Pipeline Stepper & Scorecards</h2>
+          <p>Real-time pipeline orchestration and multi-criteria evaluation matrix.</p>
+        </div>
+      </div>
+
+      <!-- Stepper Component -->
+      <div class="glass-panel" style="margin-bottom: 1.5rem;">
+        <span class="component-label">Pipeline Stepper</span>
+        <div class="step-bar">
+          <div class="step-bar-progress" id="stepProgress" style="width: 50%;"></div>
+          
+          <button class="step-item is-completed" onclick="setStep(0)">
+            <div class="step-node">✓</div>
+            <span class="step-label">1. Routing</span>
+          </button>
+          
+          <button class="step-item is-completed" onclick="setStep(1)">
+            <div class="step-node">✓</div>
+            <span class="step-label">2. Evidence</span>
+          </button>
+          
+          <button class="step-item is-active" onclick="setStep(2)">
+            <div class="step-node">3</div>
+            <span class="step-label">3. Advisers</span>
+          </button>
+          
+          <button class="step-item" onclick="setStep(3)">
+            <div class="step-node">4</div>
+            <span class="step-label">4. Debate</span>
+          </button>
+          
+          <button class="step-item" onclick="setStep(4)">
+            <div class="step-node">5</div>
+            <span class="step-label">5. Scribe</span>
+          </button>
+          
+          <button class="step-item" onclick="setStep(5)">
+            <div class="step-node">6</div>
+            <span class="step-label">6. Verdict</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Scorecard Component -->
+      <div class="glass-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2">
+              <path d="M18 20V10M12 20V4M6 20v-6"></path>
+            </svg>
+            <h3>Weighted Scorecard Matrix</h3>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="animateScoreBars()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
+            </svg>
+            Replay Fill Animation
+          </button>
+        </div>
+
+        <div class="score-row">
+          <div class="score-meta">
+            <span class="score-criterion">Cost & 3-Yr TCO</span>
+            <span class="score-weight">Weight: 1.0 • Finance</span>
+          </div>
+          <div class="score-bar-track">
+            <div class="score-bar-fill fill-pass" data-target="86%" style="width: 86%;"></div>
+          </div>
+          <span class="score-value">4.3 / 5</span>
+        </div>
+
+        <div class="score-row">
+          <div class="score-meta">
+            <span class="score-criterion">Data Localisation</span>
+            <span class="score-weight">Weight: 1.0 • InfoSec</span>
+          </div>
+          <div class="score-bar-track">
+            <div class="score-bar-fill fill-strike" data-target="30%" style="width: 30%;"></div>
+          </div>
+          <span class="score-value">1.5 / 5</span>
+        </div>
+
+        <div class="score-row">
+          <div class="score-meta">
+            <span class="score-criterion">Maintainability & SLA</span>
+            <span class="score-weight">Weight: 0.8 • Ops</span>
+          </div>
+          <div class="score-bar-track">
+            <div class="score-bar-fill fill-flag" data-target="68%" style="width: 68%;"></div>
+          </div>
+          <span class="score-value">3.4 / 5</span>
+        </div>
+
+        <div class="score-row">
+          <div class="score-meta">
+            <span class="score-criterion">Vendor Lock-in Risk</span>
+            <span class="score-weight">Weight: 0.6 • Legal</span>
+          </div>
+          <div class="score-bar-track">
+            <div class="score-bar-fill" data-target="80%" style="width: 80%;"></div>
+          </div>
+          <span class="score-value">4.0 / 5</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: BUTTONS, BADGES & EVIDENCE CHIPS -->
+    <section class="sg-section animate-rise" style="--delay: 5;">
+      <div class="sg-section-header">
+        <div>
+          <span class="eyebrow">Component Primitives</span>
+          <h2>Buttons, Badges & Chips</h2>
+          <p>Standardized interactive elements for actions, citations, and status indications.</p>
+        </div>
+      </div>
+
+      <div class="sg-grid-3">
+        <!-- Buttons Card -->
+        <div class="glass-panel component-card">
+          <span class="component-label">Action Buttons</span>
+          <div class="button-group">
+            <button class="btn btn-primary">Primary Glow</button>
+            <button class="btn btn-secondary">Secondary</button>
+            <button class="btn btn-ghost">Ghost</button>
+          </div>
+          <div class="button-group">
+            <button class="btn btn-pass btn-sm">Approve Memo</button>
+            <button class="btn btn-strike btn-sm">Veto / Override</button>
+            <button class="btn btn-secondary btn-sm" disabled>Disabled</button>
+          </div>
+        </div>
+
+        <!-- Badges Card -->
+        <div class="glass-panel component-card">
+          <span class="component-label">Status Badges</span>
+          <div class="button-group">
+            <span class="badge badge-pass"><span class="badge-dot"></span>PASS</span>
+            <span class="badge badge-flag"><span class="badge-dot"></span>FLAG</span>
+            <span class="badge badge-strike"><span class="badge-dot"></span>STRIKE</span>
+            <span class="badge badge-human"><span class="badge-dot"></span>HUMAN</span>
+            <span class="badge badge-cyan"><span class="badge-dot"></span>ACTIVE</span>
+            <span class="badge badge-neutral"><span class="badge-dot"></span>QUEUED</span>
+          </div>
+        </div>
+
+        <!-- Evidence Chips Card -->
+        <div class="glass-panel component-card">
+          <span class="component-label">Monospace Evidence Chips</span>
+          <p class="text-small">Click an evidence chip to trigger the slide-in audit drawer:</p>
+          <div class="button-group">
+            <button class="chip chip-evidence" onclick="openDrawer('FIN-01', 'Option B saves 14.4 lakh annual recurring licensing costs (Arvanta 24L vs Brevis 9.6L).', 'Finance Adviser')">
+              [FIN-01]
+            </button>
+            <button class="chip chip-evidence" onclick="openDrawer('SEC-04', 'Brevis base tier processes data through Singapore AWS, violating RBI Circular RBI/2018-19/61.', 'InfoSec Adviser')">
+              [SEC-04]
+            </button>
+            <button class="chip chip-evidence" onclick="openDrawer('OPS-02', 'Zero-downtime cutover requires dual-write adapter for 14 days.', 'Ops Adviser')">
+              [OPS-02]
+            </button>
+            <span class="chip is-active">Active Chip</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 5: LIVE METRICS & DRAWER / TOAST HARNESS -->
+    <section class="sg-section animate-rise" style="--delay: 6;">
+      <div class="sg-section-header">
+        <div>
+          <span class="eyebrow">Motion & Interactivity</span>
+          <h2>Counters, Drawers & Toast Harness</h2>
+          <p>Smooth counting animations and non-intrusive command room notifications.</p>
+        </div>
+      </div>
+
+      <div class="sg-grid-3">
+        <!-- Live Counter Card -->
+        <div class="glass-panel component-card">
+          <span class="component-label">Animated Number Counter</span>
+          <div style="display: flex; align-items: baseline; gap: 0.5rem; margin: 0.5rem 0;">
+            <div id="costCounter" class="counter-display" data-target="14.4">0.0</div>
+            <span style="font-family: var(--font-heading); font-weight: 600; color: var(--text-secondary);">INR Lakh Savings</span>
+          </div>
+          <div class="button-group">
+            <button class="btn btn-secondary btn-sm" onclick="replayCounter()">
+              Count Up From 0
+            </button>
+          </div>
+        </div>
+
+        <!-- Toast Triggers Card -->
+        <div class="glass-panel component-card">
+          <span class="component-label">Toast Notifications</span>
+          <p class="text-small">Trigger command room alerts:</p>
+          <div class="button-group">
+            <button class="btn btn-secondary btn-sm" onclick="triggerToast('pass', 'Evidence Verified', 'Check [FIN-01] confirmed against audited ledger.')">
+              Pass Toast
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="triggerToast('flag', 'Verification Warning', 'Ops benchmark evidence is older than 6 months.')">
+              Flag Toast
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="triggerToast('strike', 'Blocking Veto', 'InfoSec has raised a mandatory objection.')">
+              Strike Toast
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="triggerToast('human', 'Human Override', 'CRO logged override with reason.')">
+              Human Toast
+            </button>
+          </div>
+        </div>
+
+        <!-- Drawer Trigger Card -->
+        <div class="glass-panel component-card">
+          <span class="component-label">Evidence Audit Drawer</span>
+          <p class="text-small">Inspect citation details, source documents, and verification trails.</p>
+          <button class="btn btn-primary btn-sm" onclick="openDrawer('DEC-001', 'Full evaluation dossier for payments migration.', 'Harness Lead')">
+            Open Evidence Drawer
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 6: SKELETON LOADERS & EMPTY STATES -->
+    <section class="sg-section animate-rise" style="--delay: 7;">
+      <div class="sg-section-header">
+        <div>
+          <span class="eyebrow">Asynchronous States</span>
+          <h2>Skeleton Shimmers & Empty State</h2>
+          <p>Clean loading placeholders and zero-data fallback layouts.</p>
+        </div>
+      </div>
+
+      <div class="sg-grid-2">
+        <!-- Skeleton Card -->
+        <div class="glass-panel">
+          <span class="component-label" style="display: block; margin-bottom: 1rem;">Reasoning Shimmer Skeleton</span>
+          <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem;">
+            <div class="skeleton skeleton-circle"></div>
+            <div style="flex: 1;">
+              <div class="skeleton skeleton-title"></div>
+              <div class="skeleton skeleton-text" style="width: 45%;"></div>
+            </div>
+          </div>
+          <div class="skeleton skeleton-text"></div>
+          <div class="skeleton skeleton-text" style="width: 90%;"></div>
+          <div class="skeleton skeleton-text" style="width: 75%;"></div>
+        </div>
+
+        <!-- Empty State Card -->
+        <div class="glass-panel">
+          <div class="empty-state">
+            <div class="empty-state-icon">⚖</div>
+            <h4 class="empty-state-title">No Active Decision Run</h4>
+            <p class="empty-state-desc">Select a decision brief from the library or submit a new proposal to launch the 6 advisers.</p>
+            <button class="btn btn-secondary btn-sm">Load Sample Brief (DEC-001)</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div> <!-- /app-container -->
+
+  <!-- Slide-in Evidence Audit Drawer -->
+  <div id="drawerBackdrop" class="drawer-backdrop" onclick="closeDrawer()"></div>
+  <aside id="drawer" class="drawer" aria-labelledby="drawerTitle" role="dialog">
+    <div class="drawer-header">
+      <div>
+        <span class="eyebrow">Evidence Dossier</span>
+        <h3 id="drawerTitle" style="margin-top: 0.2rem;">[FIN-01]</h3>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="closeDrawer()" aria-label="Close drawer">✕</button>
+    </div>
+    <div class="drawer-body">
+      <div style="margin-bottom: 1.25rem;">
+        <span class="component-label">Claim Text</span>
+        <p id="drawerClaim" style="margin-top: 0.35rem; color: var(--text-primary);">
+          Option B saves 14.4 lakh annual recurring licensing costs.
+        </p>
+      </div>
+
+      <div style="margin-bottom: 1.25rem;">
+        <span class="component-label">Owner Adviser</span>
+        <p id="drawerOwner" style="margin-top: 0.35rem; font-weight: 600; color: var(--accent-cyan);">
+          Finance Adviser
+        </p>
+      </div>
+
+      <div style="margin-bottom: 1.25rem;">
+        <span class="component-label">Verification Trail</span>
+        <div class="glass-panel" style="padding: 0.875rem; margin-top: 0.35rem;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+            <span class="text-small text-muted">Document Ref:</span>
+            <span class="mono-num text-small">PRICING-2026-Q1.pdf</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+            <span class="text-small text-muted">Checksum:</span>
+            <span class="mono-num text-small">sha256:8f4c2e...</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span class="text-small text-muted">Moderator Check:</span>
+            <span class="badge badge-pass" style="font-size: 0.625rem;">PASS</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="drawer-footer">
+      <button class="btn btn-secondary btn-sm" onclick="closeDrawer()">Dismiss</button>
+      <button class="btn btn-primary btn-sm" onclick="triggerToast('pass', 'Verified', 'Evidence confirmed in run ledger.'); closeDrawer();">
+        Verify in Ledger
+      </button>
+    </div>
+  </aside>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+  <!-- Vanilla JS Interactive Harness -->
+  <script>
+    // 1. Theme Toggle
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const themeLabel = document.getElementById('themeLabel');
+    const htmlEl = document.documentElement;
+
+    function setTheme(theme) {
+      htmlEl.setAttribute('data-theme', theme);
+      if (theme === 'light') {
+        themeLabel.textContent = 'Dark Mode';
+      } else {
+        themeLabel.textContent = 'Light Mode';
+      }
+      try {
+        localStorage.setItem('colosseum_theme', theme);
+      } catch (e) {}
+    }
+
+    themeToggleBtn.addEventListener('click', () => {
+      const current = htmlEl.getAttribute('data-theme') || 'dark';
+      setTheme(current === 'dark' ? 'light' : 'dark');
+    });
+
+    // 2. The Arena Interactive States
+    const arenaAdvisers = ['finance', 'business', 'customer', 'legal', 'infosec', 'ops'];
+    const arenaStates = ['state-idle', 'state-scored', 'state-selected', 'state-working', 'state-done-pass', 'state-blocking'];
+
+    function clearSeatStates(seatEl) {
+      seatEl.classList.remove(
+        'state-idle', 'state-scored', 'state-selected', 'state-working',
+        'state-done-pass', 'state-done-flag', 'state-done-strike', 'state-blocking'
+      );
+    }
+
+    function toggleSeatState(id) {
+      const seat = document.getElementById(`seat-${id}`);
+      if (!seat) return;
+      
+      let nextIndex = 0;
+      for (let i = 0; i < arenaStates.length; i++) {
+        if (seat.classList.contains(arenaStates[i])) {
+          nextIndex = (i + 1) % arenaStates.length;
+          break;
+        }
+      }
+      clearSeatStates(seat);
+      seat.classList.add(arenaStates[nextIndex]);
+      updateConnector(id);
+    }
+
+    function updateConnector(id) {
+      const seat = document.getElementById(`seat-${id}`);
+      const conn = document.getElementById(`conn-${id}`);
+      if (!seat || !conn) return;
+
+      if (seat.classList.contains('state-selected') || seat.classList.contains('state-working')) {
+        conn.classList.add('is-active');
+      } else {
+        conn.classList.remove('is-active');
+      }
+    }
+
+    function setArenaPreset(preset) {
+      arenaAdvisers.forEach(id => {
+        const seat = document.getElementById(`seat-${id}`);
+        const conn = document.getElementById(`conn-${id}`);
+        if (!seat) return;
+        clearSeatStates(seat);
+
+        switch (preset) {
+          case 'idle':
+            seat.classList.add('state-idle');
+            if (conn) conn.classList.remove('is-active');
+            break;
+
+          case 'scored':
+            seat.classList.add('state-scored');
+            if (conn) conn.classList.remove('is-active');
+            break;
+
+          case 'selected':
+            if (['finance', 'infosec', 'ops'].includes(id)) {
+              seat.classList.add('state-selected');
+              if (conn) conn.classList.add('is-active');
+            } else {
+              seat.classList.add('state-idle');
+              if (conn) conn.classList.remove('is-active');
+            }
+            break;
+
+          case 'working':
+            if (['finance', 'infosec', 'ops'].includes(id)) {
+              seat.classList.add('state-working');
+              if (conn) conn.classList.add('is-active');
+            } else {
+              seat.classList.add('state-idle');
+              if (conn) conn.classList.remove('is-active');
+            }
+            break;
+
+          case 'done':
+            if (id === 'finance') seat.classList.add('state-done-pass');
+            else if (id === 'ops') seat.classList.add('state-done-flag');
+            else if (id === 'infosec') seat.classList.add('state-done-strike');
+            else if (id === 'legal') seat.classList.add('state-done-pass');
+            else seat.classList.add('state-idle');
+            if (conn) conn.classList.remove('is-active');
+            break;
+
+          case 'blocking':
+            if (id === 'infosec') {
+              seat.classList.add('state-blocking');
+              if (conn) conn.classList.add('is-active');
+            } else if (['finance', 'ops'].includes(id)) {
+              seat.classList.add('state-selected');
+              if (conn) conn.classList.add('is-active');
+            } else {
+              seat.classList.add('state-idle');
+              if (conn) conn.classList.remove('is-active');
+            }
+            break;
+        }
+      });
+    }
+
+    // 3. Pipeline Stepper Logic
+    function setStep(targetIdx) {
+      const items = document.querySelectorAll('.step-item');
+      const progress = document.getElementById('stepProgress');
+      const total = items.length - 1;
+
+      items.forEach((item, idx) => {
+        item.classList.remove('is-completed', 'is-active');
+        const node = item.querySelector('.step-node');
+        if (idx < targetIdx) {
+          item.classList.add('is-completed');
+          node.textContent = '✓';
+        } else if (idx === targetIdx) {
+          item.classList.add('is-active');
+          node.textContent = idx + 1;
+        } else {
+          node.textContent = idx + 1;
+        }
+      });
+
+      progress.style.width = `${(targetIdx / total) * 100}%`;
+    }
+
+    // 4. Score Bar Fill Animation
+    function animateScoreBars() {
+      const fills = document.querySelectorAll('.score-bar-fill');
+      fills.forEach(fill => {
+        const target = fill.getAttribute('data-target') || '0%';
+        fill.style.width = '0%';
+        setTimeout(() => {
+          fill.style.width = target;
+        }, 80);
+      });
+    }
+
+    // 5. Vanilla JS Number Counter
+    function animateValue(obj, start, end, duration) {
+      let startTimestamp = null;
+      const step = (timestamp) => {
+        if (!startTimestamp) startTimestamp = timestamp;
+        const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+        // Ease cubic-bezier(.2,.8,.2,1) approximate
+        const easeProgress = 1 - Math.pow(1 - progress, 3);
+        const current = (start + (end - start) * easeProgress).toFixed(1);
+        obj.textContent = current;
+        if (progress < 1) {
+          window.requestAnimationFrame(step);
+        } else {
+          obj.textContent = end.toFixed(1);
+        }
+      };
+      window.requestAnimationFrame(step);
+    }
+
+    function replayCounter() {
+      const el = document.getElementById('costCounter');
+      if (!el) return;
+      const target = parseFloat(el.getAttribute('data-target')) || 14.4;
+      animateValue(el, 0, target, 1200);
+    }
+
+    // 6. Evidence Audit Drawer
+    function openDrawer(id, text, owner) {
+      document.getElementById('drawerTitle').textContent = `[${id}]`;
+      document.getElementById('drawerClaim').textContent = text;
+      document.getElementById('drawerOwner').textContent = owner;
+      document.getElementById('drawerBackdrop').classList.add('is-open');
+      document.getElementById('drawer').classList.add('is-open');
+    }
+
+    function closeDrawer() {
+      document.getElementById('drawerBackdrop').classList.remove('is-open');
+      document.getElementById('drawer').classList.remove('is-open');
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeDrawer();
+    });
+
+    // 7. Toast Notifications
+    function triggerToast(type, title, message) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      
+      toast.innerHTML = `
+        <div class="toast-content">
+          <div class="toast-title">${title}</div>
+          <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()" aria-label="Dismiss">✕</button>
+      `;
+
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        if (toast.parentElement) {
+          toast.style.opacity = '0';
+          toast.style.transform = 'translateY(10px)';
+          toast.style.transition = 'all 240ms ease';
+          setTimeout(() => toast.remove(), 240);
+        }
+      }, 4200);
+    }
+
+    // Auto-run animations on first mount
+    window.addEventListener('DOMContentLoaded', () => {
+      animateScoreBars();
+      replayCounter();
+    });
+  </script>
+</body>
+</html>

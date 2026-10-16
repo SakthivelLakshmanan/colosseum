@@ -1,0 +1,1685 @@
+{
+ "run_id": "run_DEC-001_sample",
+ "status": "done",
+ "created_at": "2026-10-15T12:12:58Z",
+ "brief": {
+  "decision_id": "DEC-001",
+  "question": "Should Legion Capital move 40% of its payment volume (about ₹600 crore a month) from Arvanta Payments to Brevis Pay?",
+  "options": {
+   "A": "Stay with Arvanta Payments for 100% of volume",
+   "B": "Move 40% of volume to Brevis Pay"
+  },
+  "constraints": [
+   "Payment data must be stored and processed only in India",
+   "A decision is needed within 2 weeks",
+   "No more than one gateway migration this financial year",
+   "Overall payment success rate must not fall"
+  ],
+  "criteria": [
+   {
+    "name": "Cost",
+    "weight": 0.25,
+    "owners": [
+     "finance"
+    ],
+    "good_looks_like": "Lower total cost after any fixes needed"
+   },
+   {
+    "name": "Security & compliance",
+    "weight": 0.25,
+    "owners": [
+     "infosec",
+     "legal"
+    ],
+    "good_looks_like": "Meets every data, security and regulatory rule; a blocking finding overrides the score"
+   },
+   {
+    "name": "Reliability",
+    "weight": 0.2,
+    "owners": [
+     "ops"
+    ],
+    "good_looks_like": "No drop in payment success rate or uptime"
+   },
+   {
+    "name": "Growth",
+    "weight": 0.2,
+    "owners": [
+     "business"
+    ],
+    "good_looks_like": "Unlocks new merchants and products; meets the vendor-concentration OKR"
+   },
+   {
+    "name": "Customer impact",
+    "weight": 0.1,
+    "owners": [
+     "customer"
+    ],
+    "good_looks_like": "Fewer complaints, faster settlements and refunds, lower churn"
+   }
+  ],
+  "context": "Legion Capital Ltd: Fictional RBI-registered NBFC (digital personal and SME loans) with a merchant checkout product, Legion Pay. All payment volume currently goes through Arvanta Payments; Brevis Pay has run a 2% pilot since August 2026."
+ },
+ "routing": {
+  "decision_id": "DEC-001",
+  "routing_query": "Gateway migration decision for an NBFC: compare fees, one-time migration and exit costs, data residency and sub-processors, contract terms and audit rights, payment success and uptime by bank, merchant growth and vendor-concentration targets, and customer complaints and settlement times.",
+  "scores": [
+   {
+    "adviser_id": "finance",
+    "similarity": 0.812,
+    "best_matching_capability": "One-time investment, migration and exit costs",
+    "selected": true,
+    "reason": "above margin"
+   },
+   {
+    "adviser_id": "infosec",
+    "similarity": 0.794,
+    "best_matching_capability": "Where data is stored and processed, including sub-processors",
+    "selected": true,
+    "reason": "above margin"
+   },
+   {
+    "adviser_id": "legal",
+    "similarity": 0.781,
+    "best_matching_capability": "Contracts, terms, notice periods, exit fees and renewals",
+    "selected": true,
+    "reason": "above margin"
+   },
+   {
+    "adviser_id": "ops",
+    "similarity": 0.763,
+    "best_matching_capability": "Payment success rates, uptime and latency by bank",
+    "selected": true,
+    "reason": "above margin"
+   },
+   {
+    "adviser_id": "business",
+    "similarity": 0.702,
+    "best_matching_capability": "Strategy, OKRs and growth pipeline",
+    "selected": true,
+    "reason": "always-include rule: vendor concentration OKR"
+   },
+   {
+    "adviser_id": "customer",
+    "similarity": 0.668,
+    "best_matching_capability": "Complaints, settlement times and churn",
+    "selected": true,
+    "reason": "always-include rule: customer-facing change"
+   }
+  ],
+  "selected": [
+   "finance",
+   "infosec",
+   "legal",
+   "ops",
+   "business",
+   "customer"
+  ],
+  "created_at": "2026-10-15T12:13:04Z"
+ },
+ "positions": [
+  {
+   "adviser_id": "finance",
+   "stance": "favours_B",
+   "confidence": 0.78,
+   "summary": "Moving 40% saves about ₹10.4 lakh a month after the hosting add-on, dispute fees and faster settlement, and pays back its ₹65 lakh one-time cost in about 6 months. A 15% first phase avoids the exit fee but barely breaks even.",
+   "conditions": [
+    "Phase the move so the exit fee is paid only once the larger saving starts"
+   ],
+   "claims": [
+    {
+     "claim_id": "finance-1",
+     "text": "The 40% slice under decision is about ₹600 crore a month.",
+     "evidence_ids": [
+      "FIN-01",
+      "BRIEF"
+     ],
+     "kind": "calculation",
+     "formula": "0.40 × 1500",
+     "value": 600,
+     "unit": "INR crore / month"
+    },
+    {
+     "claim_id": "finance-2",
+     "text": "Brevis's fee is 0.024 points lower, a gross saving of ₹14.4 lakh a month on the 40% slice.",
+     "evidence_ids": [
+      "FIN-01",
+      "FIN-02",
+      "FIN-03"
+     ],
+     "kind": "calculation",
+     "formula": "600 crore × (0.20% − 0.176%)",
+     "value": 14.4,
+     "unit": "INR lakh / month"
+    },
+    {
+     "claim_id": "finance-3",
+     "text": "Net of the ₹6 lakh hosting add-on, ₹2 lakh extra dispute fees and ₹4 lakh lower funding cost, the monthly benefit is ₹10.4 lakh.",
+     "evidence_ids": [
+      "FIN-04",
+      "FIN-06",
+      "FIN-08"
+     ],
+     "kind": "calculation",
+     "formula": "14.4 − 6 − 2 + 4",
+     "value": 10.4,
+     "unit": "INR lakh / month"
+    },
+    {
+     "claim_id": "finance-4",
+     "text": "One-time cost is ₹65 lakh (₹40 lakh migration plus ₹25 lakh exit fee), so payback is about 6.25 months.",
+     "evidence_ids": [
+      "FIN-05",
+      "LEG-01"
+     ],
+     "kind": "calculation",
+     "formula": "(40 + 25) ÷ 10.4",
+     "value": 6.25,
+     "unit": "months"
+    },
+    {
+     "claim_id": "finance-5",
+     "text": "A 15% first phase keeps Arvanta at 85%, so no exit fee; its net benefit is about ₹0.15 lakh a month because the add-on is a flat fee.",
+     "evidence_ids": [
+      "FIN-03",
+      "FIN-04",
+      "LEG-01"
+     ],
+     "kind": "calculation",
+     "formula": "5.4 − 6 − 0.75 + 1.5",
+     "value": 0.15,
+     "unit": "INR lakh / month"
+    },
+    {
+     "claim_id": "finance-6",
+     "text": "Brevis would be 18% cheaper than Arvanta.",
+     "evidence_ids": [
+      "FIN-12"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": 18,
+     "unit": "%"
+    }
+   ],
+   "criterion_scores": [
+    {
+     "criterion": "Cost",
+     "option": "A",
+     "score": 2,
+     "reason": "Run-rate is 9% over budget with no relief",
+     "evidence_ids": [
+      "FIN-09"
+     ]
+    },
+    {
+     "criterion": "Cost",
+     "option": "B",
+     "score": 4,
+     "reason": "₹10.4 lakh a month net, 6-month payback",
+     "evidence_ids": [
+      "FIN-03",
+      "FIN-05"
+     ]
+    }
+   ],
+   "blocking_findings": [],
+   "handoffs": [
+    "legal: confirm the exit-fee threshold and notice period"
+   ]
+  },
+  {
+   "adviser_id": "business",
+   "stance": "favours_B",
+   "confidence": 0.74,
+   "summary": "Only Brevis unlocks the ₹45 crore cross-border pipeline the board wants live by March 2027, and a second gateway meets the 70% vendor-concentration OKR. Waiting costs deals now.",
+   "conditions": [],
+   "claims": [
+    {
+     "claim_id": "business-1",
+     "text": "30 cross-border SME merchants worth about ₹45 crore a month need international card acceptance, which only Brevis supports.",
+     "evidence_ids": [
+      "BUS-01"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "business-2",
+     "text": "The FY27 OKR caps any single gateway at 70% of volume by 31 March 2027; a 40% move meets it, a 15% phase alone doesn't.",
+     "evidence_ids": [
+      "BUS-02"
+     ],
+     "kind": "calculation",
+     "formula": "100 − 40 = 60 ≤ 70",
+     "value": 60,
+     "unit": "% on Arvanta"
+    },
+    {
+     "claim_id": "business-3",
+     "text": "70% of SME deals lost in Q2–Q3 cited missing international card acceptance.",
+     "evidence_ids": [
+      "BUS-08"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "business-4",
+     "text": "Arvanta's June outage delayed ₹2.3 crore of collections and forced ₹11 lakh of fee waivers.",
+     "evidence_ids": [
+      "BUS-10"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    }
+   ],
+   "criterion_scores": [
+    {
+     "criterion": "Growth",
+     "option": "A",
+     "score": 2,
+     "reason": "No cross-border acceptance; OKR missed",
+     "evidence_ids": [
+      "BUS-01",
+      "BUS-02"
+     ]
+    },
+    {
+     "criterion": "Growth",
+     "option": "B",
+     "score": 5,
+     "reason": "Unlocks pipeline and BNPL APIs",
+     "evidence_ids": [
+      "BUS-01",
+      "BUS-04"
+     ]
+    }
+   ],
+   "blocking_findings": [],
+   "handoffs": []
+  },
+  {
+   "adviser_id": "customer",
+   "stance": "favours_B",
+   "confidence": 0.66,
+   "summary": "Settlement complaints on Arvanta nearly tripled in three months and four large merchants are threatening to leave. Brevis refunds faster and converts better, but Coral and Tamra Bank customers complained more in the pilot.",
+   "conditions": [
+    "Keep Coral Bank and Tamra Bank traffic on Arvanta until Brevis's success rate there matches"
+   ],
+   "claims": [
+    {
+     "claim_id": "customer-1",
+     "text": "Settlement-delay complaints rose from 120 in July to 340 in September 2026.",
+     "evidence_ids": [
+      "CUS-01"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "customer-2",
+     "text": "Four merchants worth about ₹38 crore a month have threatened to leave over settlement delays.",
+     "evidence_ids": [
+      "CUS-02"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "customer-3",
+     "text": "Refunds take 3.0 days on Brevis against 5.2 days on Arvanta.",
+     "evidence_ids": [
+      "CUS-07"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "customer-4",
+     "text": "Coral and Tamra Bank customers complained 40% more on Brevis during the pilot.",
+     "evidence_ids": [
+      "CUS-05"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    }
+   ],
+   "criterion_scores": [
+    {
+     "criterion": "Customer impact",
+     "option": "A",
+     "score": 2,
+     "reason": "Rising complaints and churn",
+     "evidence_ids": [
+      "CUS-01",
+      "CUS-09"
+     ]
+    },
+    {
+     "criterion": "Customer impact",
+     "option": "B",
+     "score": 4,
+     "reason": "Faster refunds, better conversion",
+     "evidence_ids": [
+      "CUS-04",
+      "CUS-07"
+     ]
+    }
+   ],
+   "blocking_findings": [],
+   "handoffs": [
+    "ops: route Coral and Tamra Bank traffic separately"
+   ]
+  },
+  {
+   "adviser_id": "legal",
+   "stance": "favours_A",
+   "confidence": 0.71,
+   "summary": "The Brevis draft is much weaker than Arvanta's contract: no data-location clause, no audit rights for Legion or the RBI, Singapore law and no signed DPA. Don't sign until these are fixed. Moving 40% also triggers Arvanta's ₹25 lakh exit fee.",
+   "conditions": [
+    "Data-location clause: store and process in India only",
+    "Audit and inspection rights for Legion and the RBI",
+    "Indian governing law and Mumbai courts",
+    "24-month price lock",
+    "Signed DPDP-aligned DPA",
+    "Vendor notifies Legion of incidents within 2 hours"
+   ],
+   "claims": [
+    {
+     "claim_id": "legal-1",
+     "text": "Arvanta's ₹25 lakh exit fee applies if its share falls below 80% before 31 March 2028.",
+     "evidence_ids": [
+      "LEG-01"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "legal-2",
+     "text": "Legion must give Arvanta 90 days' written notice before reducing volume.",
+     "evidence_ids": [
+      "LEG-02"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "legal-3",
+     "text": "The Brevis draft gives no audit or inspection rights to Legion or the RBI, which RBI outsourcing norms require.",
+     "evidence_ids": [
+      "LEG-08"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "legal-4",
+     "text": "Brevis lets itself change prices on 30 days' notice and uses Singapore law.",
+     "evidence_ids": [
+      "LEG-06",
+      "LEG-07"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "legal-5",
+     "text": "Brevis has not provided a data processing agreement.",
+     "evidence_ids": [
+      "LEG-09"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    }
+   ],
+   "criterion_scores": [
+    {
+     "criterion": "Security & compliance",
+     "option": "A",
+     "score": 4,
+     "reason": "Signed DPA, Indian law, audit rights",
+     "evidence_ids": [
+      "LEG-09",
+      "LEG-07"
+     ]
+    },
+    {
+     "criterion": "Security & compliance",
+     "option": "B",
+     "score": 2,
+     "reason": "Draft lacks audit rights, DPA and data clause",
+     "evidence_ids": [
+      "LEG-04",
+      "LEG-08",
+      "LEG-09"
+     ]
+    }
+   ],
+   "blocking_findings": [],
+   "handoffs": []
+  },
+  {
+   "adviser_id": "infosec",
+   "stance": "favours_A",
+   "confidence": 0.82,
+   "summary": "Brevis sends card data to a fraud-scoring sub-processor in Singapore, which breaks Legion's India-only rule. It also has an open high-severity pen-test finding and a SOC 2 report 14 months old. All three are fixable before go-live.",
+   "conditions": [
+    "Switch on the India-only hosting add-on before any volume moves",
+    "Close the open high-severity pen-test finding",
+    "Provide a current SOC 2 Type II report"
+   ],
+   "claims": [
+    {
+     "claim_id": "infosec-1",
+     "text": "Brevis's fraud-scoring sub-processor, Sentrix Risk Pte Ltd, is in Singapore and receives tokenised card data.",
+     "evidence_ids": [
+      "SEC-01"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "infosec-2",
+     "text": "Legion policy requires vendors to store and process payment data only in India.",
+     "evidence_ids": [
+      "SEC-02"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "infosec-3",
+     "text": "The India-only add-on moves fraud scoring to Mumbai within 3 weeks of ordering.",
+     "evidence_ids": [
+      "SEC-05"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "infosec-4",
+     "text": "A high-severity pen-test finding on the refund API has been open for 47 days.",
+     "evidence_ids": [
+      "SEC-04"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "infosec-5",
+     "text": "Brevis's latest SOC 2 Type II report is about 14 months old.",
+     "evidence_ids": [
+      "SEC-03"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    }
+   ],
+   "criterion_scores": [
+    {
+     "criterion": "Security & compliance",
+     "option": "A",
+     "score": 4,
+     "reason": "Compliant today",
+     "evidence_ids": [
+      "SEC-08",
+      "SEC-12"
+     ]
+    },
+    {
+     "criterion": "Security & compliance",
+     "option": "B",
+     "score": 1,
+     "reason": "Breaks the India-only rule until fixed",
+     "evidence_ids": [
+      "SEC-01",
+      "SEC-02"
+     ]
+    }
+   ],
+   "blocking_findings": [
+    {
+     "text": "Card data is processed in Singapore by Sentrix Risk, breaking Legion's India-only processing rule.",
+     "evidence_ids": [
+      "SEC-01",
+      "SEC-02"
+     ],
+     "fix": "Order the India-only hosting add-on so fraud scoring runs in Mumbai, and confirm it in the contract before any volume moves."
+    }
+   ],
+   "handoffs": [
+    "legal: add a data-location clause"
+   ]
+  },
+  {
+   "adviser_id": "ops",
+   "stance": "conditional",
+   "confidence": 0.69,
+   "summary": "Brevis has better uptime and latency and wins at 82% of banks, but loses badly at Coral and Tamra Bank. Our routing layer can split by bank, so move only the traffic Brevis handles well. With 3 engineers free, plan for 8 weeks.",
+   "conditions": [
+    "Route Coral Bank, Tamra Bank and the two eNACH banks to Arvanta",
+    "Plan for an 8-week migration"
+   ],
+   "claims": [
+    {
+     "claim_id": "ops-1",
+     "text": "Uptime over 12 months is 99.95% on Brevis against 99.82% on Arvanta.",
+     "evidence_ids": [
+      "OPS-04"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "ops-2",
+     "text": "At Coral and Tamra Bank (18% of volume) Brevis succeeds 94.8–95.2% of the time against Arvanta's 97.5%.",
+     "evidence_ids": [
+      "OPS-02"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "ops-3",
+     "text": "At the other 82% of volume Brevis succeeds 98.2% of the time against 97.9%.",
+     "evidence_ids": [
+      "OPS-03"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "ops-4",
+     "text": "The routing layer can split traffic by issuing bank and payment method.",
+     "evidence_ids": [
+      "OPS-11"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "ops-5",
+     "text": "Brevis says migration can be done in under 4 weeks.",
+     "evidence_ids": [
+      "OPS-13"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "ops-6",
+     "text": "With only 3 engineers free from November, migration will take about 8 weeks.",
+     "evidence_ids": [
+      "OPS-09",
+      "OPS-10"
+     ],
+     "kind": "calculation",
+     "formula": "6 weeks × 4 ÷ 3",
+     "value": 8,
+     "unit": "weeks"
+    }
+   ],
+   "criterion_scores": [
+    {
+     "criterion": "Reliability",
+     "option": "A",
+     "score": 3,
+     "reason": "Lower uptime, 3 major incidents",
+     "evidence_ids": [
+      "OPS-04",
+      "OPS-06"
+     ]
+    },
+    {
+     "criterion": "Reliability",
+     "option": "B",
+     "score": 4,
+     "reason": "Better uptime if weak banks stay on Arvanta",
+     "evidence_ids": [
+      "OPS-03",
+      "OPS-04",
+      "OPS-11"
+     ]
+    }
+   ],
+   "blocking_findings": [],
+   "handoffs": []
+  }
+ ],
+ "claim_verdicts": [
+  {
+   "claim_id": "finance-1",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "finance-2",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "finance-3",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "finance-4",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "finance-5",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "finance-6",
+   "status": "STRIKE",
+   "check": "superseded",
+   "reason": "FIN-12 was replaced by FIN-03: the final quote is 12% cheaper, not 18%."
+  },
+  {
+   "claim_id": "business-1",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "business-2",
+   "status": "FLAG",
+   "check": "number_check",
+   "reason": "True for the full 40% move only. A 15% first phase leaves Arvanta at 85%, above the 70% OKR."
+  },
+  {
+   "claim_id": "business-3",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "business-4",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "customer-1",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "customer-2",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "customer-3",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "customer-4",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "legal-1",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "legal-2",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "legal-3",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "legal-4",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "legal-5",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "infosec-1",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "infosec-2",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "infosec-3",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "infosec-4",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "infosec-5",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "ops-1",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "ops-2",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "ops-3",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "ops-4",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "ops-5",
+   "status": "FLAG",
+   "check": "low_reliability",
+   "reason": "OPS-13 is a vendor sales claim (low reliability). Ops' own estimate is 6–8 weeks."
+  },
+  {
+   "claim_id": "ops-6",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "infosec-B1",
+   "status": "FLAG",
+   "check": "blocking_protected",
+   "reason": "Blocking finding kept. The fix cites SEC-05; the contract clause still has to be confirmed by Legal."
+  }
+ ],
+ "scorecard": {
+  "rows": [
+   {
+    "criterion": "Cost",
+    "weight": 0.25,
+    "scores": {
+     "A": 2,
+     "B": 4
+    },
+    "evidence_ids": [
+     "FIN-03",
+     "FIN-05",
+     "FIN-09"
+    ],
+    "owners": [
+     "finance"
+    ]
+   },
+   {
+    "criterion": "Security & compliance",
+    "weight": 0.25,
+    "scores": {
+     "A": 4,
+     "B": 1.5
+    },
+    "evidence_ids": [
+     "SEC-01",
+     "LEG-08",
+     "LEG-09"
+    ],
+    "owners": [
+     "infosec",
+     "legal"
+    ]
+   },
+   {
+    "criterion": "Reliability",
+    "weight": 0.2,
+    "scores": {
+     "A": 3,
+     "B": 4
+    },
+    "evidence_ids": [
+     "OPS-03",
+     "OPS-04"
+    ],
+    "owners": [
+     "ops"
+    ]
+   },
+   {
+    "criterion": "Growth",
+    "weight": 0.2,
+    "scores": {
+     "A": 2,
+     "B": 5
+    },
+    "evidence_ids": [
+     "BUS-01",
+     "BUS-02"
+    ],
+    "owners": [
+     "business"
+    ]
+   },
+   {
+    "criterion": "Customer impact",
+    "weight": 0.1,
+    "scores": {
+     "A": 2,
+     "B": 4
+    },
+    "evidence_ids": [
+     "CUS-01",
+     "CUS-07"
+    ],
+    "owners": [
+     "customer"
+    ]
+   }
+  ],
+  "weighted_totals": {
+   "A": 2.7,
+   "B": 3.57
+  },
+  "blocked_options": {
+   "B": [
+    "Card data is processed in Singapore (SEC-01) until the India-only add-on is live."
+   ]
+  }
+ },
+ "memo": {
+  "decision_id": "DEC-001",
+  "recommendation": "Approve a phased move to Brevis Pay. Start with about 15% of volume once the conditions below are met, then scale to 40% after a 60-day review, before 31 March 2027.",
+  "stance": "conditional",
+  "confidence": 0.74,
+  "conditions": [
+   "Brevis commits in the contract to India-only processing and switches on its India-only fraud-scoring add-on before any volume moves (SEC-01, SEC-05; InfoSec, Legal)",
+   "Brevis closes the open high-severity pen-test finding on its refund API (SEC-04; InfoSec)",
+   "Brevis provides a current SOC 2 Type II report (SEC-03; InfoSec)",
+   "Contract fixes before signing: Indian governing law, audit rights for Legion and the RBI, a 24-month price lock, a signed DPA and 2-hour incident notice (LEG-06, LEG-07, LEG-08, LEG-09; Legal)",
+   "Coral Bank, Tamra Bank and the two eNACH banks stay on Arvanta so the overall success rate doesn't fall (OPS-02, OPS-08, CUS-05; Ops, Customer)"
+  ],
+  "phased_plan": [
+   "Now: serve Arvanta 90 days' notice and negotiate the contract fixes (LEG-02).",
+   "Phase 1: route about 15% of volume to Brevis, excluding Coral, Tamra and the eNACH banks. Arvanta keeps 85%, so no exit fee (LEG-01).",
+   "60-day review: check success rate by bank, settlement complaints and the pen-test fix.",
+   "Phase 2: scale to 40% before 31 March 2027 to meet the 70% vendor OKR and the board's cross-border deadline, accepting the ₹25 lakh exit fee (BUS-02, BUS-09)."
+  ],
+  "scorecard": {
+   "rows": [
+    {
+     "criterion": "Cost",
+     "weight": 0.25,
+     "scores": {
+      "A": 2,
+      "B": 4
+     },
+     "evidence_ids": [
+      "FIN-03",
+      "FIN-05",
+      "FIN-09"
+     ],
+     "owners": [
+      "finance"
+     ]
+    },
+    {
+     "criterion": "Security & compliance",
+     "weight": 0.25,
+     "scores": {
+      "A": 4,
+      "B": 1.5
+     },
+     "evidence_ids": [
+      "SEC-01",
+      "LEG-08",
+      "LEG-09"
+     ],
+     "owners": [
+      "infosec",
+      "legal"
+     ]
+    },
+    {
+     "criterion": "Reliability",
+     "weight": 0.2,
+     "scores": {
+      "A": 3,
+      "B": 4
+     },
+     "evidence_ids": [
+      "OPS-03",
+      "OPS-04"
+     ],
+     "owners": [
+      "ops"
+     ]
+    },
+    {
+     "criterion": "Growth",
+     "weight": 0.2,
+     "scores": {
+      "A": 2,
+      "B": 5
+     },
+     "evidence_ids": [
+      "BUS-01",
+      "BUS-02"
+     ],
+     "owners": [
+      "business"
+     ]
+    },
+    {
+     "criterion": "Customer impact",
+     "weight": 0.1,
+     "scores": {
+      "A": 2,
+      "B": 4
+     },
+     "evidence_ids": [
+      "CUS-01",
+      "CUS-07"
+     ],
+     "owners": [
+      "customer"
+     ]
+    }
+   ],
+   "weighted_totals": {
+    "A": 2.7,
+    "B": 3.57
+   },
+   "blocked_options": {
+    "B": [
+     "Card data is processed in Singapore (SEC-01) until the India-only add-on is live."
+    ]
+   }
+  },
+  "key_numbers": [
+   {
+    "claim_id": "k1",
+    "text": "Volume moving to Brevis at 40%",
+    "evidence_ids": [
+     "BRIEF",
+     "FIN-01"
+    ],
+    "kind": "calculation",
+    "formula": "0.40 × 1500",
+    "value": 600,
+    "unit": "₹ crore / month"
+   },
+   {
+    "claim_id": "k2",
+    "text": "Net monthly benefit at 40%",
+    "evidence_ids": [
+     "FIN-02",
+     "FIN-03",
+     "FIN-04",
+     "FIN-06",
+     "FIN-08"
+    ],
+    "kind": "calculation",
+    "formula": "14.4 − 6 − 2 + 4",
+    "value": 10.4,
+    "unit": "₹ lakh / month"
+   },
+   {
+    "claim_id": "k3",
+    "text": "One-time cost at 40%",
+    "evidence_ids": [
+     "FIN-05",
+     "LEG-01"
+    ],
+    "kind": "calculation",
+    "formula": "40 + 25",
+    "value": 65,
+    "unit": "₹ lakh"
+   },
+   {
+    "claim_id": "k4",
+    "text": "Payback at 40%",
+    "evidence_ids": [
+     "FIN-05",
+     "LEG-01"
+    ],
+    "kind": "calculation",
+    "formula": "65 ÷ 10.4",
+    "value": 6.25,
+    "unit": "months"
+   },
+   {
+    "claim_id": "k5",
+    "text": "Net monthly benefit at 15% (no exit fee)",
+    "evidence_ids": [
+     "FIN-03",
+     "FIN-04",
+     "LEG-01"
+    ],
+    "kind": "calculation",
+    "formula": "5.4 − 6 − 0.75 + 1.5",
+    "value": 0.15,
+    "unit": "₹ lakh / month"
+   },
+   {
+    "claim_id": "k6",
+    "text": "Arvanta share after the full move",
+    "evidence_ids": [
+     "BUS-02"
+    ],
+    "kind": "calculation",
+    "formula": "100 − 40",
+    "value": 60,
+    "unit": "% of volume"
+   }
+  ],
+  "blocking_findings": [
+   {
+    "text": "Card data is processed in Singapore by Sentrix Risk, breaking Legion's India-only processing rule.",
+    "evidence_ids": [
+     "SEC-01",
+     "SEC-02"
+    ],
+    "fix": "Order the India-only hosting add-on so fraud scoring runs in Mumbai, and confirm it in the contract before any volume moves."
+   }
+  ],
+  "dissent": [
+   "Legal favours staying with Arvanta until the Brevis contract matches Arvanta's on liability, law and audit rights (LEG-05, LEG-07, LEG-08).",
+   "InfoSec favours waiting: Brevis is a younger vendor that took 9 days to report a 2025 incident against a 6-hour rule (SEC-06, SEC-07).",
+   "Business wants to move faster: every month without cross-border acceptance costs deals (BUS-01, BUS-08)."
+  ],
+  "assumptions": [
+   "The 25% volume growth forecast holds (FIN-10).",
+   "Brevis's pilot success rates hold at higher volume (OPS-03)."
+  ],
+  "numbers_to_watch": [
+   "Success rate at Coral and Tamra Bank, weekly (OPS-02)",
+   "Settlement-delay complaints, monthly (CUS-01)",
+   "Brevis pen-test finding status (SEC-04)",
+   "Merchant churn (CUS-09)"
+  ],
+  "evidence_index": [
+   "BRIEF",
+   "BUS-02",
+   "FIN-01",
+   "FIN-02",
+   "FIN-03",
+   "FIN-04",
+   "FIN-05",
+   "FIN-06",
+   "FIN-08",
+   "LEG-01"
+  ]
+ },
+ "memo_revisions": [
+  {
+   "decision_id": "DEC-001",
+   "recommendation": "Approve a phased move to Brevis Pay. Start with about 15% of volume once the conditions below are met, then scale to 40% after a 60-day review, before 31 March 2027.",
+   "stance": "conditional",
+   "confidence": 0.74,
+   "conditions": [
+    "Brevis commits in the contract to India-only processing and switches on its India-only fraud-scoring add-on before any volume moves (SEC-01, SEC-05; InfoSec, Legal)",
+    "Brevis closes the open high-severity pen-test finding on its refund API (SEC-04; InfoSec)",
+    "Contract fixes before signing: Indian governing law, audit rights for Legion and the RBI, a 24-month price lock, a signed DPA and 2-hour incident notice (LEG-06, LEG-07, LEG-08, LEG-09; Legal)",
+    "Coral Bank, Tamra Bank and the two eNACH banks stay on Arvanta so the overall success rate doesn't fall (OPS-02, OPS-08, CUS-05; Ops, Customer)"
+   ],
+   "phased_plan": [
+    "Now: serve Arvanta 90 days' notice and negotiate the contract fixes (LEG-02).",
+    "Phase 1: route about 15% of volume to Brevis, excluding Coral, Tamra and the eNACH banks. Arvanta keeps 85%, so no exit fee (LEG-01).",
+    "60-day review: check success rate by bank, settlement complaints and the pen-test fix.",
+    "Phase 2: scale to 40% before 31 March 2027 to meet the 70% vendor OKR and the board's cross-border deadline, accepting the ₹25 lakh exit fee (BUS-02, BUS-09)."
+   ],
+   "scorecard": {
+    "rows": [
+     {
+      "criterion": "Cost",
+      "weight": 0.25,
+      "scores": {
+       "A": 2,
+       "B": 4
+      },
+      "evidence_ids": [
+       "FIN-03",
+       "FIN-05",
+       "FIN-09"
+      ],
+      "owners": [
+       "finance"
+      ]
+     },
+     {
+      "criterion": "Security & compliance",
+      "weight": 0.25,
+      "scores": {
+       "A": 4,
+       "B": 1.5
+      },
+      "evidence_ids": [
+       "SEC-01",
+       "LEG-08",
+       "LEG-09"
+      ],
+      "owners": [
+       "infosec",
+       "legal"
+      ]
+     },
+     {
+      "criterion": "Reliability",
+      "weight": 0.2,
+      "scores": {
+       "A": 3,
+       "B": 4
+      },
+      "evidence_ids": [
+       "OPS-03",
+       "OPS-04"
+      ],
+      "owners": [
+       "ops"
+      ]
+     },
+     {
+      "criterion": "Growth",
+      "weight": 0.2,
+      "scores": {
+       "A": 2,
+       "B": 5
+      },
+      "evidence_ids": [
+       "BUS-01",
+       "BUS-02"
+      ],
+      "owners": [
+       "business"
+      ]
+     },
+     {
+      "criterion": "Customer impact",
+      "weight": 0.1,
+      "scores": {
+       "A": 2,
+       "B": 4
+      },
+      "evidence_ids": [
+       "CUS-01",
+       "CUS-07"
+      ],
+      "owners": [
+       "customer"
+      ]
+     }
+    ],
+    "weighted_totals": {
+     "A": 2.7,
+     "B": 3.57
+    },
+    "blocked_options": {
+     "B": [
+      "Card data is processed in Singapore (SEC-01) until the India-only add-on is live."
+     ]
+    }
+   },
+   "key_numbers": [
+    {
+     "claim_id": "k1",
+     "text": "Volume moving to Brevis at 40%",
+     "evidence_ids": [
+      "BRIEF",
+      "FIN-01"
+     ],
+     "kind": "calculation",
+     "formula": "0.40 × 1500",
+     "value": 600,
+     "unit": "₹ crore / month"
+    },
+    {
+     "claim_id": "k2",
+     "text": "Net monthly benefit at 40%",
+     "evidence_ids": [
+      "FIN-02",
+      "FIN-03",
+      "FIN-04",
+      "FIN-06",
+      "FIN-08"
+     ],
+     "kind": "calculation",
+     "formula": "14.4 − 6 − 2 + 4",
+     "value": 10.4,
+     "unit": "₹ lakh / month"
+    },
+    {
+     "claim_id": "k3",
+     "text": "One-time cost at 40%",
+     "evidence_ids": [
+      "FIN-05",
+      "LEG-01"
+     ],
+     "kind": "calculation",
+     "formula": "40 + 25",
+     "value": 65,
+     "unit": "₹ lakh"
+    },
+    {
+     "claim_id": "k4",
+     "text": "Payback at 40%",
+     "evidence_ids": [
+      "FIN-05",
+      "LEG-01"
+     ],
+     "kind": "calculation",
+     "formula": "65 ÷ 10.4",
+     "value": 6.25,
+     "unit": "months"
+    },
+    {
+     "claim_id": "k5",
+     "text": "Net monthly benefit at 15% (no exit fee)",
+     "evidence_ids": [
+      "FIN-03",
+      "FIN-04",
+      "LEG-01"
+     ],
+     "kind": "calculation",
+     "formula": "5.4 − 6 − 0.75 + 1.5",
+     "value": 0.15,
+     "unit": "₹ lakh / month"
+    },
+    {
+     "claim_id": "k6",
+     "text": "Arvanta share after the full move",
+     "evidence_ids": [
+      "BUS-02"
+     ],
+     "kind": "calculation",
+     "formula": "100 − 40",
+     "value": 60,
+     "unit": "% of volume"
+    }
+   ],
+   "blocking_findings": [
+    {
+     "text": "Card data is processed in Singapore by Sentrix Risk, breaking Legion's India-only processing rule.",
+     "evidence_ids": [
+      "SEC-01",
+      "SEC-02"
+     ],
+     "fix": "Order the India-only hosting add-on so fraud scoring runs in Mumbai, and confirm it in the contract before any volume moves."
+    }
+   ],
+   "dissent": [
+    "Legal favours staying with Arvanta until the Brevis contract matches Arvanta's on liability, law and audit rights (LEG-05, LEG-07, LEG-08).",
+    "InfoSec favours waiting: Brevis is a younger vendor that took 9 days to report a 2025 incident against a 6-hour rule (SEC-06, SEC-07).",
+    "Business wants to move faster: every month without cross-border acceptance costs deals (BUS-01, BUS-08)."
+   ],
+   "assumptions": [
+    "The 25% volume growth forecast holds (FIN-10).",
+    "Brevis's pilot success rates hold at higher volume (OPS-03)."
+   ],
+   "numbers_to_watch": [
+    "Success rate at Coral and Tamra Bank, weekly (OPS-02)",
+    "Settlement-delay complaints, monthly (CUS-01)",
+    "Brevis pen-test finding status (SEC-04)",
+    "Merchant churn (CUS-09)"
+   ],
+   "evidence_index": [
+    "BRIEF",
+    "BUS-02",
+    "FIN-01",
+    "FIN-02",
+    "FIN-03",
+    "FIN-04",
+    "FIN-05",
+    "FIN-06",
+    "FIN-08",
+    "LEG-01"
+   ]
+  },
+  {
+   "decision_id": "DEC-001",
+   "recommendation": "Approve a phased move to Brevis Pay. Start with about 15% of volume once the conditions below are met, then scale to 40% after a 60-day review, before 31 March 2027.",
+   "stance": "conditional",
+   "confidence": 0.74,
+   "conditions": [
+    "Brevis commits in the contract to India-only processing and switches on its India-only fraud-scoring add-on before any volume moves (SEC-01, SEC-05; InfoSec, Legal)",
+    "Brevis closes the open high-severity pen-test finding on its refund API (SEC-04; InfoSec)",
+    "Brevis provides a current SOC 2 Type II report (SEC-03; InfoSec)",
+    "Contract fixes before signing: Indian governing law, audit rights for Legion and the RBI, a 24-month price lock, a signed DPA and 2-hour incident notice (LEG-06, LEG-07, LEG-08, LEG-09; Legal)",
+    "Coral Bank, Tamra Bank and the two eNACH banks stay on Arvanta so the overall success rate doesn't fall (OPS-02, OPS-08, CUS-05; Ops, Customer)"
+   ],
+   "phased_plan": [
+    "Now: serve Arvanta 90 days' notice and negotiate the contract fixes (LEG-02).",
+    "Phase 1: route about 15% of volume to Brevis, excluding Coral, Tamra and the eNACH banks. Arvanta keeps 85%, so no exit fee (LEG-01).",
+    "60-day review: check success rate by bank, settlement complaints and the pen-test fix.",
+    "Phase 2: scale to 40% before 31 March 2027 to meet the 70% vendor OKR and the board's cross-border deadline, accepting the ₹25 lakh exit fee (BUS-02, BUS-09)."
+   ],
+   "scorecard": {
+    "rows": [
+     {
+      "criterion": "Cost",
+      "weight": 0.25,
+      "scores": {
+       "A": 2,
+       "B": 4
+      },
+      "evidence_ids": [
+       "FIN-03",
+       "FIN-05",
+       "FIN-09"
+      ],
+      "owners": [
+       "finance"
+      ]
+     },
+     {
+      "criterion": "Security & compliance",
+      "weight": 0.25,
+      "scores": {
+       "A": 4,
+       "B": 1.5
+      },
+      "evidence_ids": [
+       "SEC-01",
+       "LEG-08",
+       "LEG-09"
+      ],
+      "owners": [
+       "infosec",
+       "legal"
+      ]
+     },
+     {
+      "criterion": "Reliability",
+      "weight": 0.2,
+      "scores": {
+       "A": 3,
+       "B": 4
+      },
+      "evidence_ids": [
+       "OPS-03",
+       "OPS-04"
+      ],
+      "owners": [
+       "ops"
+      ]
+     },
+     {
+      "criterion": "Growth",
+      "weight": 0.2,
+      "scores": {
+       "A": 2,
+       "B": 5
+      },
+      "evidence_ids": [
+       "BUS-01",
+       "BUS-02"
+      ],
+      "owners": [
+       "business"
+      ]
+     },
+     {
+      "criterion": "Customer impact",
+      "weight": 0.1,
+      "scores": {
+       "A": 2,
+       "B": 4
+      },
+      "evidence_ids": [
+       "CUS-01",
+       "CUS-07"
+      ],
+      "owners": [
+       "customer"
+      ]
+     }
+    ],
+    "weighted_totals": {
+     "A": 2.7,
+     "B": 3.57
+    },
+    "blocked_options": {
+     "B": [
+      "Card data is processed in Singapore (SEC-01) until the India-only add-on is live."
+     ]
+    }
+   },
+   "key_numbers": [
+    {
+     "claim_id": "k1",
+     "text": "Volume moving to Brevis at 40%",
+     "evidence_ids": [
+      "BRIEF",
+      "FIN-01"
+     ],
+     "kind": "calculation",
+     "formula": "0.40 × 1500",
+     "value": 600,
+     "unit": "₹ crore / month"
+    },
+    {
+     "claim_id": "k2",
+     "text": "Net monthly benefit at 40%",
+     "evidence_ids": [
+      "FIN-02",
+      "FIN-03",
+      "FIN-04",
+      "FIN-06",
+      "FIN-08"
+     ],
+     "kind": "calculation",
+     "formula": "14.4 − 6 − 2 + 4",
+     "value": 10.4,
+     "unit": "₹ lakh / month"
+    },
+    {
+     "claim_id": "k3",
+     "text": "One-time cost at 40%",
+     "evidence_ids": [
+      "FIN-05",
+      "LEG-01"
+     ],
+     "kind": "calculation",
+     "formula": "40 + 25",
+     "value": 65,
+     "unit": "₹ lakh"
+    },
+    {
+     "claim_id": "k4",
+     "text": "Payback at 40%",
+     "evidence_ids": [
+      "FIN-05",
+      "LEG-01"
+     ],
+     "kind": "calculation",
+     "formula": "65 ÷ 10.4",
+     "value": 6.25,
+     "unit": "months"
+    },
+    {
+     "claim_id": "k5",
+     "text": "Net monthly benefit at 15% (no exit fee)",
+     "evidence_ids": [
+      "FIN-03",
+      "FIN-04",
+      "LEG-01"
+     ],
+     "kind": "calculation",
+     "formula": "5.4 − 6 − 0.75 + 1.5",
+     "value": 0.15,
+     "unit": "₹ lakh / month"
+    },
+    {
+     "claim_id": "k6",
+     "text": "Arvanta share after the full move",
+     "evidence_ids": [
+      "BUS-02"
+     ],
+     "kind": "calculation",
+     "formula": "100 − 40",
+     "value": 60,
+     "unit": "% of volume"
+    }
+   ],
+   "blocking_findings": [
+    {
+     "text": "Card data is processed in Singapore by Sentrix Risk, breaking Legion's India-only processing rule.",
+     "evidence_ids": [
+      "SEC-01",
+      "SEC-02"
+     ],
+     "fix": "Order the India-only hosting add-on so fraud scoring runs in Mumbai, and confirm it in the contract before any volume moves."
+    }
+   ],
+   "dissent": [
+    "Legal favours staying with Arvanta until the Brevis contract matches Arvanta's on liability, law and audit rights (LEG-05, LEG-07, LEG-08).",
+    "InfoSec favours waiting: Brevis is a younger vendor that took 9 days to report a 2025 incident against a 6-hour rule (SEC-06, SEC-07).",
+    "Business wants to move faster: every month without cross-border acceptance costs deals (BUS-01, BUS-08)."
+   ],
+   "assumptions": [
+    "The 25% volume growth forecast holds (FIN-10).",
+    "Brevis's pilot success rates hold at higher volume (OPS-03)."
+   ],
+   "numbers_to_watch": [
+    "Success rate at Coral and Tamra Bank, weekly (OPS-02)",
+    "Settlement-delay complaints, monthly (CUS-01)",
+    "Brevis pen-test finding status (SEC-04)",
+    "Merchant churn (CUS-09)"
+   ],
+   "evidence_index": [
+    "BRIEF",
+    "BUS-02",
+    "FIN-01",
+    "FIN-02",
+    "FIN-03",
+    "FIN-04",
+    "FIN-05",
+    "FIN-06",
+    "FIN-08",
+    "LEG-01"
+   ]
+  }
+ ],
+ "final_verdicts": [
+  {
+   "verdict": "INCOMPLETE",
+   "revision_number": 0,
+   "issues": [
+    {
+     "kind": "missing_condition",
+     "detail": "InfoSec's condition for a current SOC 2 Type II report is supported by an accepted claim but missing from the memo.",
+     "evidence_ids": [
+      "SEC-03"
+     ]
+    }
+   ],
+   "revision_instructions": "Add the current SOC 2 Type II report as a condition, citing SEC-03."
+  },
+  {
+   "verdict": "PASS",
+   "revision_number": 1,
+   "issues": [],
+   "revision_instructions": ""
+  }
+ ],
+ "final_verdict": {
+  "verdict": "PASS",
+  "revision_number": 1,
+  "issues": [],
+  "revision_instructions": ""
+ },
+ "human_decisions": [],
+ "metrics": {
+  "routing_s": 6.2,
+  "advisers_s": 214.0,
+  "moderating_s": 58.4,
+  "scoring_s": 0.3,
+  "writing_s": 71.5,
+  "checking_s": 62.8,
+  "facts_considered": 125,
+  "latency_s": 413.2
+ }
+}

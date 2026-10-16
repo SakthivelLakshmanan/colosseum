@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Colosseum — AI Debate Room for Enterprise Decisions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <div class="brand-group">
+        <div class="brand-title">
+          <span class="brand-dot"></span>
+          <span>COLOSSEUM</span>
+        </div>
+        <div class="brand-subtitle">AI debate room for enterprise decisions</div>
+      </div>
+
+      <div class="top-bar-controls">
+        <div class="saved-runs-wrapper">
+          <select id="saved-runs-select" class="select-control" aria-label="Open a saved run">
+            <option value="">Open a saved run...</option>
+          </select>
+        </div>
+        <button id="theme-toggle" class="btn btn-secondary btn-sm" aria-label="Toggle theme">
+          <span id="theme-icon">☀️</span>
+          <span id="theme-text">Light Mode</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Progress Step Bar & Timer -->
+    <div class="step-bar-wrapper glass-panel" style="padding: 1rem 1.5rem; margin-bottom: 1.5rem;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+        <span class="eyebrow" id="pipeline-status-label">PIPELINE STATUS: READY</span>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <span class="text-small text-muted">Elapsed:</span>
+          <span class="badge badge-neutral"><span id="elapsed-timer" class="mono-num">00:00</span></span>
+        </div>
+      </div>
+
+      <div class="step-bar">
+        <div class="step-bar-progress" id="step-progress-line" style="width: 0%;"></div>
+        
+        <div class="step-item is-active" data-step="routing">
+          <div class="step-node">1</div>
+          <div class="step-label">Routing</div>
+        </div>
+        <div class="step-item" data-step="advisers">
+          <div class="step-node">2</div>
+          <div class="step-label">Advisers</div>
+        </div>
+        <div class="step-item" data-step="moderating">
+          <div class="step-node">3</div>
+          <div class="step-label">Moderating</div>
+        </div>
+        <div class="step-item" data-step="scoring">
+          <div class="step-node">4</div>
+          <div class="step-label">Scoring</div>
+        </div>
+        <div class="step-item" data-step="writing">
+          <div class="step-node">5</div>
+          <div class="step-label">Writing</div>
+        </div>
+        <div class="step-item" data-step="checking">
+          <div class="step-node">6</div>
+          <div class="step-label">Checking</div>
+        </div>
+        <div class="step-item" data-step="done">
+          <div class="step-node">✓</div>
+          <div class="step-label">Done</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Red Glass Panel for Failed Runs -->
+    <div id="pipeline-error" class="glass-panel panel-error" style="display: none;">
+      <div class="panel-error-icon">!</div>
+      <div style="flex: 1;">
+        <div class="panel-error-title" id="pipeline-error-stage">Pipeline Failed</div>
+        <div class="panel-error-msg" id="pipeline-error-detail">An unexpected error occurred during execution.</div>
+      </div>
+    </div>
+
+    <!-- Hero Grid: The Arena & "Why These Advisers" -->
+    <div class="hero-grid">
+      <!-- The Arena (Hero Centerpiece) -->
+      <div class="glass-panel arena-panel" style="padding: 1.5rem;">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="eyebrow" style="margin: 0;">THE ARENA</span>
+            <span style="font-size: 0.875rem; color: var(--text-secondary);">Council of 6 Advisers</span>
+          </div>
+          <span id="arena-status-badge" class="badge badge-neutral">Idle</span>
+        </div>
+
+        <div class="arena-wrapper">
+          <svg class="arena-svg" viewBox="0 0 800 420" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <!-- Filter for glow on active rings -->
+              <filter id="cyanGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
+
+            <!-- Connector Lines (Behind Seats) -->
+            <g class="arena-connectors">
+              <line id="connector-ops" class="arena-connector" x1="175" y1="272" x2="400" y2="320" />
+              <line id="connector-finance" class="arena-connector" x1="237" y1="157" x2="400" y2="320" />
+              <line id="connector-business" class="arena-connector" x1="352" y1="95" x2="400" y2="320" />
+              <line id="connector-customer" class="arena-connector" x1="448" y1="95" x2="400" y2="320" />
+              <line id="connector-legal" class="arena-connector" x1="563" y1="157" x2="400" y2="320" />
+              <line id="connector-infosec" class="arena-connector" x1="625" y1="272" x2="400" y2="320" />
+            </g>
+
+            <!-- Center Decision Node -->
+            <g class="center-decision-node" id="node-decision">
+              <circle class="center-disc" cx="400" cy="320" r="64" />
+              <circle class="center-ring" cx="400" cy="320" r="74" />
+              <text class="center-title" x="400" y="302">DECISION</text>
+              <text class="center-question" id="arena-center-question" x="400" y="324">
+                <tspan x="400" dy="0">Load brief or run</tspan>
+                <tspan x="400" dy="18">to start debate</tspan>
+              </text>
+            </g>
+
+            <!-- Adviser Seats -->
+            <!-- 1. Ops -->
+            <g id="seat-ops" class="arena-seat state-idle" data-adviser="ops" transform="translate(0,0)">
+              <circle class="seat-ring" cx="175" cy="272" r="34" />
+              <circle class="seat-disc" cx="175" cy="272" r="28" />
+              <text class="seat-icon" x="175" y="278" font-size="16" text-anchor="middle">⚙️</text>
+              <text class="seat-label" x="175" y="320">Ops</text>
+              <text class="seat-score-badge" id="seat-score-ops" x="175" y="335">0.00</text>
+            </g>
+
+            <!-- 2. Finance -->
+            <g id="seat-finance" class="arena-seat state-idle" data-adviser="finance" transform="translate(0,0)">
+              <circle class="seat-ring" cx="237" cy="157" r="34" />
+              <circle class="seat-disc" cx="237" cy="157" r="28" />
+              <text class="seat-icon" x="237" y="163" font-size="16" text-anchor="middle">💰</text>
+              <text class="seat-label" x="237" y="205">Finance</text>
+              <text class="seat-score-badge" id="seat-score-finance" x="237" y="220">0.00</text>
+            </g>
+
+            <!-- 3. Business -->
+            <g id="seat-business" class="arena-seat state-idle" data-adviser="business" transform="translate(0,0)">
+              <circle class="seat-ring" cx="352" cy="95" r="34" />
+              <circle class="seat-disc" cx="352" cy="95" r="28" />
+              <text class="seat-icon" x="352" y="101" font-size="16" text-anchor="middle">📈</text>
+              <text class="seat-label" x="352" y="143">Business</text>
+              <text class="seat-score-badge" id="seat-score-business" x="352" y="158">0.00</text>
+            </g>
+
+            <!-- 4. Customer -->
+            <g id="seat-customer" class="arena-seat state-idle" data-adviser="customer" transform="translate(0,0)">
+              <circle class="seat-ring" cx="448" cy="95" r="34" />
+              <circle class="seat-disc" cx="448" cy="95" r="28" />
+              <text class="seat-icon" x="448" y="101" font-size="16" text-anchor="middle">👥</text>
+              <text class="seat-label" x="448" y="143">Customer</text>
+              <text class="seat-score-badge" id="seat-score-customer" x="448" y="158">0.00</text>
+            </g>
+
+            <!-- 5. Legal -->
+            <g id="seat-legal" class="arena-seat state-idle" data-adviser="legal" transform="translate(0,0)">
+              <circle class="seat-ring" cx="563" cy="157" r="34" />
+              <circle class="seat-disc" cx="563" cy="157" r="28" />
+              <text class="seat-icon" x="563" y="163" font-size="16" text-anchor="middle">⚖️</text>
+              <text class="seat-label" x="563" y="205">Legal</text>
+              <text class="seat-score-badge" id="seat-score-legal" x="563" y="220">0.00</text>
+            </g>
+
+            <!-- 6. InfoSec -->
+            <g id="seat-infosec" class="arena-seat state-idle" data-adviser="infosec" transform="translate(0,0)">
+              <circle class="seat-ring" cx="625" cy="272" r="34" />
+              <circle class="seat-disc" cx="625" cy="272" r="28" />
+              <text class="seat-icon" x="625" y="278" font-size="16" text-anchor="middle">🛡️</text>
+              <text class="seat-label" x="625" y="320">InfoSec</text>
+              <text class="seat-score-badge" id="seat-score-infosec" x="625" y="335">0.00</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <!-- "Why These Advisers" Panel -->
+      <div class="glass-panel routing-panel" style="padding: 1.5rem;">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="eyebrow" style="margin: 0;">WHY THESE ADVISERS</span>
+          </div>
+          <span class="text-small text-muted" id="routing-summary-badge">0 / 6 Selected</span>
+        </div>
+
+        <div id="routing-rows-container" class="routing-list">
+          <!-- Rendered dynamically by app.js -->
+          <div class="empty-state" style="padding: 1.5rem 0;">
+            <p class="text-small text-muted">Awaiting brief routing...</p>
+          </div>
+        </div>
+
+        <div style="margin-top: 1rem;">
+          <div class="form-label" style="margin-bottom: 0.25rem;">Harness Routing Query:</div>
+          <blockquote id="routing-query-box" class="routing-query-box">
+            No routing query generated yet. Run a debate or open a saved run.
+          </blockquote>
+        </div>
+      </div>
+    </div>
+
+    <!-- Brief Panel -->
+    <div id="brief-panel" class="glass-panel" style="margin-bottom: 2rem;">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span class="eyebrow" style="margin: 0;">EXECUTIVE INPUT</span>
+          <span style="font-size: 1.125rem; font-weight: 600;">Decision Brief</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <span id="weight-indicator" class="badge badge-pass">Weights: 100%</span>
+          <button id="btn-load-sample" class="btn btn-secondary btn-sm" type="button">
+            Load sample
+          </button>
+        </div>
+      </div>
+
+      <form id="brief-form" onsubmit="return false;">
+        <div class="form-group">
+          <label class="form-label" for="brief-question">
+            <span>Decision Question</span>
+            <span class="text-muted" style="font-weight: 400; text-transform: none;">Actionable core question</span>
+          </label>
+          <textarea id="brief-question" class="textarea-control" rows="2" placeholder="e.g. Should Legion Capital move 40% of payment volume from Arvanta to Brevis Pay?"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="brief-context">
+            <span>Business Context</span>
+            <span class="text-muted" style="font-weight: 400; text-transform: none;">Background facts and current operations</span>
+          </label>
+          <textarea id="brief-context" class="textarea-control" rows="2" placeholder="Describe the company background and vendor landscape..."></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">
+            <span>Decision Options</span>
+            <span class="text-muted" style="font-weight: 400; text-transform: none;">Option A vs Option B</span>
+          </label>
+          <div class="options-grid">
+            <div>
+              <span class="eyebrow" style="font-size: 0.6875rem;">Option A</span>
+              <input type="text" id="option-a-text" class="input-control" placeholder="Option A description" />
+            </div>
+            <div>
+              <span class="eyebrow" style="font-size: 0.6875rem;">Option B</span>
+              <input type="text" id="option-b-text" class="input-control" placeholder="Option B description" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Constraints List -->
+        <div class="form-group" style="margin-top: 1rem;">
+          <div class="form-label">
+            <span>Constraints</span>
+            <button id="btn-add-constraint" class="btn btn-ghost btn-sm" type="button" style="padding: 0.2rem 0.5rem;">+ Add constraint</button>
+          </div>
+          <div id="constraints-list">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Criteria List -->
+        <div class="form-group" style="margin-top: 1rem;">
+          <div class="form-label">
+            <span>Weighted Criteria</span>
+            <span class="text-muted" style="font-weight: 400; text-transform: none;">Must sum to 100%</span>
+          </div>
+          <div id="criteria-list">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <div class="panel-footer">
+          <button id="btn-run-debate" class="btn btn-primary btn-lg" type="button">
+            <span>⚡</span>
+            <span>Run debate</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Empty Sections for 8.2 and 8.3 -->
+    <section id="debate" class="glass-panel section-placeholder" style="padding: 2rem 1.5rem;">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span class="eyebrow" style="margin: 0;">STAGE 8.2</span>
+          <span>Adviser Debate Grid</span>
+        </div>
+      </div>
+      <div class="empty-state">
+        <div class="empty-state-icon">⚖️</div>
+        <div class="empty-state-title">Adviser Debate</div>
+        <div class="empty-state-desc">Load the sample brief or open a saved run to begin.</div>
+      </div>
+    </section>
+
+    <section id="scorecard" class="glass-panel section-placeholder" style="padding: 2rem 1.5rem;">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span class="eyebrow" style="margin: 0;">STAGE 8.3</span>
+          <span>Scorecard Synthesis</span>
+        </div>
+      </div>
+      <div class="empty-state">
+        <div class="empty-state-icon">📊</div>
+        <div class="empty-state-title">Scorecard Synthesis</div>
+        <div class="empty-state-desc">Load the sample brief or open a saved run to begin.</div>
+      </div>
+    </section>
+
+    <section id="memo" class="glass-panel section-placeholder" style="padding: 2rem 1.5rem;">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span class="eyebrow" style="margin: 0;">STAGE 8.3</span>
+          <span>Decision Memo & Final Verdict</span>
+        </div>
+      </div>
+      <div class="empty-state">
+        <div class="empty-state-icon">📝</div>
+        <div class="empty-state-title">Decision Memo & Verdict</div>
+        <div class="empty-state-desc">Load the sample brief or open a saved run to begin.</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Toast Notifications Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

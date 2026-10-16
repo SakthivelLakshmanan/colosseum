@@ -21,6 +21,7 @@ from core.ledger import create_run
 from core.registry import find_project_root, get_registry
 from core.schemas import DecisionBrief
 from core.settings import get_settings
+from knowledge.fact_store import get_fact
 
 logger = logging.getLogger(__name__)
 
@@ -324,6 +325,25 @@ def record_human_decision(run_id: str, payload: DecisionRequest) -> dict[str, An
         raise HTTPException(status_code=500, detail=f"Failed to record decision: {exc}")
 
     return {"status": "ok", "decision": decision_record}
+
+
+@app.get("/facts/{fact_id}")
+def get_fact_by_id(fact_id: str) -> dict[str, Any]:
+    """Retrieve fact metadata by fact_id from the colosseum dataset only.
+
+    Never reads from colosseum_eval. Returns 404 if not found.
+    """
+    settings = get_settings()
+    dataset = getattr(settings.bigquery, "dataset", "colosseum")
+    if dataset == "colosseum_eval" or "eval" in dataset.lower():
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: facts endpoint reads only from the colosseum dataset, never colosseum_eval.",
+        )
+    fact = get_fact(fact_id)
+    if not fact:
+        raise HTTPException(status_code=404, detail=f"Fact '{fact_id}' not found")
+    return fact.model_dump(mode="json")
 
 
 # Mount static folder web/ at root '/' so the web dashboard and API deploy together

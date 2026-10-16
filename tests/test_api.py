@@ -1,11 +1,12 @@
 """Unit tests for FastAPI endpoints in api/main.py."""
 import json
+from datetime import date
 from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
-from core.schemas import DecisionBrief
+from core.schemas import DecisionBrief, Fact, Reliability
 
 client = TestClient(app)
 
@@ -294,3 +295,44 @@ def test_static_html_serving():
     assert response.status_code == 200
     assert "text/html" in response.headers.get("content-type", "")
     assert "Colosseum" in response.text
+
+
+def test_get_fact_by_id_success():
+    fake_fact = Fact(
+        fact_id="FIN-01",
+        domain="finance",
+        topic="volume",
+        statement="Legion Capital processed 10.0 million payment transactions worth about ₹1,500 crore in September 2026.",
+        entity="Legion Capital",
+        metric="monthly_payment_volume",
+        value_num=1500.0,
+        unit="INR crore / month",
+        as_of=date(2026, 9, 30),
+        source_type="table",
+        source_ref="transactions_monthly",
+        reliability=Reliability.high,
+    )
+    with patch("api.main.get_fact", return_value=fake_fact):
+        response = client.get("/facts/FIN-01")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["fact_id"] == "FIN-01"
+        assert data["domain"] == "finance"
+        assert data["value_num"] == 1500.0
+        assert "Legion Capital" in data["statement"]
+
+
+def test_get_fact_by_id_not_found():
+    with patch("api.main.get_fact", return_value=None):
+        response = client.get("/facts/NONEXISTENT-99")
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+
+def test_get_fact_dataset_colosseum_only():
+    fake_settings = MagicMock()
+    fake_settings.bigquery.dataset = "colosseum_eval"
+    with patch("api.main.get_settings", return_value=fake_settings):
+        response = client.get("/facts/FIN-01")
+        assert response.status_code == 403
+        assert "never colosseum_eval" in response.json()["detail"].lower()
