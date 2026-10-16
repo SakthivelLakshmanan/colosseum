@@ -1,0 +1,2455 @@
+{
+    "run_id": "run_DEC-001_20261015_121258",
+    "status": "done",
+    "created_at": "2026-10-15T12:12:59.034685+00:00",
+    "brief": {
+        "decision_id": "DEC-001",
+        "question": "Should Legion Capital move 40% of its payment volume (about \u20b9600 crore a month) from Arvanta Payments to Brevis Pay?",
+        "criteria": [
+            {
+                "good_looks_like": "Lower total cost after any fixes needed",
+                "name": "Cost",
+                "weight": 0.25,
+                "owners": [
+                    "finance"
+                ]
+            },
+            {
+                "good_looks_like": "Meets every data, security and regulatory rule; a blocking finding overrides the score",
+                "name": "Security & compliance",
+                "weight": 0.25,
+                "owners": [
+                    "infosec",
+                    "legal"
+                ]
+            },
+            {
+                "good_looks_like": "No drop in payment success rate or uptime",
+                "name": "Reliability",
+                "weight": 0.2,
+                "owners": [
+                    "ops"
+                ]
+            },
+            {
+                "good_looks_like": "Unlocks new merchants and products; meets the vendor-concentration OKR",
+                "name": "Growth",
+                "weight": 0.2,
+                "owners": [
+                    "business"
+                ]
+            },
+            {
+                "good_looks_like": "Fewer complaints, faster settlements and refunds, lower churn",
+                "name": "Customer impact",
+                "weight": 0.1,
+                "owners": [
+                    "customer"
+                ]
+            }
+        ],
+        "constraints": [
+            "Payment data must be stored and processed only in India",
+            "A decision is needed within 2 weeks",
+            "No more than one gateway migration this financial year",
+            "Overall payment success rate must not fall"
+        ],
+        "context": "Legion Capital Ltd: Fictional RBI-registered NBFC (digital personal and SME loans) with a merchant checkout product, Legion Pay. All payment volume currently goes through Arvanta Payments; Brevis Pay has run a 2% pilot since August 2026.",
+        "options": {
+            "A": "Stay with Arvanta Payments for 100% of volume",
+            "B": "Move 40% of volume to Brevis Pay"
+        }
+    },
+    "routing": {
+        "decision_id": "DEC-001",
+        "selected": [
+            "ops",
+            "finance",
+            "legal",
+            "business",
+            "customer",
+            "infosec"
+        ],
+        "created_at": "2026-10-15T12:13:06.781239Z",
+        "scores": [
+            {
+                "adviser_id": "ops",
+                "selected": true,
+                "best_matching_capability": "Migration effort, engineering capacity and delivery timelines",
+                "similarity": 0.7349,
+                "reason": "within margin of top"
+            },
+            {
+                "adviser_id": "finance",
+                "selected": true,
+                "best_matching_capability": "One-time investment, migration and exit costs",
+                "similarity": 0.6938,
+                "reason": "within margin of top"
+            },
+            {
+                "adviser_id": "legal",
+                "selected": true,
+                "best_matching_capability": "Regulatory compliance: RBI rules, licences, outsourcing norms",
+                "similarity": 0.6871,
+                "reason": "within margin of top"
+            },
+            {
+                "adviser_id": "business",
+                "selected": true,
+                "best_matching_capability": "Vendor strategy and concentration risk",
+                "similarity": 0.6809,
+                "reason": "within margin of top"
+            },
+            {
+                "adviser_id": "customer",
+                "selected": true,
+                "best_matching_capability": "Checkout conversion, refunds and payment failures customers feel",
+                "similarity": 0.6728,
+                "reason": "above floor"
+            },
+            {
+                "adviser_id": "infosec",
+                "selected": true,
+                "best_matching_capability": "Certifications: SOC 2, PCI DSS, ISO 27001",
+                "similarity": 0.6603,
+                "reason": "always-include rule: data"
+            }
+        ],
+        "routing_query": "payment gateway migration effort\npayment success rates and uptime\ndomestic data localization compliance\nRBI digital payment regulations\nvendor concentration risk\npayment processing fees and cost savings\nsettlement and refund speed\nmerchant and customer checkout experience\nvendor contract terms"
+    },
+    "positions": [
+        {
+            "confidence": 0.9,
+            "summary": "Moving 40% volume to Brevis Pay improves overall uptime (99.95% vs 99.82%), p95 latency (1.4s vs 1.9s), and non-weak bank success rates (98.2% vs 97.9%), while resolving Arvanta's worsening settlement ticket delays. However, migration is viable only if Legion uses dynamic bank-level routing to keep underperforming banks (Coral Bank and Tamra Bank, 18% of volume) and unsupported eNACH mandates on Arvanta, and plans for an 8-week implementation timeline given engineering capacity constraints.",
+            "handoffs": [
+                "infosec: Brevis Pay has an open high-severity pen-test finding (missing rate limiting on refund API) open for 47 days (SEC-04).",
+                "legal: Arvanta MSA mandates a 90-day written notice period before volume can be reduced (LEG-02).",
+                "finance: One-time migration cost is estimated at \u20b940 lakh against a \u20b94 lakh/month float savings from T+1 settlement (FIN-05, FIN-06)."
+            ],
+            "claims": [
+                {
+                    "unit": "%",
+                    "formula": null,
+                    "text": "Overall payment success rate is 97.8% on Arvanta over 12 months compared to 97.6% on Brevis Pay during the August\u2013September 2026 pilot.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "OPS-01"
+                    ],
+                    "value": 97.6,
+                    "claim_id": "ops-1"
+                },
+                {
+                    "unit": "%",
+                    "formula": null,
+                    "text": "Brevis Pay significantly underperforms Arvanta at Coral Bank and Tamra Bank (which represent 18% of volume), achieving 94.8% and 95.2% respectively versus Arvanta's 97.5%.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "OPS-02"
+                    ],
+                    "value": 94.8,
+                    "claim_id": "ops-2"
+                },
+                {
+                    "unit": "%",
+                    "formula": null,
+                    "text": "At all other banks representing 82% of payment volume, Brevis Pay outperforms Arvanta with a 98.2% success rate against Arvanta's 97.9%.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "OPS-03"
+                    ],
+                    "value": 98.2,
+                    "claim_id": "ops-3"
+                },
+                {
+                    "unit": "%",
+                    "formula": "0.82 * 98.2 + 0.18 * 97.5",
+                    "text": "By leveraging Legion's payment routing layer to selectively route non-weak banks to Brevis while retaining weak banks (18%) on Arvanta, the blended success rate reaches 98.074%, preventing any success rate drop.",
+                    "kind": "calculation",
+                    "evidence_ids": [
+                        "OPS-02",
+                        "OPS-03",
+                        "OPS-11"
+                    ],
+                    "value": 98.074,
+                    "claim_id": "ops-4"
+                },
+                {
+                    "unit": "ms",
+                    "formula": null,
+                    "text": "Brevis Pay demonstrates superior system availability and response times, with 99.95% uptime versus Arvanta's 99.82%, and a p95 payment latency of 1,400 ms versus Arvanta's 1,900 ms.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "OPS-04",
+                        "OPS-05"
+                    ],
+                    "value": 1400.0,
+                    "claim_id": "ops-5"
+                },
+                {
+                    "unit": "incidents",
+                    "formula": null,
+                    "text": "Arvanta experienced 3 major availability incidents in the last 12 months (including a 4-hour outage on 14 June 2026 delaying \u20b92.3 crore in collections), whereas Brevis experienced only 1 major incident.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "OPS-06",
+                        "BUS-10"
+                    ],
+                    "value": 3.0,
+                    "claim_id": "ops-6"
+                },
+                {
+                    "unit": "%",
+                    "formula": null,
+                    "text": "UPI AutoPay mandate success is higher on Brevis (97.4%) than Arvanta (96.1%), though Brevis lacks eNACH support for two small banks covering about 2% of mandates which must remain on Arvanta.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "OPS-07",
+                        "OPS-08"
+                    ],
+                    "value": 97.4,
+                    "claim_id": "ops-7"
+                },
+                {
+                    "unit": "tickets / month",
+                    "formula": null,
+                    "text": "Settlement-delay support complaints against Arvanta have escalated significantly from 120 in July to 340 in September 2026, while Brevis provides real-time settlement and reconciliation APIs and T+1 settlement.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "CUS-01",
+                        "OPS-12",
+                        "FIN-06"
+                    ],
+                    "value": 340.0,
+                    "claim_id": "ops-8"
+                },
+                {
+                    "unit": "weeks",
+                    "formula": "(6 * 4) / 3",
+                    "text": "Vendor sales claims that migration can be achieved in under 4 weeks are unverified marketing assertions; internal sizing requires 24 engineer-weeks (6 weeks with 4 engineers), resulting in an 8-week timeline given only 3 available engineers.",
+                    "kind": "calculation",
+                    "evidence_ids": [
+                        "OPS-09",
+                        "OPS-10",
+                        "OPS-13"
+                    ],
+                    "value": 8.0,
+                    "claim_id": "ops-9"
+                },
+                {
+                    "unit": "%",
+                    "formula": null,
+                    "text": "Customer complaints for Coral and Tamra Bank rose 40% under Brevis during the pilot, confirming that unconstrained routing to Brevis without bank-level segregation degrades customer experience.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "CUS-05",
+                        "OPS-02"
+                    ],
+                    "value": 40.0,
+                    "claim_id": "ops-10"
+                },
+                {
+                    "unit": "findings",
+                    "formula": null,
+                    "text": "Brevis Pay has an open high-severity penetration test finding regarding missing rate limiting on its refund API that has remained unaddressed for 47 days.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "SEC-04"
+                    ],
+                    "value": 1.0,
+                    "claim_id": "ops-11"
+                }
+            ],
+            "conditions": [
+                "Traffic routing must exclude Coral Bank and Tamra Bank (18% of volume) and unsupported eNACH mandates (2% of mandates) from Brevis Pay, keeping them on Arvanta Payments via Legion's routing layer.",
+                "Migration planning must budget for an 8-week timeline (24 engineer-weeks) utilizing the 3 available payments engineers starting November 2026, rejecting unverified vendor claims of under 4 weeks.",
+                "Brevis Pay's open high-severity penetration test vulnerability (missing rate limiting on refund API) must be remediated and verified before going live."
+            ],
+            "adviser_id": "ops",
+            "blocking_findings": [],
+            "stance": "conditional",
+            "criterion_scores": [
+                {
+                    "option": "A",
+                    "criterion": "Reliability",
+                    "score": 3.0,
+                    "reason": "Arvanta provides consistent multi-bank coverage and a 97.8% baseline success rate, but suffers from lower uptime (99.82%), 3 major outages, and surging settlement operational defects.",
+                    "evidence_ids": [
+                        "OPS-01",
+                        "OPS-04",
+                        "OPS-06",
+                        "CUS-01"
+                    ]
+                },
+                {
+                    "option": "B",
+                    "criterion": "Reliability",
+                    "score": 4.0,
+                    "reason": "Brevis Pay offers superior uptime (99.95%), faster latency (1.4s), and higher mandate and core bank success (98.2%), provided weak banks (18%) and unsupported eNACH (2%) are routed to Arvanta.",
+                    "evidence_ids": [
+                        "OPS-03",
+                        "OPS-04",
+                        "OPS-05",
+                        "OPS-07",
+                        "OPS-08",
+                        "OPS-11"
+                    ]
+                }
+            ]
+        },
+        {
+            "confidence": 0.95,
+            "summary": "Moving 40% of payment volume (\u20b9600 crore/month) to Brevis Pay generates a net monthly recurring benefit of \u20b910.4 lakh after accounting for fee savings, India-hosting add-on costs, dispute fee differentials, and float savings. Total one-time costs of \u20b965 lakh (\u20b940 lakh migration plus \u20b925 lakh Arvanta exit penalty) achieve payback in 6.25 months, while helping close the \u20b93 crore/year payments budget overrun and supporting the board's cost-to-income target.",
+            "handoffs": [
+                "legal: Review whether Arvanta's \u20b925 lakh early-exit penalty under \u00a79.2 can be waived or renegotiated, and evaluate commercial exposure from Brevis's 30-day price modification clause and 3-month liability cap.",
+                "infosec: Confirm that Brevis Pay's Mumbai region hosting add-on fully satisfies RBI data localization requirements before migration.",
+                "ops: Verify engineering team capacity given that 3 available engineers may extend migration from 6 weeks to 8 weeks."
+            ],
+            "claims": [
+                {
+                    "unit": "INR crore / month",
+                    "formula": null,
+                    "text": "Legion Capital processed \u20b91,500 crore across 10 million transactions in September 2026, meaning 40% of volume represents \u20b9600 crore per month.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "FIN-01"
+                    ],
+                    "value": 1500.0,
+                    "claim_id": "finance-1"
+                },
+                {
+                    "unit": "INR lakh / month",
+                    "formula": "(1500 * 0.40) * 0.0020 * 100",
+                    "text": "At Arvanta's blended fee of 0.20%, monthly processing cost on the \u20b9600 crore volume in scope is \u20b9120 lakh.",
+                    "kind": "calculation",
+                    "evidence_ids": [
+                        "FIN-01",
+                        "FIN-02"
+                    ],
+                    "value": 120.0,
+                    "claim_id": "finance-2"
+                },
+                {
+                    "unit": "INR lakh / month",
+                    "formula": "((1500 * 0.40) * 0.0020 * 100) - ((1500 * 0.40) * 0.00176 * 100)",
+                    "text": "At Brevis Pay's quoted fee of 0.176%, monthly processing fee for the \u20b9600 crore volume is \u20b9105.6 lakh, yielding a gross recurring fee saving of \u20b914.4 lakh per month.",
+                    "kind": "calculation",
+                    "evidence_ids": [
+                        "FIN-01",
+                        "FIN-02",
+                        "FIN-03"
+                    ],
+                    "value": 14.4,
+                    "claim_id": "finance-3"
+                },
+                {
+                    "unit": "INR lakh / month",
+                    "formula": "14.40 - 6.0 - 2.0 + 4.0",
+                    "text": "After adjusting for the \u20b96 lakh/month India-only hosting fee, \u20b92 lakh/month higher dispute fees, and \u20b94 lakh/month treasury float savings from T+1 settlement, Option B generates a net recurring monthly benefit of \u20b910.4 lakh.",
+                    "kind": "calculation",
+                    "evidence_ids": [
+                        "FIN-04",
+                        "FIN-06",
+                        "FIN-08"
+                    ],
+                    "value": 10.4,
+                    "claim_id": "finance-4"
+                },
+                {
+                    "unit": "INR lakh one-time",
+                    "formula": "40.0 + 25.0",
+                    "text": "Total one-time costs for Option B are \u20b965 lakh, comprising \u20b940 lakh in migration and engineering costs and a \u20b925 lakh early-exit penalty payable under Arvanta's MSA for dropping below 80% volume.",
+                    "kind": "calculation",
+                    "evidence_ids": [
+                        "FIN-05",
+                        "LEG-01"
+                    ],
+                    "value": 65.0,
+                    "claim_id": "finance-5"
+                },
+                {
+                    "unit": "months",
+                    "formula": "65.0 / 10.40",
+                    "text": "Option B achieves full payback on total one-time implementation costs in 6.25 months.",
+                    "kind": "calculation",
+                    "evidence_ids": [
+                        "FIN-04",
+                        "FIN-05",
+                        "FIN-06",
+                        "FIN-08",
+                        "LEG-01"
+                    ],
+                    "value": 6.25,
+                    "claim_id": "finance-6"
+                },
+                {
+                    "unit": "INR lakh / month",
+                    "formula": "7.20 - 6.0 - 1.0 + 2.0",
+                    "text": "If phased to avoid Arvanta's \u20b925 lakh exit fee, the maximum initial slice is 20% (\u20b9300 crore/month), which delivers a net monthly benefit of \u20b92.2 lakh after the fixed \u20b96 lakh hosting add-on, dispute delta, and float savings.",
+                    "kind": "calculation",
+                    "evidence_ids": [
+                        "FIN-01",
+                        "FIN-02",
+                        "FIN-03",
+                        "FIN-04",
+                        "LEG-01"
+                    ],
+                    "value": 2.2,
+                    "claim_id": "finance-7"
+                },
+                {
+                    "unit": "INR crore / year",
+                    "formula": null,
+                    "text": "Current payment costs are running at \u20b936 crore per year against an FY27 budget of \u20b933 crore (\u20b93 crore or 9% over budget); the net annualized savings of \u20b91.248 crore from Option B help reduce this budget variance.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "FIN-09"
+                    ],
+                    "value": 36.0,
+                    "claim_id": "finance-8"
+                },
+                {
+                    "unit": "INR lakh / month",
+                    "formula": "1500 * (0.0020 * (1 - 0.08)) * 100",
+                    "text": "Arvanta's counter-offer of an 8% fee cut requires committing 100% volume for 3 years, which would reduce total monthly fees from \u20b9300 lakh to \u20b9276 lakh (a \u20b924 lakh/month saving) but directly violates Legion's FY27 OKR capping vendor share at 70%.",
+                    "kind": "calculation",
+                    "evidence_ids": [
+                        "BUS-02",
+                        "BUS-05",
+                        "FIN-01",
+                        "FIN-02"
+                    ],
+                    "value": 276.0,
+                    "claim_id": "finance-9"
+                },
+                {
+                    "unit": "% next 12 months",
+                    "formula": null,
+                    "text": "Payment volume is projected to grow 25% over the next 12 months, which will increase the variable fee savings from Brevis Pay while fixed hosting add-ons remain constant.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "FIN-10"
+                    ],
+                    "value": 25.0,
+                    "claim_id": "finance-10"
+                },
+                {
+                    "unit": "INR crore / year",
+                    "formula": null,
+                    "text": "Option B enables \u20b945 crore/month in cross-border SME pipeline requiring international card acceptance, expected to generate \u20b91.08 crore/year in fee revenue.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "BUS-01",
+                        "BUS-06"
+                    ],
+                    "value": 1.08,
+                    "claim_id": "finance-11"
+                },
+                {
+                    "unit": "days",
+                    "formula": null,
+                    "text": "The Brevis draft agreement allows price changes on 30 days' notice and caps vendor liability at 3 months of fees compared to Arvanta's 12 months, introducing commercial downside exposure.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "LEG-05",
+                        "LEG-06"
+                    ],
+                    "value": 30.0,
+                    "claim_id": "finance-12"
+                }
+            ],
+            "conditions": [],
+            "adviser_id": "finance",
+            "blocking_findings": [],
+            "stance": "favours_B",
+            "criterion_scores": [
+                {
+                    "option": "A",
+                    "criterion": "Cost",
+                    "score": 2.0,
+                    "reason": "Leaves payment costs at an annualized run-rate of \u20b936 crore, exceeding the \u20b933 crore budget, and forfeits \u20b910.4 lakh in net monthly operating improvements.",
+                    "evidence_ids": [
+                        "FIN-01",
+                        "FIN-02",
+                        "FIN-09"
+                    ]
+                },
+                {
+                    "option": "B",
+                    "criterion": "Cost",
+                    "score": 4.0,
+                    "reason": "Yields \u20b910.4 lakh net monthly savings after all add-ons and penalties with a rapid 6.25-month payback, though constrained by a \u20b925 lakh exit fee and \u20b96 lakh/month flat hosting cost.",
+                    "evidence_ids": [
+                        "FIN-03",
+                        "FIN-04",
+                        "FIN-05",
+                        "FIN-06",
+                        "FIN-08",
+                        "LEG-01"
+                    ]
+                }
+            ]
+        },
+        {
+            "confidence": 0.95,
+            "summary": "Option B triggers immediate legal and regulatory violations: Brevis's draft agreement lacks required data localisation, DPA, and RBI audit clauses, while its Singaporean sub-processor Sentrix Risk processes card data abroad in direct breach of Legion policy and RBI mandates. Furthermore, moving 40% of volume breaches Arvanta's 80% volume threshold, incurring a \u20b925 lakh early-exit penalty and requiring 90 days' notice.",
+            "handoffs": [
+                "legal: Hand off to infosec to raise a blocking finding regarding Brevis sub-processor Sentrix Risk processing card data in Singapore, violating data localisation constraints (SEC-01, SEC-02).",
+                "legal: Hand off to finance regarding the \u20b925 lakh early-exit penalty and 90-day notice requirement under the Arvanta MSA triggered by moving 40% volume (LEG-01, LEG-02).",
+                "legal: Hand off to customer/ops regarding the 20 settlement complaints breaching the 30-day statutory limit and 900 monthly EMI auto-debit disputes (CUS-03, CUS-10)."
+            ],
+            "claims": [
+                {
+                    "unit": "% of volume",
+                    "formula": "100 - 40",
+                    "text": "Moving 40% of payment volume leaves Arvanta with 60%, falling below Arvanta's 80% minimum volume commitment and triggering a \u20b925 lakh early-exit penalty before 31 March 2028.",
+                    "kind": "calculation",
+                    "evidence_ids": [
+                        "LEG-01"
+                    ],
+                    "value": 60.0,
+                    "claim_id": "legal-1"
+                },
+                {
+                    "unit": "days",
+                    "formula": null,
+                    "text": "The Arvanta MSA mandates a 90-day written notice period prior to reducing payment volume.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "LEG-02"
+                    ],
+                    "value": 90.0,
+                    "claim_id": "legal-2"
+                },
+                {
+                    "unit": "",
+                    "formula": null,
+                    "text": "Brevis Pay's fraud-scoring sub-processor, Sentrix Risk Pte Ltd, is based in Singapore and receives card data, directly violating Legion's mandatory policy that payment/card data must be stored and processed only in India.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "SEC-01",
+                        "SEC-02"
+                    ],
+                    "value": null,
+                    "claim_id": "legal-3"
+                },
+                {
+                    "unit": "",
+                    "formula": null,
+                    "text": "The draft agreement with Brevis contains no clause stipulating data storage or processing location in India.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "LEG-04"
+                    ],
+                    "value": null,
+                    "claim_id": "legal-4"
+                },
+                {
+                    "unit": "",
+                    "formula": null,
+                    "text": "The Brevis draft provides no audit or inspection rights for Legion or the RBI, which directly violates RBI outsourcing norms and Legion InfoSec policy.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "LEG-08"
+                    ],
+                    "value": null,
+                    "claim_id": "legal-5"
+                },
+                {
+                    "unit": "",
+                    "formula": null,
+                    "text": "Arvanta has an executed Data Processing Agreement aligned with the DPDP Act 2023, whereas Brevis has not provided any DPA.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "LEG-09"
+                    ],
+                    "value": null,
+                    "claim_id": "legal-6"
+                },
+                {
+                    "unit": "",
+                    "formula": null,
+                    "text": "Brevis's contract terms are substantially weaker than Arvanta's: Brevis subjects disputes to Singapore law and arbitration (vs Indian law/Mumbai courts for Arvanta), indemnifies only for 'gross negligence' (vs 'negligence'), caps liability at 3 months of fees (vs 12 months), and permits price changes on 30 days' notice.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "LEG-05",
+                        "LEG-06",
+                        "LEG-07",
+                        "LEG-10"
+                    ],
+                    "value": null,
+                    "claim_id": "legal-7"
+                },
+                {
+                    "unit": "",
+                    "formula": null,
+                    "text": "Both Arvanta and Brevis are RBI-authorised payment aggregators and support RBI card-on-file tokenisation.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "LEG-11",
+                        "SEC-12"
+                    ],
+                    "value": null,
+                    "claim_id": "legal-8"
+                },
+                {
+                    "unit": "hours",
+                    "formula": null,
+                    "text": "Brevis took 216 hours (9 days) to report an October 2025 security incident to CERT-In, significantly breaching Legion's policy requirement of CERT-In notification within 6 hours and vendor notification within 2 hours.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "SEC-06",
+                        "SEC-07"
+                    ],
+                    "value": 216.0,
+                    "claim_id": "legal-9"
+                },
+                {
+                    "unit": "",
+                    "formula": null,
+                    "text": "Arvanta has offered an 8% fee discount on its 0.20% fee schedule in exchange for a 3-year commitment of 100% volume, while its existing contract auto-renews for 2 years unless terminated 6 months before 31 March 2028.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "BUS-05",
+                        "FIN-02",
+                        "LEG-03"
+                    ],
+                    "value": null,
+                    "claim_id": "legal-10"
+                },
+                {
+                    "unit": "tickets",
+                    "formula": null,
+                    "text": "Customer dispute resolution faces regulatory scrutiny, with 20 of 340 settlement complaints (~6%) breaching the 30-day statutory grievance-resolution limit in September 2026, alongside 900 monthly failed EMI debit complaints.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "CUS-03",
+                        "CUS-10"
+                    ],
+                    "value": 20.0,
+                    "claim_id": "legal-11"
+                }
+            ],
+            "conditions": [],
+            "adviser_id": "legal",
+            "blocking_findings": [],
+            "stance": "favours_A",
+            "criterion_scores": [
+                {
+                    "option": "A",
+                    "criterion": "Security & compliance",
+                    "score": 4.0,
+                    "reason": "Fully compliant with Indian law and RBI mandates; has an active DPDP DPA, Mumbai jurisdiction, 12 months liability coverage, and local processing, though settlement grievance resolution limits need operational tightening.",
+                    "evidence_ids": [
+                        "LEG-07",
+                        "LEG-09",
+                        "LEG-11",
+                        "CUS-10"
+                    ]
+                },
+                {
+                    "option": "B",
+                    "criterion": "Security & compliance",
+                    "score": 1.0,
+                    "reason": "Directly breaches project constraints and RBI norms: offshore processing of card data via Sentrix Risk in Singapore, no contract data localisation clause, missing DPA, lack of RBI audit rights, and severe CERT-In reporting lag history.",
+                    "evidence_ids": [
+                        "SEC-01",
+                        "SEC-02",
+                        "SEC-06",
+                        "LEG-04",
+                        "LEG-08",
+                        "LEG-09"
+                    ]
+                }
+            ]
+        },
+        {
+            "confidence": 0.95,
+            "summary": "Moving 40% of payment volume to Brevis Pay directly fulfills Legion Capital's FY27 vendor-concentration OKR (reducing single-vendor volume from 100% to 60%, below the 70% threshold) and unlocks \u20b91.08 crore annually from cross-border SME merchant pipeline deals. Staying with Arvanta perpetuates single-vendor disruption risk, risks merchant churn, and delays strategic product initiatives like Legion Pay Later and cross-border acceptance.",
+            "handoffs": [
+                "legal: Review early-exit fee implications under Arvanta MSA \u00a79.2 (\u20b925 lakh threshold if volume drops below 80%) versus Arvanta's 3-year exclusivity offer.",
+                "ops: Verify routing configurations to ensure overall transaction success rates are preserved across weak issuer banks (Coral Bank and Tamra Bank).",
+                "finance: Evaluate net fee impact of Brevis blended fee (0.176%) against Arvanta counter-offer (8% discount on 0.20%) and cost-to-income targets."
+            ],
+            "claims": [
+                {
+                    "unit": "%",
+                    "formula": null,
+                    "text": "Legion Capital's FY27 OKR requires that no single payment gateway carries more than 70% of payment volume by 31 March 2027.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "BUS-02"
+                    ],
+                    "value": 70.0,
+                    "claim_id": "business-1"
+                },
+                {
+                    "unit": "%",
+                    "formula": "post_migration_arvanta_share = 100 - 40",
+                    "text": "Allocating 40% of volume to Brevis leaves Arvanta with 60% of volume, successfully meeting the vendor concentration cap with 6 months remaining before the 31 March 2027 deadline.",
+                    "kind": "calculation",
+                    "evidence_ids": [
+                        "BUS-02"
+                    ],
+                    "value": 60.0,
+                    "claim_id": "business-2"
+                },
+                {
+                    "unit": "INR crore / month",
+                    "formula": null,
+                    "text": "Brevis Pay enables international card acceptance, unlocking 30 cross-border SME merchants in the sales pipeline worth \u20b945 crore a month in volume.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "BUS-01"
+                    ],
+                    "value": 45.0,
+                    "claim_id": "business-3"
+                },
+                {
+                    "unit": "INR crore / year",
+                    "formula": "cross_border_rev_calc = 45 * 12 * 0.002",
+                    "text": "The cross-border SME pipeline unlocks \u20b91.08 crore a year in fee revenue based on a 0.2% take rate on \u20b945 crore monthly volume.",
+                    "kind": "calculation",
+                    "evidence_ids": [
+                        "BUS-01",
+                        "BUS-06"
+                    ],
+                    "value": 1.08,
+                    "claim_id": "business-4"
+                },
+                {
+                    "unit": "%",
+                    "formula": null,
+                    "text": "70% of lost SME deals in Q2\u2013Q3 FY27 cited lack of international card acceptance, an capability currently supported only by Brevis Pay.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "BUS-08",
+                        "BUS-01"
+                    ],
+                    "value": 70.0,
+                    "claim_id": "business-5"
+                },
+                {
+                    "unit": "months",
+                    "formula": null,
+                    "text": "Legion Pay Later (BNPL) is planned for Q1 FY28; Brevis provides native EMI/BNPL APIs whereas Arvanta requires a 4-month custom build.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "BUS-04"
+                    ],
+                    "value": 4.0,
+                    "claim_id": "business-6"
+                },
+                {
+                    "unit": "percentage points",
+                    "formula": null,
+                    "text": "Brevis checkout offers 11 Indian languages versus 4 on Arvanta, and delivered a 3.1 percentage point mobile conversion uplift during the 2% pilot.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "CUS-08",
+                        "CUS-04"
+                    ],
+                    "value": 3.1,
+                    "claim_id": "business-7"
+                },
+                {
+                    "unit": null,
+                    "formula": null,
+                    "text": "Competitor Vireo Finance migrated to a multi-gateway architecture in June 2026, advertising 99.9% uptime to SME merchants.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "BUS-03"
+                    ],
+                    "value": null,
+                    "claim_id": "business-8"
+                },
+                {
+                    "unit": "INR crore",
+                    "formula": null,
+                    "text": "Arvanta experienced 3 major availability incidents in the past 12 months, including a June 2026 outage that delayed \u20b92.3 crore in collections and forced \u20b911 lakh in fee waivers, highlighting single-gateway vulnerability.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "BUS-10",
+                        "OPS-06"
+                    ],
+                    "value": 2.3,
+                    "claim_id": "business-9"
+                },
+                {
+                    "unit": "INR crore / month",
+                    "formula": null,
+                    "text": "Four large merchants generating \u20b938 crore a month have threatened exit over settlement delays as merchant churn increased to 2.1% in September 2026, while 2 of Legion's top 5 co-lending partners already settle via Brevis Pay.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "CUS-02",
+                        "CUS-09",
+                        "BUS-07"
+                    ],
+                    "value": 38.0,
+                    "claim_id": "business-10"
+                },
+                {
+                    "unit": "merchants",
+                    "formula": null,
+                    "text": "Brevis Pay is less mature with 1,200 merchants and 3 years in business compared to Arvanta's 40,000 merchants over 9 years, representing operational scale considerations.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "BUS-11"
+                    ],
+                    "value": 1200.0,
+                    "claim_id": "business-11"
+                },
+                {
+                    "unit": null,
+                    "formula": null,
+                    "text": "Arvanta offered an 8% fee cut conditioned on 100% volume commitment for 3 years, but accepting this would breach the FY27 vendor concentration OKR and forfeit multi-gateway resilience.",
+                    "kind": "judgement",
+                    "evidence_ids": [
+                        "BUS-05",
+                        "BUS-02"
+                    ],
+                    "value": null,
+                    "claim_id": "business-12"
+                }
+            ],
+            "conditions": [],
+            "adviser_id": "business",
+            "blocking_findings": [],
+            "stance": "favours_B",
+            "criterion_scores": [
+                {
+                    "option": "A",
+                    "criterion": "Growth",
+                    "score": 2.0,
+                    "reason": "Fails FY27 vendor concentration OKR (100% single-vendor share vs 70% target), foregoes \u20b91.08 Cr/year cross-border pipeline revenue, and delays BNPL launch by 4 months.",
+                    "evidence_ids": [
+                        "BUS-02",
+                        "BUS-01",
+                        "BUS-04",
+                        "BUS-06"
+                    ]
+                },
+                {
+                    "option": "B",
+                    "criterion": "Growth",
+                    "score": 5.0,
+                    "reason": "Meets concentration OKR (60% Arvanta / 40% Brevis), unlocks \u20b91.08 Cr/year international card pipeline, accelerates BNPL roadmap, and matches competitor multi-gateway offerings.",
+                    "evidence_ids": [
+                        "BUS-02",
+                        "BUS-01",
+                        "BUS-06",
+                        "BUS-04",
+                        "BUS-03"
+                    ]
+                }
+            ]
+        },
+        {
+            "confidence": 0.85,
+            "summary": "Moving 40% of volume to Brevis Pay significantly improves merchant and borrower experience through faster refunds (3.0 vs 5.2 days), lower latency (1.4s vs 1.9s), higher checkout conversion (+3.1 points), and multilingual reach (11 vs 4 languages), mitigating rising merchant churn (2.1%) and \u20b938 crore/month in threatened volume. However, approval must be conditional on routing traffic from Coral Bank and Tamra Bank away from Brevis to avoid severe localized success-rate drops and a 40% surge in customer complaints.",
+            "handoffs": [
+                "legal: 20 settlement delay complaints in September breached the 30-day regulatory grievance limit under Arvanta (CUS-10).",
+                "ops: Brevis has inferior routing on Coral and Tamra banks (18% volume) with 94.8%-95.2% success rates and lacks eNACH for 2% of mandates; smart-routing configuration is required (OPS-02, OPS-08).",
+                "finance: Brevis charges \u20b9250 per dispute vs Arvanta's \u20b9150, creating a \u20b92 lakh/month cost delta on 2,000 disputes (FIN-08)."
+            ],
+            "claims": [
+                {
+                    "unit": "%",
+                    "formula": "((340 - 120) / 120) * 100",
+                    "text": "Settlement-delay complaints under Arvanta grew 183.33% from 120 in July to 340 in September 2026, driving 20 regulatory breaches of the 30-day limit in September.",
+                    "kind": "calculation",
+                    "evidence_ids": [
+                        "CUS-01",
+                        "CUS-10"
+                    ],
+                    "value": 183.333333333333,
+                    "claim_id": "customer-1"
+                },
+                {
+                    "unit": "INR crore / month",
+                    "formula": null,
+                    "text": "Four major merchants represent \u20b938 crore per month in volume threatening exit over settlement delays, contributing to monthly merchant churn rising from 1.4% in Q1 to 2.1% in September 2026.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "CUS-02",
+                        "CUS-09"
+                    ],
+                    "value": 38.0,
+                    "claim_id": "customer-2"
+                },
+                {
+                    "unit": "score",
+                    "formula": null,
+                    "text": "Legion's merchant NPS stands at 41, trailing the industry benchmark of 50, while 22% of 1-star app reviews cite 'payment failed'.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "CUS-06",
+                        "CUS-11"
+                    ],
+                    "value": 41.0,
+                    "claim_id": "customer-3"
+                },
+                {
+                    "unit": "days",
+                    "formula": null,
+                    "text": "Brevis Pay delivers tangible customer experience advantages, reducing refund turnaround from 5.2 days to 3.0 days and lowering p95 latency from 1.9s to 1.4s.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "CUS-07",
+                        "OPS-05"
+                    ],
+                    "value": 3.0,
+                    "claim_id": "customer-4"
+                },
+                {
+                    "unit": "percentage points",
+                    "formula": null,
+                    "text": "Pilot results with Brevis showed a 3.1 percentage point increase in mobile checkout conversion and broader accessibility with support for 11 Indian languages versus Arvanta's 4.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "CUS-04",
+                        "CUS-08"
+                    ],
+                    "value": 3.1,
+                    "claim_id": "customer-5"
+                },
+                {
+                    "unit": "tickets / month",
+                    "formula": "900 * 0.14",
+                    "text": "UPI AutoPay success is superior on Brevis at 97.4% compared to Arvanta's 96.1%, which will alleviate failed debit complaints; Arvanta currently sees 900 failed EMI auto-debit complaints monthly, with 14% resulting in wrongly charged late fees.",
+                    "kind": "calculation",
+                    "evidence_ids": [
+                        "OPS-07",
+                        "CUS-03"
+                    ],
+                    "value": 126.0,
+                    "claim_id": "customer-6"
+                },
+                {
+                    "unit": "INR / month",
+                    "formula": "(900 + 340) * 180",
+                    "text": "At a support handling cost of \u20b9180 per ticket, settlement delay tickets alone cost \u20b961,200 monthly, and combined with failed EMI complaints cost Legion \u20b9223,200 per month.",
+                    "kind": "calculation",
+                    "evidence_ids": [
+                        "CUS-01",
+                        "CUS-03",
+                        "CUS-12"
+                    ],
+                    "value": 223200.0,
+                    "claim_id": "customer-7"
+                },
+                {
+                    "unit": "%",
+                    "formula": null,
+                    "text": "On Coral Bank and Tamra Bank (18% of volume), Brevis payment success drops to 94.8% and 95.2% (vs Arvanta's 97.5%), generating a 40% increase in customer complaints during the pilot.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "OPS-02",
+                        "CUS-05"
+                    ],
+                    "value": 40.0,
+                    "claim_id": "customer-8"
+                },
+                {
+                    "unit": "INR crore",
+                    "formula": null,
+                    "text": "Arvanta concentration creates severe borrower disruption, evidenced by the 14 June outage delaying \u20b92.3 crore in collections and forcing \u20b911 lakh in fee waivers across 1,900 borrowers, while competitor Vireo advertises 99.9% uptime with a multi-gateway setup.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "BUS-10",
+                        "BUS-03"
+                    ],
+                    "value": 2.3,
+                    "claim_id": "customer-9"
+                },
+                {
+                    "unit": "% of mandates",
+                    "formula": null,
+                    "text": "Brevis does not support eNACH for two small banks representing 2% of mandates, and its dispute fees are higher at \u20b9250 versus \u20b9150 for Arvanta across an estimated 2,000 monthly disputes on the migrated volume.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "OPS-08",
+                        "FIN-08"
+                    ],
+                    "value": 2.0,
+                    "claim_id": "customer-10"
+                },
+                {
+                    "unit": "",
+                    "formula": null,
+                    "text": "Brevis enforces MFA and SSO on merchant dashboards, enhancing merchant account security compared to Arvanta's optional MFA.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "SEC-10"
+                    ],
+                    "value": null,
+                    "claim_id": "customer-11"
+                }
+            ],
+            "conditions": [
+                "Smart-routing rules must keep Coral Bank and Tamra Bank transactions on Arvanta, since Brevis achieves only 94.8%\u201395.2% success rates and incurs 40% more complaints on those two issuers.",
+                "eNACH mandates for unsupported partner banks (2% of mandates) must remain routed through Arvanta.",
+                "Brevis dispute escalation SLAs must be tightly monitored to avoid added merchant friction from higher \u20b9250 dispute fees."
+            ],
+            "adviser_id": "customer",
+            "blocking_findings": [],
+            "stance": "conditional",
+            "criterion_scores": [
+                {
+                    "option": "A",
+                    "criterion": "Customer impact",
+                    "score": 2.0,
+                    "reason": "Staying 100% on Arvanta perpetuates severe settlement delays (340 tickets/mo, 183% growth), regulatory breaches, 5.2-day refund lags, and risks \u20b938 crore/mo merchant churn.",
+                    "evidence_ids": [
+                        "CUS-01",
+                        "CUS-02",
+                        "CUS-07",
+                        "CUS-09",
+                        "CUS-10"
+                    ]
+                },
+                {
+                    "option": "B",
+                    "criterion": "Customer impact",
+                    "score": 4.0,
+                    "reason": "Moving 40% volume to Brevis improves refund turnaround (3.0 days), checkout conversion (+3.1 pts), latency, and auto-debit success, provided weak bank traffic is selectively retained on Arvanta.",
+                    "evidence_ids": [
+                        "CUS-04",
+                        "CUS-05",
+                        "CUS-07",
+                        "CUS-08",
+                        "OPS-02",
+                        "OPS-05",
+                        "OPS-07"
+                    ]
+                }
+            ]
+        },
+        {
+            "confidence": 0.95,
+            "summary": "Brevis Pay directly violates Legion's mandatory data localisation rule and RBI payment aggregator norms by routing card data to Sentrix Risk in Singapore, while omitting contractual data location and audit rights. In contrast, Arvanta Payments maintains fully compliant domestic data handling, signed DPDP-aligned agreements, and timely incident reporting, making Option A the secure and compliant choice.",
+            "handoffs": [
+                "legal: Review and ensure execution of a binding DPDP-compliant Data Processing Agreement and statutory audit clauses with Brevis Pay.",
+                "finance: Account for the \u20b96 lakh/month recurring cost of Brevis Pay's India-only hosting add-on required to resolve data localisation non-compliance."
+            ],
+            "claims": [
+                {
+                    "unit": "",
+                    "formula": null,
+                    "text": "Legion's information security policy strictly mandates that any vendor processing payment or card data must store and process it solely in India.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "SEC-02"
+                    ],
+                    "value": null,
+                    "claim_id": "infosec-1"
+                },
+                {
+                    "unit": "",
+                    "formula": null,
+                    "text": "Brevis Pay's fraud-scoring sub-processor, Sentrix Risk Pte Ltd, is based in Singapore and receives card data (tokenised card number, BIN, and device data) outside India.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "SEC-01"
+                    ],
+                    "value": null,
+                    "claim_id": "infosec-2"
+                },
+                {
+                    "unit": "weeks",
+                    "formula": null,
+                    "text": "Brevis Pay offers an India-only hosting add-on to keep fraud scoring in Mumbai at \u20b96 lakh per month, requiring a 3-week implementation lead time.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "FIN-04",
+                        "SEC-05"
+                    ],
+                    "value": 3.0,
+                    "claim_id": "infosec-3"
+                },
+                {
+                    "unit": "",
+                    "formula": null,
+                    "text": "The Brevis draft agreement completely omits data location covenants, DPDP-aligned data processing agreements, and statutory Legion/RBI audit and inspection rights.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "LEG-04",
+                        "LEG-08",
+                        "LEG-09"
+                    ],
+                    "value": null,
+                    "claim_id": "infosec-4"
+                },
+                {
+                    "unit": "findings",
+                    "formula": null,
+                    "text": "Brevis Pay has an open high-severity penetration test finding (missing rate limiting on refund API) that has remained unaddressed for 47 days.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "SEC-04"
+                    ],
+                    "value": 1.0,
+                    "claim_id": "infosec-5"
+                },
+                {
+                    "unit": "months",
+                    "formula": null,
+                    "text": "Brevis Pay's latest SOC 2 Type II report is 14 months old (period ending 31 July 2025), leaving current operational controls uncertified.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "SEC-03"
+                    ],
+                    "value": 14.0,
+                    "claim_id": "infosec-6"
+                },
+                {
+                    "unit": "hours",
+                    "formula": null,
+                    "text": "Brevis took 216 hours (9 days) to report an October 2025 data exposure incident to CERT-In, significantly breaching Legion's policy requiring vendor incident reporting within 2 hours and statutory 6-hour CERT-In filing.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "SEC-06",
+                        "SEC-07"
+                    ],
+                    "value": 216.0,
+                    "claim_id": "infosec-7"
+                },
+                {
+                    "unit": "hours",
+                    "formula": null,
+                    "text": "Arvanta Payments complies with key governance benchmarks, having reported its minor November 2025 security incident to CERT-In within 5 hours, maintained an active DPDP agreement, and held a valid annual vendor risk assessment.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "LEG-09",
+                        "SEC-08",
+                        "SEC-11"
+                    ],
+                    "value": 5.0,
+                    "claim_id": "infosec-8"
+                },
+                {
+                    "unit": "",
+                    "formula": null,
+                    "text": "Both Arvanta and Brevis are RBI-authorised payment aggregators and support RBI card-on-file tokenisation, with Brevis holding PCI DSS v4.0 through June 2027 and Arvanta through February 2027.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "LEG-11",
+                        "SEC-09",
+                        "SEC-12"
+                    ],
+                    "value": null,
+                    "claim_id": "infosec-9"
+                },
+                {
+                    "unit": "",
+                    "formula": null,
+                    "text": "Brevis enforces MFA and SSO on merchant dashboards, whereas Arvanta's MFA is currently optional for merchant admin users.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "SEC-10"
+                    ],
+                    "value": null,
+                    "claim_id": "infosec-10"
+                },
+                {
+                    "unit": "merchants",
+                    "formula": null,
+                    "text": "Arvanta is a 9-year-old vendor serving ~40,000 merchants compared to Brevis which is 3 years old with ~1,200 merchants, reflecting higher institutional maturity in security governance.",
+                    "kind": "fact",
+                    "evidence_ids": [
+                        "BUS-11"
+                    ],
+                    "value": 40000.0,
+                    "claim_id": "infosec-11"
+                }
+            ],
+            "conditions": [],
+            "adviser_id": "infosec",
+            "blocking_findings": [
+                {
+                    "fix": "Contractually mandate India-only processing in the agreement, activate Brevis's India-only Mumbai hosting add-on, and verify discontinuation of overseas data transfer before any production traffic is routed.",
+                    "evidence_ids": [
+                        "SEC-01",
+                        "SEC-02",
+                        "LEG-04"
+                    ],
+                    "text": "{'finding_id': 'BLOCK-INFOSEC-01', 'rule': 'Legion InfoSec Vendor Policy \u00a74.1 & Decision Constraint: Payment data must be stored and processed only in India', 'evidence_ids': ['SEC-01', 'SEC-02', 'LEG-04'], 'description': 'Brevis Pay transfers card data (tokenised card number, BIN, device data) to offshore sub-processor Sentrix Risk Pte Ltd in Singapore for fraud scoring, with no data localisation covenants in the draft contract.', 'fix': \"Contractually mandate India-only processing in the agreement, activate Brevis's India-only Mumbai hosting add-on, and verify discontinuation of overseas data transfer before any production traffic is routed.\"}"
+                },
+                {
+                    "fix": "Execute revised contract terms incorporating unconditional audit and regulatory inspection rights for Legion and the RBI.",
+                    "evidence_ids": [
+                        "LEG-08"
+                    ],
+                    "text": "{'finding_id': 'BLOCK-INFOSEC-02', 'rule': 'Legion InfoSec Vendor Policy \u00a77 & RBI Outsourcing Norms: Mandatory audit and inspection rights for Legion and RBI', 'evidence_ids': ['LEG-08'], 'description': 'The Brevis draft agreement does not grant Legion or the RBI rights to inspect or audit security practices and operational infrastructure.', 'fix': 'Execute revised contract terms incorporating unconditional audit and regulatory inspection rights for Legion and the RBI.'}"
+                }
+            ],
+            "stance": "favours_A",
+            "criterion_scores": [
+                {
+                    "option": "A",
+                    "criterion": "Security & compliance",
+                    "score": 4.0,
+                    "reason": "Arvanta satisfies all core data localisation, CERT-In reporting SLA, and DPDP contractual requirements, though admin MFA remains optional.",
+                    "evidence_ids": [
+                        "LEG-09",
+                        "SEC-08",
+                        "SEC-10",
+                        "SEC-11"
+                    ]
+                },
+                {
+                    "option": "B",
+                    "criterion": "Security & compliance",
+                    "score": 1.0,
+                    "reason": "Brevis breaches mandatory India data localisation rules, lacks statutory audit and DPDP agreements, has an outdated SOC 2 report, and has an open high pen-test vulnerability.",
+                    "evidence_ids": [
+                        "LEG-04",
+                        "LEG-08",
+                        "LEG-09",
+                        "SEC-01",
+                        "SEC-02",
+                        "SEC-03",
+                        "SEC-04",
+                        "SEC-06"
+                    ]
+                }
+            ]
+        }
+    ],
+    "claim_verdicts": [
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence directly supports the overall payment success rates for both providers.",
+            "claim_id": "ops-1"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence directly supports the success rates at Coral and Tamra banks.",
+            "claim_id": "ops-2"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence directly supports the success rates at all other banks.",
+            "claim_id": "ops-3"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The calculation correctly blends 18% at 97.5% and 82% at 98.2% to reach 98.074%.",
+            "claim_id": "ops-4"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the uptime and correctly converts 1.9 and 1.4 seconds to 1,900 and 1,400 ms.",
+            "claim_id": "ops-5"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence directly supports the number of incidents and the impact of the June outage.",
+            "claim_id": "ops-6"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence directly supports the UPI AutoPay success rates and the lack of eNACH support for two banks.",
+            "claim_id": "ops-7"
+        },
+        {
+            "check": "overgeneralised",
+            "status": "FLAG",
+            "reason": "The claim states Brevis provides 'T+1 settlement' generally, but the evidence specifies it is 'T+1 card settlement'.",
+            "claim_id": "ops-8"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the vendor claims, internal sizing, and the resulting 8-week timeline.",
+            "claim_id": "ops-9"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence directly supports the 40% increase in complaints for the specified banks during the pilot.",
+            "claim_id": "ops-10"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence directly supports the open high-severity penetration test finding and its duration.",
+            "claim_id": "ops-11"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The cited evidence fully supports the volume and the 40% calculation.",
+            "claim_id": "finance-1"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The cited evidence provides the volume and fee percentage to support the calculation.",
+            "claim_id": "finance-2"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The cited evidence provides all necessary inputs to calculate the gross recurring fee saving.",
+            "claim_id": "finance-3"
+        },
+        {
+            "check": "partly_supported",
+            "status": "FLAG",
+            "reason": "The cited evidence explains the adjustments but omits the base fee savings (FIN-02, FIN-03) needed to calculate the \u20b910.4 lakh net benefit.",
+            "claim_id": "finance-4"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The cited evidence fully supports the one-time costs and exit penalty.",
+            "claim_id": "finance-5"
+        },
+        {
+            "check": "partly_supported",
+            "status": "FLAG",
+            "reason": "The cited evidence covers the costs and adjustments but omits the base fee savings required to calculate the payback period.",
+            "claim_id": "finance-6"
+        },
+        {
+            "check": "partly_supported",
+            "status": "FLAG",
+            "reason": "The claim includes dispute delta and float savings in its calculation but fails to cite the evidence for them (FIN-06, FIN-08).",
+            "claim_id": "finance-7"
+        },
+        {
+            "check": "partly_supported",
+            "status": "FLAG",
+            "reason": "The cited evidence supports the budget variance but omits the evidence needed to support the \u20b91.248 crore savings figure.",
+            "claim_id": "finance-8"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The cited evidence fully supports the counter-offer calculation and the OKR violation.",
+            "claim_id": "finance-9"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The cited evidence supports the growth projection, and the rest is a valid logical deduction based on the pricing structure.",
+            "claim_id": "finance-10"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The cited evidence fully supports the pipeline volume and expected fee revenue.",
+            "claim_id": "finance-11"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The cited evidence fully supports the contract terms regarding price changes and liability caps.",
+            "claim_id": "finance-12"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence directly supports the calculation and the penalty trigger.",
+            "claim_id": "legal-1"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms the 90-day written notice requirement.",
+            "claim_id": "legal-2"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms the sub-processor is in Singapore, receives card data, and violates the India-only policy.",
+            "claim_id": "legal-3"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms the absence of a data location clause in the draft agreement.",
+            "claim_id": "legal-4"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms the lack of audit rights and the violation of RBI norms and Legion policy.",
+            "claim_id": "legal-5"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms Arvanta has a signed DPA aligned with the DPDP Act and Brevis does not.",
+            "claim_id": "legal-6"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports all the listed differences in contract terms between Brevis and Arvanta.",
+            "claim_id": "legal-7"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms both are RBI-authorised and support RBI tokenisation.",
+            "claim_id": "legal-8"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms the 9-day delay and the specific policy requirements that were breached.",
+            "claim_id": "legal-9"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms the 8% discount offer, the 0.20% fee, and the auto-renewal terms.",
+            "claim_id": "legal-10"
+        },
+        {
+            "check": "overgeneralised",
+            "status": "FLAG",
+            "reason": "The evidence confirms the breach of the statutory limit and the number of complaints, but does not explicitly state that the company 'faces regulatory scrutiny'.",
+            "claim_id": "legal-11"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence directly supports the FY27 OKR requirement of no single gateway carrying more than 70% volume.",
+            "claim_id": "business-1"
+        },
+        {
+            "check": "number_matches",
+            "status": "STRIKE",
+            "reason": "Calculation error for formula 'post_migration_arvanta_share = 100 - 40': Invalid arithmetic expression: invalid syntax (<unknown>, line 1)",
+            "claim_id": "business-2"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms the 30 cross-border SME merchants worth \u20b945 crore a month and Brevis Pay's unique support for international cards.",
+            "claim_id": "business-3"
+        },
+        {
+            "check": "number_matches",
+            "status": "STRIKE",
+            "reason": "Calculation error for formula 'cross_border_rev_calc = 45 * 12 * 0.002': Invalid arithmetic expression: invalid syntax (<unknown>, line 1)",
+            "claim_id": "business-4"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports that 70% of lost SME deals cited lack of international card acceptance, which only Brevis Pay supports.",
+            "claim_id": "business-5"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms the Q1 FY28 timeline for BNPL, Brevis Pay's native APIs, and Arvanta's 4-month custom build requirement.",
+            "claim_id": "business-6"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the language count comparison and the 3.1 percentage point mobile conversion uplift during the 2% pilot.",
+            "claim_id": "business-7"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms Vireo Finance's move to a multi-gateway setup in June 2026 and their 99.9% uptime advertisement.",
+            "claim_id": "business-8"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms Arvanta's 3 major incidents, the June 2026 outage, the \u20b92.3 crore delayed collections, and the \u20b911 lakh in fee waivers.",
+            "claim_id": "business-9"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the merchant threats, the \u20b938 crore volume, the 2.1% churn rate, and the co-lending partners using Brevis Pay.",
+            "claim_id": "business-10"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms the merchant counts and years in business for both Brevis Pay and Arvanta.",
+            "claim_id": "business-11"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports Arvanta's 8% fee cut offer for a 100% volume commitment, which directly conflicts with the 70% maximum volume OKR.",
+            "claim_id": "business-12"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence fully supports the calculation and the facts stated.",
+            "claim_id": "customer-1"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence fully supports the merchant volume and churn figures.",
+            "claim_id": "customer-2"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the NPS score and the app review statistics.",
+            "claim_id": "customer-3"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the refund turnaround and latency improvements.",
+            "claim_id": "customer-4"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the mobile checkout conversion increase and language support.",
+            "claim_id": "customer-5"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the UPI AutoPay success rates and the EMI complaint volumes.",
+            "claim_id": "customer-6"
+        },
+        {
+            "check": "overgeneralised",
+            "status": "FLAG",
+            "reason": "The claim states settlement delay tickets cost \u20b961,200 'monthly', but this calculation uses September's peak volume of 340 tickets rather than an average month.",
+            "claim_id": "customer-7"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the drop in payment success and the resulting increase in complaints for the specified banks.",
+            "claim_id": "customer-8"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the outage impact and the competitor's advertised uptime.",
+            "claim_id": "customer-9"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the lack of eNACH support for two banks and the higher dispute fees.",
+            "claim_id": "customer-10"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the security features of Brevis compared to Arvanta.",
+            "claim_id": "customer-11"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence directly supports the claim regarding Legion's data localisation policy.",
+            "claim_id": "infosec-1"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms the sub-processor's location and the specific card data it receives.",
+            "claim_id": "infosec-2"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the cost, location, and lead time of the India-only hosting add-on.",
+            "claim_id": "infosec-3"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms the omission of data location clauses, audit rights, and a DPDP-aligned agreement.",
+            "claim_id": "infosec-4"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence matches the details of the open high-severity penetration test finding.",
+            "claim_id": "infosec-5"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms the SOC 2 Type II report is 14 months old.",
+            "claim_id": "infosec-6"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the 9-day delay and the policy requirements of 2 hours for Legion and 6 hours for CERT-In.",
+            "claim_id": "infosec-7"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms the 5-hour reporting time, the active DPDP agreement, and the valid risk assessment.",
+            "claim_id": "infosec-8"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the RBI authorisation, tokenisation support, and PCI DSS validity dates for both vendors.",
+            "claim_id": "infosec-9"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence confirms the MFA and SSO enforcement differences between the two vendors.",
+            "claim_id": "infosec-10"
+        },
+        {
+            "check": "overgeneralised",
+            "status": "FLAG",
+            "reason": "The evidence supports the age and merchant counts, but 'reflecting higher institutional maturity in security governance' is an unsupported extrapolation, and the source is of medium reliability.",
+            "claim_id": "infosec-11"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the blocking finding regarding offshore data processing and the lack of contractual data localisation.",
+            "claim_id": "infosec-B1"
+        },
+        {
+            "check": "supported",
+            "status": "KEEP",
+            "reason": "The evidence supports the blocking finding regarding the lack of audit and inspection rights in the draft agreement.",
+            "claim_id": "infosec-B2"
+        }
+    ],
+    "scorecard": {
+        "weighted_totals": {
+            "A": 2.7,
+            "B": 3.45
+        },
+        "rows": [
+            {
+                "missing_owners": [],
+                "scores": {
+                    "A": 2.0,
+                    "B": 4.0
+                },
+                "criterion": "Cost",
+                "weight": 0.25,
+                "evidence_ids": [
+                    "FIN-01",
+                    "FIN-02",
+                    "FIN-09",
+                    "FIN-03",
+                    "FIN-04",
+                    "FIN-05",
+                    "FIN-06",
+                    "FIN-08",
+                    "LEG-01"
+                ]
+            },
+            {
+                "missing_owners": [],
+                "scores": {
+                    "A": 4.0,
+                    "B": 1.0
+                },
+                "criterion": "Security & compliance",
+                "weight": 0.25,
+                "evidence_ids": [
+                    "LEG-09",
+                    "SEC-08",
+                    "SEC-10",
+                    "SEC-11",
+                    "LEG-07",
+                    "LEG-11",
+                    "CUS-10",
+                    "LEG-04",
+                    "LEG-08",
+                    "SEC-01",
+                    "SEC-02",
+                    "SEC-03",
+                    "SEC-04",
+                    "SEC-06"
+                ]
+            },
+            {
+                "missing_owners": [],
+                "scores": {
+                    "A": 3.0,
+                    "B": 4.0
+                },
+                "criterion": "Reliability",
+                "weight": 0.2,
+                "evidence_ids": [
+                    "OPS-01",
+                    "OPS-04",
+                    "OPS-06",
+                    "CUS-01",
+                    "OPS-03",
+                    "OPS-05",
+                    "OPS-07",
+                    "OPS-08",
+                    "OPS-11"
+                ]
+            },
+            {
+                "missing_owners": [],
+                "scores": {
+                    "A": 2.0,
+                    "B": 5.0
+                },
+                "criterion": "Growth",
+                "weight": 0.2,
+                "evidence_ids": [
+                    "BUS-02",
+                    "BUS-01",
+                    "BUS-04",
+                    "BUS-06",
+                    "BUS-03"
+                ]
+            },
+            {
+                "missing_owners": [],
+                "scores": {
+                    "A": 2.0,
+                    "B": 4.0
+                },
+                "criterion": "Customer impact",
+                "weight": 0.1,
+                "evidence_ids": [
+                    "CUS-01",
+                    "CUS-02",
+                    "CUS-07",
+                    "CUS-09",
+                    "CUS-10",
+                    "CUS-04",
+                    "CUS-05",
+                    "CUS-08",
+                    "OPS-02",
+                    "OPS-05",
+                    "OPS-07"
+                ]
+            }
+        ],
+        "has_missing_scores": false,
+        "blocked_options": {
+            "B": [
+                "{'finding_id': 'BLOCK-INFOSEC-01', 'rule': 'Legion InfoSec Vendor Policy \u00a74.1 & Decision Constraint: Payment data must be stored and processed only in India', 'evidence_ids': ['SEC-01', 'SEC-02', 'LEG-04'], 'description': 'Brevis Pay transfers card data (tokenised card number, BIN, device data) to offshore sub-processor Sentrix Risk Pte Ltd in Singapore for fraud scoring, with no data localisation covenants in the draft contract.', 'fix': \"Contractually mandate India-only processing in the agreement, activate Brevis's India-only Mumbai hosting add-on, and verify discontinuation of overseas data transfer before any production traffic is routed.\"}",
+                "{'finding_id': 'BLOCK-INFOSEC-02', 'rule': 'Legion InfoSec Vendor Policy \u00a77 & RBI Outsourcing Norms: Mandatory audit and inspection rights for Legion and RBI', 'evidence_ids': ['LEG-08'], 'description': 'The Brevis draft agreement does not grant Legion or the RBI rights to inspect or audit security practices and operational infrastructure.', 'fix': 'Execute revised contract terms incorporating unconditional audit and regulatory inspection rights for Legion and the RBI.'}"
+            ]
+        }
+    },
+    "memo": {
+        "confidence": 0.8,
+        "decision_id": "DEC-001",
+        "evidence_index": [
+            "BUS-01",
+            "BUS-02",
+            "BUS-03",
+            "BUS-04",
+            "BUS-05",
+            "BUS-06",
+            "BUS-07",
+            "BUS-08",
+            "BUS-10",
+            "BUS-11",
+            "CUS-01",
+            "CUS-02",
+            "CUS-03",
+            "CUS-04",
+            "CUS-05",
+            "CUS-06",
+            "CUS-07",
+            "CUS-08",
+            "CUS-09",
+            "CUS-10",
+            "CUS-11",
+            "CUS-12",
+            "FIN-01",
+            "FIN-02",
+            "FIN-03",
+            "FIN-04",
+            "FIN-05",
+            "FIN-06",
+            "FIN-08",
+            "FIN-09",
+            "FIN-10",
+            "LEG-01",
+            "LEG-02",
+            "LEG-03",
+            "LEG-04",
+            "LEG-05",
+            "LEG-06",
+            "LEG-07",
+            "LEG-08",
+            "LEG-09",
+            "LEG-10",
+            "LEG-11",
+            "OPS-01",
+            "OPS-02",
+            "OPS-03",
+            "OPS-04",
+            "OPS-05",
+            "OPS-06",
+            "OPS-07",
+            "OPS-08",
+            "OPS-09",
+            "OPS-10",
+            "OPS-11",
+            "OPS-12",
+            "OPS-13",
+            "SEC-01",
+            "SEC-02",
+            "SEC-03",
+            "SEC-04",
+            "SEC-05",
+            "SEC-06",
+            "SEC-07",
+            "SEC-08",
+            "SEC-09",
+            "SEC-10",
+            "SEC-11",
+            "SEC-12"
+        ],
+        "dissent": [
+            "legal: Favours staying with Arvanta due to Brevis's weaker contract terms (Singapore law, 3-month liability cap), lack of DPDP-aligned DPA, and the \u20b925 lakh early-exit penalty triggered by moving 40% volume (LEG-01, LEG-04, LEG-05, LEG-06, LEG-07, LEG-08, LEG-09, LEG-10).",
+            "infosec: Favours staying with Arvanta due to Brevis's offshore data processing, lack of audit rights, 14-month-old SOC 2 report, and severe delays in CERT-In incident reporting (216 hours) (SEC-01, SEC-02, SEC-03, SEC-06, SEC-07, LEG-04, LEG-08)."
+        ],
+        "numbers_to_watch": [
+            "Overall payment success rate (must remain above 97.8% blended)",
+            "Migration timeline (target 8 weeks, 24 engineer-weeks)",
+            "Monthly settlement-delay complaints and regulatory breaches (target 0 breaches)",
+            "Dispute volumes and associated fees (monitoring the \u20b9250/dispute cost delta)"
+        ],
+        "key_numbers": [
+            {
+                "unit": "INR crore / month",
+                "formula": null,
+                "text": "Legion Capital processed \u20b91,500 crore across 10 million transactions in September 2026, meaning 40% of volume represents \u20b9600 crore per month.",
+                "kind": "fact",
+                "evidence_ids": [
+                    "FIN-01"
+                ],
+                "value": 1500.0,
+                "claim_id": "finance-1"
+            },
+            {
+                "unit": "INR lakh / month",
+                "formula": null,
+                "text": "After adjusting for the \u20b96 lakh/month India-only hosting fee, \u20b92 lakh/month higher dispute fees, and \u20b94 lakh/month treasury float savings from T+1 settlement, Option B generates a net recurring monthly benefit of \u20b910.4 lakh.",
+                "kind": "calculation",
+                "evidence_ids": [
+                    "FIN-04",
+                    "FIN-06",
+                    "FIN-08"
+                ],
+                "value": 10.4,
+                "claim_id": "finance-4"
+            },
+            {
+                "unit": "INR lakh one-time",
+                "formula": null,
+                "text": "Total one-time costs for Option B are \u20b965 lakh, comprising \u20b940 lakh in migration and engineering costs and a \u20b925 lakh early-exit penalty payable under Arvanta's MSA for dropping below 80% volume.",
+                "kind": "calculation",
+                "evidence_ids": [
+                    "FIN-05",
+                    "LEG-01"
+                ],
+                "value": 65.0,
+                "claim_id": "finance-5"
+            },
+            {
+                "unit": "INR lakh / month",
+                "formula": null,
+                "text": "If phased to avoid Arvanta's \u20b925 lakh exit fee, the maximum initial slice is 20% (\u20b9300 crore/month), which delivers a net monthly benefit of \u20b92.2 lakh after the fixed \u20b96 lakh hosting add-on, dispute delta, and float savings.",
+                "kind": "calculation",
+                "evidence_ids": [
+                    "FIN-01",
+                    "FIN-02",
+                    "FIN-03",
+                    "FIN-04",
+                    "LEG-01"
+                ],
+                "value": 2.2,
+                "claim_id": "finance-7"
+            },
+            {
+                "unit": "%",
+                "formula": null,
+                "text": "By leveraging Legion's payment routing layer to selectively route non-weak banks to Brevis while retaining weak banks (18%) on Arvanta, the blended success rate reaches 98.074%, preventing any success rate drop.",
+                "kind": "calculation",
+                "evidence_ids": [
+                    "OPS-02",
+                    "OPS-03",
+                    "OPS-11"
+                ],
+                "value": 98.074,
+                "claim_id": "ops-4"
+            },
+            {
+                "unit": "weeks",
+                "formula": null,
+                "text": "Vendor sales claims that migration can be achieved in under 4 weeks are unverified marketing assertions; internal sizing requires 24 engineer-weeks (6 weeks with 4 engineers), resulting in an 8-week timeline given only 3 available engineers.",
+                "kind": "calculation",
+                "evidence_ids": [
+                    "OPS-09",
+                    "OPS-10",
+                    "OPS-13"
+                ],
+                "value": 8.0,
+                "claim_id": "ops-9"
+            },
+            {
+                "unit": "INR crore / month",
+                "formula": null,
+                "text": "Brevis Pay enables international card acceptance, unlocking 30 cross-border SME merchants in the sales pipeline worth \u20b945 crore a month in volume.",
+                "kind": "fact",
+                "evidence_ids": [
+                    "BUS-01"
+                ],
+                "value": 45.0,
+                "claim_id": "business-3"
+            },
+            {
+                "unit": "%",
+                "formula": null,
+                "text": "Settlement-delay complaints under Arvanta grew 183.33% from 120 in July to 340 in September 2026, driving 20 regulatory breaches of the 30-day limit in September.",
+                "kind": "calculation",
+                "evidence_ids": [
+                    "CUS-01",
+                    "CUS-10"
+                ],
+                "value": 183.333333333333,
+                "claim_id": "customer-1"
+            }
+        ],
+        "recommendation": "Move 40% of payment volume to Brevis Pay in a phased approach, strictly conditional upon resolving data localization and audit blocking findings, and implementing smart routing to protect payment success rates.",
+        "conditions": [
+            "Contractually mandate India-only processing in the agreement, activate Brevis's India-only Mumbai hosting add-on (\u20b96 lakh/month), and verify discontinuation of overseas data transfer to Sentrix Risk Pte Ltd before any production traffic is routed to satisfy the data localization constraint (SEC-01, SEC-02, LEG-04, SEC-05, FIN-04).",
+            "Execute revised contract terms incorporating unconditional audit and regulatory inspection rights for Legion and the RBI (LEG-08).",
+            "Implement smart-routing rules to keep Coral Bank and Tamra Bank (18% of volume) and unsupported eNACH mandates (2% of mandates) on Arvanta Payments to prevent a drop in overall payment success rate (OPS-02, OPS-03, OPS-08, OPS-11, CUS-05).",
+            "Remediate and verify Brevis Pay's open high-severity penetration test vulnerability (missing rate limiting on refund API) before going live (SEC-04).",
+            "Budget for an 8-week migration timeline utilizing the 3 available payments engineers, rejecting unverified vendor claims of under 4 weeks (OPS-09, OPS-10, OPS-13)."
+        ],
+        "assumptions": [
+            "Brevis Pay will agree to amend their standard contract to include India-only processing covenants and unconditional audit rights for Legion and the RBI.",
+            "The \u20b96 lakh/month Mumbai hosting add-on fully satisfies the RBI and internal data localization constraints.",
+            "Legion's routing layer can effectively segregate traffic for Coral Bank, Tamra Bank, and unsupported eNACH mandates without introducing additional latency or errors."
+        ],
+        "blocking_findings": [
+            {
+                "fix": "Contractually mandate India-only processing in the agreement, activate Brevis's India-only Mumbai hosting add-on, and verify discontinuation of overseas data transfer before any production traffic is routed.",
+                "evidence_ids": [
+                    "SEC-01",
+                    "SEC-02",
+                    "LEG-04"
+                ],
+                "text": "Brevis Pay transfers card data (tokenised card number, BIN, device data) to offshore sub-processor Sentrix Risk Pte Ltd in Singapore for fraud scoring, with no data localisation covenants in the draft contract."
+            },
+            {
+                "fix": "Execute revised contract terms incorporating unconditional audit and regulatory inspection rights for Legion and the RBI.",
+                "evidence_ids": [
+                    "LEG-08"
+                ],
+                "text": "The Brevis draft agreement does not grant Legion or the RBI rights to inspect or audit security practices and operational infrastructure."
+            }
+        ],
+        "scorecard": {
+            "weighted_totals": {
+                "A": 2.7,
+                "B": 3.45
+            },
+            "rows": [
+                {
+                    "missing_owners": [],
+                    "scores": {
+                        "A": 2.0,
+                        "B": 4.0
+                    },
+                    "weight": 0.25,
+                    "criterion": "Cost",
+                    "evidence_ids": [
+                        "FIN-01",
+                        "FIN-02",
+                        "FIN-09",
+                        "FIN-03",
+                        "FIN-04",
+                        "FIN-05",
+                        "FIN-06",
+                        "FIN-08",
+                        "LEG-01"
+                    ]
+                },
+                {
+                    "missing_owners": [],
+                    "scores": {
+                        "A": 4.0,
+                        "B": 1.0
+                    },
+                    "weight": 0.25,
+                    "criterion": "Security & compliance",
+                    "evidence_ids": [
+                        "LEG-09",
+                        "SEC-08",
+                        "SEC-10",
+                        "SEC-11",
+                        "LEG-07",
+                        "LEG-11",
+                        "CUS-10",
+                        "LEG-04",
+                        "LEG-08",
+                        "SEC-01",
+                        "SEC-02",
+                        "SEC-03",
+                        "SEC-04",
+                        "SEC-06"
+                    ]
+                },
+                {
+                    "missing_owners": [],
+                    "scores": {
+                        "A": 3.0,
+                        "B": 4.0
+                    },
+                    "weight": 0.2,
+                    "criterion": "Reliability",
+                    "evidence_ids": [
+                        "OPS-01",
+                        "OPS-04",
+                        "OPS-06",
+                        "CUS-01",
+                        "OPS-03",
+                        "OPS-05",
+                        "OPS-07",
+                        "OPS-08",
+                        "OPS-11"
+                    ]
+                },
+                {
+                    "missing_owners": [],
+                    "scores": {
+                        "A": 2.0,
+                        "B": 5.0
+                    },
+                    "weight": 0.2,
+                    "criterion": "Growth",
+                    "evidence_ids": [
+                        "BUS-02",
+                        "BUS-01",
+                        "BUS-04",
+                        "BUS-06",
+                        "BUS-03"
+                    ]
+                },
+                {
+                    "missing_owners": [],
+                    "scores": {
+                        "A": 2.0,
+                        "B": 4.0
+                    },
+                    "weight": 0.1,
+                    "criterion": "Customer impact",
+                    "evidence_ids": [
+                        "CUS-01",
+                        "CUS-02",
+                        "CUS-07",
+                        "CUS-09",
+                        "CUS-10",
+                        "CUS-04",
+                        "CUS-05",
+                        "CUS-08",
+                        "OPS-02",
+                        "OPS-05",
+                        "OPS-07"
+                    ]
+                }
+            ],
+            "has_missing_scores": false,
+            "blocked_options": {
+                "B": [
+                    "{'finding_id': 'BLOCK-INFOSEC-01', 'rule': 'Legion InfoSec Vendor Policy \u00a74.1 & Decision Constraint: Payment data must be stored and processed only in India', 'evidence_ids': ['SEC-01', 'SEC-02', 'LEG-04'], 'description': 'Brevis Pay transfers card data (tokenised card number, BIN, device data) to offshore sub-processor Sentrix Risk Pte Ltd in Singapore for fraud scoring, with no data localisation covenants in the draft contract.', 'fix': \"Contractually mandate India-only processing in the agreement, activate Brevis's India-only Mumbai hosting add-on, and verify discontinuation of overseas data transfer before any production traffic is routed.\"}",
+                    "{'finding_id': 'BLOCK-INFOSEC-02', 'rule': 'Legion InfoSec Vendor Policy \u00a77 & RBI Outsourcing Norms: Mandatory audit and inspection rights for Legion and RBI', 'evidence_ids': ['LEG-08'], 'description': 'The Brevis draft agreement does not grant Legion or the RBI rights to inspect or audit security practices and operational infrastructure.', 'fix': 'Execute revised contract terms incorporating unconditional audit and regulatory inspection rights for Legion and the RBI.'}"
+                ]
+            }
+        },
+        "stance": "conditional",
+        "phased_plan": [
+            "Phase 1: Migrate 20% of payment volume (\u20b9300 crore/month) to Brevis Pay. This stays within Arvanta's 80% minimum volume commitment, avoiding the \u20b925 lakh early-exit penalty, and delivers a net monthly benefit of \u20b92.2 lakh after the fixed \u20b96 lakh hosting add-on, dispute delta, and float savings (FIN-01, FIN-02, FIN-03, FIN-04, LEG-01). Note: The calculation for this benefit relies on flagged claims regarding dispute and float savings.",
+            "Phase 2: Migrate the remaining 20% of volume to reach the 40% target. This will trigger the \u20b925 lakh early-exit penalty (LEG-01), bringing total one-time costs to \u20b965 lakh (FIN-05, LEG-01). The full 40% migration yields a net recurring monthly benefit of \u20b910.4 lakh, achieving payback in 6.25 months (FIN-04, FIN-05, FIN-06, FIN-08, LEG-01). Note: The payback and net benefit calculations were flagged for omitting base fee savings citations."
+        ]
+    },
+    "memo_revisions": [
+        {
+            "revision": 0,
+            "verdict": {
+                "verdict": "PASS",
+                "revision_instructions": "",
+                "issues": [],
+                "revision_number": 0
+            },
+            "memo": {
+                "decision_id": "DEC-001",
+                "confidence": 0.8,
+                "evidence_index": [
+                    "BUS-01",
+                    "BUS-02",
+                    "BUS-03",
+                    "BUS-04",
+                    "BUS-05",
+                    "BUS-06",
+                    "BUS-07",
+                    "BUS-08",
+                    "BUS-10",
+                    "BUS-11",
+                    "CUS-01",
+                    "CUS-02",
+                    "CUS-03",
+                    "CUS-04",
+                    "CUS-05",
+                    "CUS-06",
+                    "CUS-07",
+                    "CUS-08",
+                    "CUS-09",
+                    "CUS-10",
+                    "CUS-11",
+                    "CUS-12",
+                    "FIN-01",
+                    "FIN-02",
+                    "FIN-03",
+                    "FIN-04",
+                    "FIN-05",
+                    "FIN-06",
+                    "FIN-08",
+                    "FIN-09",
+                    "FIN-10",
+                    "LEG-01",
+                    "LEG-02",
+                    "LEG-03",
+                    "LEG-04",
+                    "LEG-05",
+                    "LEG-06",
+                    "LEG-07",
+                    "LEG-08",
+                    "LEG-09",
+                    "LEG-10",
+                    "LEG-11",
+                    "OPS-01",
+                    "OPS-02",
+                    "OPS-03",
+                    "OPS-04",
+                    "OPS-05",
+                    "OPS-06",
+                    "OPS-07",
+                    "OPS-08",
+                    "OPS-09",
+                    "OPS-10",
+                    "OPS-11",
+                    "OPS-12",
+                    "OPS-13",
+                    "SEC-01",
+                    "SEC-02",
+                    "SEC-03",
+                    "SEC-04",
+                    "SEC-05",
+                    "SEC-06",
+                    "SEC-07",
+                    "SEC-08",
+                    "SEC-09",
+                    "SEC-10",
+                    "SEC-11",
+                    "SEC-12"
+                ],
+                "numbers_to_watch": [
+                    "Overall payment success rate (must remain above 97.8% blended)",
+                    "Migration timeline (target 8 weeks, 24 engineer-weeks)",
+                    "Monthly settlement-delay complaints and regulatory breaches (target 0 breaches)",
+                    "Dispute volumes and associated fees (monitoring the \u20b9250/dispute cost delta)"
+                ],
+                "key_numbers": [
+                    {
+                        "unit": "INR crore / month",
+                        "formula": null,
+                        "evidence_ids": [
+                            "FIN-01"
+                        ],
+                        "kind": "fact",
+                        "text": "Legion Capital processed \u20b91,500 crore across 10 million transactions in September 2026, meaning 40% of volume represents \u20b9600 crore per month.",
+                        "value": 1500.0,
+                        "claim_id": "finance-1"
+                    },
+                    {
+                        "unit": "INR lakh / month",
+                        "formula": null,
+                        "evidence_ids": [
+                            "FIN-04",
+                            "FIN-06",
+                            "FIN-08"
+                        ],
+                        "kind": "calculation",
+                        "text": "After adjusting for the \u20b96 lakh/month India-only hosting fee, \u20b92 lakh/month higher dispute fees, and \u20b94 lakh/month treasury float savings from T+1 settlement, Option B generates a net recurring monthly benefit of \u20b910.4 lakh.",
+                        "value": 10.4,
+                        "claim_id": "finance-4"
+                    },
+                    {
+                        "unit": "INR lakh one-time",
+                        "formula": null,
+                        "evidence_ids": [
+                            "FIN-05",
+                            "LEG-01"
+                        ],
+                        "kind": "calculation",
+                        "text": "Total one-time costs for Option B are \u20b965 lakh, comprising \u20b940 lakh in migration and engineering costs and a \u20b925 lakh early-exit penalty payable under Arvanta's MSA for dropping below 80% volume.",
+                        "value": 65.0,
+                        "claim_id": "finance-5"
+                    },
+                    {
+                        "unit": "INR lakh / month",
+                        "formula": null,
+                        "evidence_ids": [
+                            "FIN-01",
+                            "FIN-02",
+                            "FIN-03",
+                            "FIN-04",
+                            "LEG-01"
+                        ],
+                        "kind": "calculation",
+                        "text": "If phased to avoid Arvanta's \u20b925 lakh exit fee, the maximum initial slice is 20% (\u20b9300 crore/month), which delivers a net monthly benefit of \u20b92.2 lakh after the fixed \u20b96 lakh hosting add-on, dispute delta, and float savings.",
+                        "value": 2.2,
+                        "claim_id": "finance-7"
+                    },
+                    {
+                        "unit": "%",
+                        "formula": null,
+                        "evidence_ids": [
+                            "OPS-02",
+                            "OPS-03",
+                            "OPS-11"
+                        ],
+                        "kind": "calculation",
+                        "text": "By leveraging Legion's payment routing layer to selectively route non-weak banks to Brevis while retaining weak banks (18%) on Arvanta, the blended success rate reaches 98.074%, preventing any success rate drop.",
+                        "value": 98.074,
+                        "claim_id": "ops-4"
+                    },
+                    {
+                        "unit": "weeks",
+                        "formula": null,
+                        "evidence_ids": [
+                            "OPS-09",
+                            "OPS-10",
+                            "OPS-13"
+                        ],
+                        "kind": "calculation",
+                        "text": "Vendor sales claims that migration can be achieved in under 4 weeks are unverified marketing assertions; internal sizing requires 24 engineer-weeks (6 weeks with 4 engineers), resulting in an 8-week timeline given only 3 available engineers.",
+                        "value": 8.0,
+                        "claim_id": "ops-9"
+                    },
+                    {
+                        "unit": "INR crore / month",
+                        "formula": null,
+                        "evidence_ids": [
+                            "BUS-01"
+                        ],
+                        "kind": "fact",
+                        "text": "Brevis Pay enables international card acceptance, unlocking 30 cross-border SME merchants in the sales pipeline worth \u20b945 crore a month in volume.",
+                        "value": 45.0,
+                        "claim_id": "business-3"
+                    },
+                    {
+                        "unit": "%",
+                        "formula": null,
+                        "evidence_ids": [
+                            "CUS-01",
+                            "CUS-10"
+                        ],
+                        "kind": "calculation",
+                        "text": "Settlement-delay complaints under Arvanta grew 183.33% from 120 in July to 340 in September 2026, driving 20 regulatory breaches of the 30-day limit in September.",
+                        "value": 183.333333333333,
+                        "claim_id": "customer-1"
+                    }
+                ],
+                "dissent": [
+                    "legal: Favours staying with Arvanta due to Brevis's weaker contract terms (Singapore law, 3-month liability cap), lack of DPDP-aligned DPA, and the \u20b925 lakh early-exit penalty triggered by moving 40% volume (LEG-01, LEG-04, LEG-05, LEG-06, LEG-07, LEG-08, LEG-09, LEG-10).",
+                    "infosec: Favours staying with Arvanta due to Brevis's offshore data processing, lack of audit rights, 14-month-old SOC 2 report, and severe delays in CERT-In incident reporting (216 hours) (SEC-01, SEC-02, SEC-03, SEC-06, SEC-07, LEG-04, LEG-08)."
+                ],
+                "recommendation": "Move 40% of payment volume to Brevis Pay in a phased approach, strictly conditional upon resolving data localization and audit blocking findings, and implementing smart routing to protect payment success rates.",
+                "conditions": [
+                    "Contractually mandate India-only processing in the agreement, activate Brevis's India-only Mumbai hosting add-on (\u20b96 lakh/month), and verify discontinuation of overseas data transfer to Sentrix Risk Pte Ltd before any production traffic is routed to satisfy the data localization constraint (SEC-01, SEC-02, LEG-04, SEC-05, FIN-04).",
+                    "Execute revised contract terms incorporating unconditional audit and regulatory inspection rights for Legion and the RBI (LEG-08).",
+                    "Implement smart-routing rules to keep Coral Bank and Tamra Bank (18% of volume) and unsupported eNACH mandates (2% of mandates) on Arvanta Payments to prevent a drop in overall payment success rate (OPS-02, OPS-03, OPS-08, OPS-11, CUS-05).",
+                    "Remediate and verify Brevis Pay's open high-severity penetration test vulnerability (missing rate limiting on refund API) before going live (SEC-04).",
+                    "Budget for an 8-week migration timeline utilizing the 3 available payments engineers, rejecting unverified vendor claims of under 4 weeks (OPS-09, OPS-10, OPS-13)."
+                ],
+                "assumptions": [
+                    "Brevis Pay will agree to amend their standard contract to include India-only processing covenants and unconditional audit rights for Legion and the RBI.",
+                    "The \u20b96 lakh/month Mumbai hosting add-on fully satisfies the RBI and internal data localization constraints.",
+                    "Legion's routing layer can effectively segregate traffic for Coral Bank, Tamra Bank, and unsupported eNACH mandates without introducing additional latency or errors."
+                ],
+                "stance": "conditional",
+                "scorecard": {
+                    "weighted_totals": {
+                        "A": 2.7,
+                        "B": 3.45
+                    },
+                    "blocked_options": {
+                        "B": [
+                            "{'finding_id': 'BLOCK-INFOSEC-01', 'rule': 'Legion InfoSec Vendor Policy \u00a74.1 & Decision Constraint: Payment data must be stored and processed only in India', 'evidence_ids': ['SEC-01', 'SEC-02', 'LEG-04'], 'description': 'Brevis Pay transfers card data (tokenised card number, BIN, device data) to offshore sub-processor Sentrix Risk Pte Ltd in Singapore for fraud scoring, with no data localisation covenants in the draft contract.', 'fix': \"Contractually mandate India-only processing in the agreement, activate Brevis's India-only Mumbai hosting add-on, and verify discontinuation of overseas data transfer before any production traffic is routed.\"}",
+                            "{'finding_id': 'BLOCK-INFOSEC-02', 'rule': 'Legion InfoSec Vendor Policy \u00a77 & RBI Outsourcing Norms: Mandatory audit and inspection rights for Legion and RBI', 'evidence_ids': ['LEG-08'], 'description': 'The Brevis draft agreement does not grant Legion or the RBI rights to inspect or audit security practices and operational infrastructure.', 'fix': 'Execute revised contract terms incorporating unconditional audit and regulatory inspection rights for Legion and the RBI.'}"
+                        ]
+                    },
+                    "has_missing_scores": false,
+                    "rows": [
+                        {
+                            "missing_owners": [],
+                            "scores": {
+                                "A": 2.0,
+                                "B": 4.0
+                            },
+                            "criterion": "Cost",
+                            "weight": 0.25,
+                            "evidence_ids": [
+                                "FIN-01",
+                                "FIN-02",
+                                "FIN-09",
+                                "FIN-03",
+                                "FIN-04",
+                                "FIN-05",
+                                "FIN-06",
+                                "FIN-08",
+                                "LEG-01"
+                            ]
+                        },
+                        {
+                            "missing_owners": [],
+                            "scores": {
+                                "A": 4.0,
+                                "B": 1.0
+                            },
+                            "criterion": "Security & compliance",
+                            "weight": 0.25,
+                            "evidence_ids": [
+                                "LEG-09",
+                                "SEC-08",
+                                "SEC-10",
+                                "SEC-11",
+                                "LEG-07",
+                                "LEG-11",
+                                "CUS-10",
+                                "LEG-04",
+                                "LEG-08",
+                                "SEC-01",
+                                "SEC-02",
+                                "SEC-03",
+                                "SEC-04",
+                                "SEC-06"
+                            ]
+                        },
+                        {
+                            "missing_owners": [],
+                            "scores": {
+                                "A": 3.0,
+                                "B": 4.0
+                            },
+                            "criterion": "Reliability",
+                            "weight": 0.2,
+                            "evidence_ids": [
+                                "OPS-01",
+                                "OPS-04",
+                                "OPS-06",
+                                "CUS-01",
+                                "OPS-03",
+                                "OPS-05",
+                                "OPS-07",
+                                "OPS-08",
+                                "OPS-11"
+                            ]
+                        },
+                        {
+                            "missing_owners": [],
+                            "scores": {
+                                "A": 2.0,
+                                "B": 5.0
+                            },
+                            "criterion": "Growth",
+                            "weight": 0.2,
+                            "evidence_ids": [
+                                "BUS-02",
+                                "BUS-01",
+                                "BUS-04",
+                                "BUS-06",
+                                "BUS-03"
+                            ]
+                        },
+                        {
+                            "missing_owners": [],
+                            "scores": {
+                                "A": 2.0,
+                                "B": 4.0
+                            },
+                            "criterion": "Customer impact",
+                            "weight": 0.1,
+                            "evidence_ids": [
+                                "CUS-01",
+                                "CUS-02",
+                                "CUS-07",
+                                "CUS-09",
+                                "CUS-10",
+                                "CUS-04",
+                                "CUS-05",
+                                "CUS-08",
+                                "OPS-02",
+                                "OPS-05",
+                                "OPS-07"
+                            ]
+                        }
+                    ]
+                },
+                "blocking_findings": [
+                    {
+                        "fix": "Contractually mandate India-only processing in the agreement, activate Brevis's India-only Mumbai hosting add-on, and verify discontinuation of overseas data transfer before any production traffic is routed.",
+                        "evidence_ids": [
+                            "SEC-01",
+                            "SEC-02",
+                            "LEG-04"
+                        ],
+                        "text": "Brevis Pay transfers card data (tokenised card number, BIN, device data) to offshore sub-processor Sentrix Risk Pte Ltd in Singapore for fraud scoring, with no data localisation covenants in the draft contract."
+                    },
+                    {
+                        "fix": "Execute revised contract terms incorporating unconditional audit and regulatory inspection rights for Legion and the RBI.",
+                        "evidence_ids": [
+                            "LEG-08"
+                        ],
+                        "text": "The Brevis draft agreement does not grant Legion or the RBI rights to inspect or audit security practices and operational infrastructure."
+                    }
+                ],
+                "phased_plan": [
+                    "Phase 1: Migrate 20% of payment volume (\u20b9300 crore/month) to Brevis Pay. This stays within Arvanta's 80% minimum volume commitment, avoiding the \u20b925 lakh early-exit penalty, and delivers a net monthly benefit of \u20b92.2 lakh after the fixed \u20b96 lakh hosting add-on, dispute delta, and float savings (FIN-01, FIN-02, FIN-03, FIN-04, LEG-01). Note: The calculation for this benefit relies on flagged claims regarding dispute and float savings.",
+                    "Phase 2: Migrate the remaining 20% of volume to reach the 40% target. This will trigger the \u20b925 lakh early-exit penalty (LEG-01), bringing total one-time costs to \u20b965 lakh (FIN-05, LEG-01). The full 40% migration yields a net recurring monthly benefit of \u20b910.4 lakh, achieving payback in 6.25 months (FIN-04, FIN-05, FIN-06, FIN-08, LEG-01). Note: The payback and net benefit calculations were flagged for omitting base fee savings citations."
+                ]
+            }
+        }
+    ],
+    "final_verdict": {
+        "verdict": "PASS",
+        "revision_instructions": "",
+        "issues": [],
+        "revision_number": 0
+    },
+    "human_decisions": [],
+    "error": null
+}

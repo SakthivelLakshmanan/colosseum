@@ -1,0 +1,62 @@
+[
+    {
+        "run_id": "run_DEC-001_20261015_121258",
+        "status": "done",
+        "created_at": "2026-10-15T12:12:59.034685+00:00",
+        "final_verdict": "PASS"
+    },
+    {
+        "run_id": "run_DEC-001_20261015_115101",
+        "status": "INCOMPLETE",
+        "created_at": "2026-10-15T11:51:01.496763+00:00",
+        "final_verdict": "INCOMPLETE"
+    },
+    {
+        "run_id": "run_DEC-001_20261015_113954",
+        "status": "INCOMPLETE",
+        "created_at": "2026-10-15T11:39:55.335586+00:00",
+        "final_verdict": "INCOMPLETE"
+    },
+    {
+        "run_id": "run_DEC-001_20261015_102340",
+        "status": "done",
+        "created_at": "2026-10-15T10:23:40.386174+00:00",
+        "final_verdict": "WRONG"
+    },
+    {
+        "run_id": "run_DEC-001_20261015_101324",
+        "status": "done",
+        "created_at": "2026-10-15T10:13:24.863248+00:00",
+        "final_verdict": "WRONG"
+    },
+    {
+        "run_id": "run_DEC-001_20261015_100436",
+        "status": "done",
+        "created_at": "2026-10-15T10:04:37.564320+00:00",
+        "final_verdict": "PASS"
+    },
+    {
+        "run_id": "run_DEC-001_20261015_091909",
+        "status": "writing",
+        "created_at": "2026-10-15T09:19:10.377644+00:00",
+        "final_verdict": null
+    },
+    {
+        "run_id": "run_DEC-001_20261015_084944",
+        "status": "failed",
+        "created_at": "2026-10-15T08:49:45.160903+00:00",
+        "final_verdict": null
+    },
+    {
+        "run_id": "run_DEC-001_20261014_174117",
+        "status": "moderating",
+        "created_at": "2026-10-14T17:41:18.637435+00:00",
+        "final_verdict": null
+    },
+    {
+        "run_id": "run_DEC-001_20261014_173511",
+        "status": "failed",
+        "created_at": "2026-10-14T17:35:12.420671+00:00",
+        "final_verdict": null
+    }
+]

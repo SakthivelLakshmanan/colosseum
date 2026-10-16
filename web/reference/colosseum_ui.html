@@ -1,0 +1,2792 @@
+<title>Colosseum Decision Room</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Colosseum: an AI debate room where six advisers argue a business decision, a moderator checks every claim, and a named person signs off.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2311262A'/%3E%3Cpath d='M12 44a20 20 0 0 1 40 0' fill='none' stroke='%23CFA35E' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M20 44a12 12 0 0 1 24 0' fill='none' stroke='%2355D6CB' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* Layout: an amphitheatre seen from above. The decision sits on the floor, the advisers on the tiers,
+   the moderator's verdict is delivered beneath, and a named person signs at the end. */
+:root{
+  color-scheme: dark;
+  --ground:#0B181B; --panel:#10242A; --panel-2:#153036; --line:#234249; --line-2:#2E555D;
+  --ink:#E4EDEA; --ink-2:#A6BCBA; --ink-3:#6E8A8B;
+  --signal:#55D6CB; --signal-ink:#062A28; --laurel:#CFA35E;
+  --opt-a:#8DB2FF; --opt-b:#55D6CB; --cond:#CFA35E;
+  --keep:#66C98F; --flag:#F2A93B; --strike:#F2685B; --human:#B39BF5;
+  --glow: 0 0 0 1px rgba(85,214,203,.25), 0 10px 40px -12px rgba(85,214,203,.35);
+  --shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 20px 50px -30px rgba(0,0,0,.6);
+  --f-display:"Unbounded", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-code:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r-lg:20px; --r-md:12px; --r-sm:8px;
+  --ease: cubic-bezier(.2,.8,.2,1);
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){
+  color-scheme: light;
+  --ground:#ECF1EF; --panel:#FFFFFF; --panel-2:#F3F7F6; --line:#D3DFDC; --line-2:#BBCDC9;
+  --ink:#0D2427; --ink-2:#3C5759; --ink-3:#647C7E;
+  --signal:#0A7F77; --signal-ink:#FFFFFF; --laurel:#8C6422;
+  --opt-a:#2F5FC9; --opt-b:#0A7F77; --cond:#8C6422;
+  --keep:#1D8A4E; --flag:#A86400; --strike:#C2382B; --human:#6A4BC9;
+  --glow: 0 0 0 1px rgba(10,127,119,.25), 0 10px 30px -14px rgba(10,127,119,.35);
+  --shadow: 0 1px 2px rgba(13,36,39,.06), 0 18px 40px -28px rgba(13,36,39,.35);
+}}
+:root[data-theme="light"]{
+  color-scheme: light;
+  --ground:#ECF1EF; --panel:#FFFFFF; --panel-2:#F3F7F6; --line:#D3DFDC; --line-2:#BBCDC9;
+  --ink:#0D2427; --ink-2:#3C5759; --ink-3:#647C7E;
+  --signal:#0A7F77; --signal-ink:#FFFFFF; --laurel:#8C6422;
+  --opt-a:#2F5FC9; --opt-b:#0A7F77; --cond:#8C6422;
+  --keep:#1D8A4E; --flag:#A86400; --strike:#C2382B; --human:#6A4BC9;
+  --glow: 0 0 0 1px rgba(10,127,119,.25), 0 10px 30px -14px rgba(10,127,119,.35);
+  --shadow: 0 1px 2px rgba(13,36,39,.06), 0 18px 40px -28px rgba(13,36,39,.35);
+}
+
+*{box-sizing:border-box}
+html,body{background:var(--ground)}
+body{color:var(--ink); font:400 15px/1.55 var(--f-body); -webkit-font-smoothing:antialiased;
+  background:
+    radial-gradient(1100px 520px at 50% 330px, color-mix(in srgb, var(--signal) 9%, transparent), transparent 70%),
+    var(--ground);}
+h1,h2,h3{margin:0; text-wrap:balance}
+p{margin:0}
+button,input,textarea,select{font:inherit; color:inherit}
+:focus-visible{outline:2px solid var(--signal); outline-offset:2px; border-radius:6px}
+.tabnum{font-variant-numeric:tabular-nums}
+.code{font-family:var(--f-code); font-size:.86em}
+
+/* ---------- top bar ---------- */
+body::before{content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top,0px); z-index:30; background:var(--ground)}
+.bar{position:sticky; top:env(safe-area-inset-top,0px); z-index:20;
+  background:color-mix(in srgb, var(--ground) 82%, transparent); backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line)}
+.bar-in{max-width:1320px; margin:0 auto; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  padding-block:12px; padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
+.brand{display:flex; align-items:center; gap:10px; margin-right:auto; text-decoration:none; color:inherit}
+.brand svg{flex:none}
+.brand b{font:600 17px/1 var(--f-display); letter-spacing:.02em}
+.brand span{display:block; font-size:12px; color:var(--ink-3); margin-top:3px}
+.mode{font-size:12px; padding:4px 10px; border-radius:99px; border:1px solid var(--line-2); color:var(--ink-2); white-space:nowrap}
+.mode.live{color:var(--keep); border-color:color-mix(in srgb, var(--keep) 45%, transparent)}
+.mode.live::before{content:""; display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--keep); margin-right:6px; vertical-align:1px; animation:beat 1.6s infinite}
+.picker{min-width:0; max-width:300px; background:var(--panel); border:1px solid var(--line-2); border-radius:10px; padding:8px 10px; font-size:13px}
+.btn{display:inline-flex; align-items:center; gap:8px; border-radius:10px; border:1px solid var(--line-2); background:var(--panel);
+  padding:9px 14px; font-weight:500; font-size:14px; cursor:pointer; transition:transform .15s var(--ease), border-color .2s, background .2s}
+.btn:hover{border-color:var(--signal)}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--signal); color:var(--signal-ink); border-color:transparent; box-shadow:var(--glow)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.ghost{background:transparent}
+.btn.danger{border-color:color-mix(in srgb, var(--strike) 55%, transparent); color:var(--strike); background:transparent}
+.btn[disabled]{opacity:.45; cursor:not-allowed}
+.icon-btn{width:38px; height:38px; justify-content:center; padding:0}
+
+/* ---------- page ---------- */
+.page{max-width:1320px; margin:0 auto; display:grid; gap:28px;
+  padding-block:28px 64px; padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:var(--shadow)}
+.sec-h{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:14px}
+.sec-h h2{font:500 20px/1.2 var(--f-display); letter-spacing:.01em}
+.sec-h p{color:var(--ink-3); font-size:14px}
+.muted{color:var(--ink-3)}
+
+/* hero */
+.hero{display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:28px; align-items:start}
+.qid{font:500 13px/1 var(--f-code); color:var(--laurel)}
+.question{font:500 clamp(24px, 3.2vw, 36px)/1.22 var(--f-body); letter-spacing:-.01em; margin:10px 0 18px; max-width:30ch}
+.options{display:grid; gap:8px; margin-bottom:16px}
+.opt{display:flex; gap:10px; align-items:baseline; font-size:15px}
+.opt i{font:600 12px/1 var(--f-display); font-style:normal; width:24px; height:24px; flex:none; display:grid; place-items:center; border-radius:7px;
+  color:var(--ground); transform:translateY(5px)}
+.opt.a i{background:var(--opt-a)} .opt.b i{background:var(--opt-b)}
+.constraints{display:flex; flex-wrap:wrap; gap:8px}
+.constraints li{list-style:none; font-size:13px; color:var(--ink-2); border:1px solid var(--line); border-radius:99px; padding:4px 11px; background:var(--panel)}
+.constraints{padding:0; margin:0}
+
+/* pipeline rail */
+.rail{padding:18px; display:grid; gap:14px}
+.rail-top{display:flex; justify-content:space-between; align-items:baseline}
+.rail-top b{font:500 14px/1 var(--f-display)}
+.clock{font:500 22px/1 var(--f-code); color:var(--ink)}
+.steps{list-style:none; margin:0; padding:0; display:grid; gap:2px; position:relative}
+.steps li{display:grid; grid-template-columns:18px 1fr auto; gap:10px; align-items:center; padding:6px 0; color:var(--ink-3); font-size:14px; position:relative}
+.steps li .dot{width:12px; height:12px; border-radius:50%; border:2px solid var(--line-2); background:var(--panel); justify-self:center; transition:all .35s var(--ease); z-index:1}
+.steps li:not(:last-child)::after{content:""; position:absolute; left:8px; top:24px; height:calc(100% - 12px); width:2px; background:var(--line)}
+.steps li.done{color:var(--ink-2)} .steps li.done .dot{background:var(--signal); border-color:var(--signal)}
+.steps li.now{color:var(--ink); font-weight:500} .steps li.now .dot{border-color:var(--signal); box-shadow:0 0 0 5px color-mix(in srgb, var(--signal) 22%, transparent); animation:beat 1.4s infinite}
+.steps li.failed{color:var(--strike)} .steps li.failed .dot{border-color:var(--strike); background:var(--strike)}
+.steps .t{font:400 12px/1 var(--f-code); color:var(--ink-3)}
+.rail .btn{justify-content:center}
+
+/* arena + routing */
+.stage{display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:20px}
+.arena{position:relative; padding:10px 10px 0; overflow:hidden; display:grid; align-content:center}
+.arena svg{display:block; width:100%; height:auto}
+.tier{fill:none; stroke:var(--line); stroke-width:1.2}
+.tier.t2{stroke-dasharray:2 7}
+.floor{fill:color-mix(in srgb, var(--signal) 7%, var(--panel-2)); stroke:var(--line-2)}
+.floor-glow{fill:var(--signal); opacity:0; transition:opacity .8s var(--ease)}
+.s6 .floor-glow{opacity:.10}
+.floor-t1{font:500 13px var(--f-code); fill:var(--laurel)}
+.floor-t2{font:500 15px var(--f-body); fill:var(--ink)}
+.link{fill:none; stroke:var(--signal); stroke-width:1.6; stroke-dasharray:4 6; opacity:0; transition:opacity .6s var(--ease)}
+.s1 .link.on{opacity:.55}
+.working .link.on{animation:flow 1s linear infinite}
+.seat{cursor:pointer; transition:opacity .5s var(--ease)}
+.seat .body{fill:var(--panel-2); stroke:var(--line-2); stroke-width:1.5; transition:all .5s var(--ease)}
+.seat .ring{fill:none; stroke:var(--line); stroke-width:3}
+.seat .score{fill:none; stroke:var(--signal); stroke-width:3; stroke-linecap:round; opacity:0; transition:opacity .6s var(--ease), stroke-dashoffset 1s var(--ease)}
+.seat .glyph{fill:none; stroke:var(--ink-2); stroke-width:2; stroke-linecap:round; stroke-linejoin:round}
+.seat .glyph-t{fill:var(--ink-2); font:600 20px var(--f-display); text-anchor:middle}
+.seat .name{fill:var(--ink); font:500 14px var(--f-body); text-anchor:middle}
+.seat .sub{fill:var(--ink-3); font:400 12px var(--f-code); text-anchor:middle}
+.seat .shield{opacity:0; transition:opacity .4s var(--ease), transform .4s var(--ease); transform-box:fill-box; transform-origin:center; transform:scale(.6)}
+.seat .shield path{fill:var(--strike)} .seat .shield text{fill:#fff; font:700 11px var(--f-body); text-anchor:middle}
+.arena .seat{opacity:.35}
+.s0 .seat{opacity:1}
+.s0 .seat .score{opacity:1}
+.s1 .seat.is-selected .ring{stroke:var(--signal)}
+.working .seat.is-selected .body{animation:seatpulse 1.3s ease-in-out infinite}
+.s2 .seat.stance-a .ring{stroke:var(--opt-a)} .s2 .seat.stance-b .ring{stroke:var(--opt-b)} .s2 .seat.stance-c .ring{stroke:var(--cond)}
+.s2 .seat .body{stroke:transparent}
+.s3 .seat.is-blocking .ring{stroke:var(--strike)}
+.s3 .seat.is-blocking .shield{opacity:1; transform:scale(1)}
+.seat:hover .body, .seat.hl .body{fill:color-mix(in srgb, var(--signal) 18%, var(--panel-2))}
+.legend{display:flex; flex-wrap:wrap; gap:6px 16px; padding:6px 14px 14px; font-size:12.5px; color:var(--ink-2)}
+.legend span{display:inline-flex; align-items:center; gap:7px}
+.legend i{width:12px; height:12px; border-radius:50%; border:3px solid; display:inline-block}
+
+.routing{padding:18px; display:grid; gap:12px; align-content:start}
+.routing h3{font:500 15px/1.3 var(--f-display)}
+.routing .why{font-size:13px; color:var(--ink-3)}
+.r-row{display:grid; gap:5px; padding:8px 10px; margin:0 -10px; border-radius:10px; cursor:default; transition:background .2s}
+.r-row:hover, .r-row.hl{background:var(--panel-2)}
+.r-top{display:flex; justify-content:space-between; gap:8px; font-size:14px}
+.r-top b{font-weight:500}
+.r-top .v{font:500 13px var(--f-code)}
+.track{position:relative; height:8px; border-radius:6px; background:var(--panel-2); overflow:visible}
+.track i{position:absolute; inset:0 auto 0 0; width:0; border-radius:6px; background:linear-gradient(90deg, color-mix(in srgb, var(--signal) 55%, transparent), var(--signal)); transition:width 1s var(--ease)}
+.s0 .track i{width:var(--w)}
+.track .mark{position:absolute; top:-4px; bottom:-4px; width:0; border-left:1.5px dashed var(--ink-3)}
+.r-why{font-size:12.5px; color:var(--ink-3)}
+.r-why.rule{color:var(--laurel)}
+.quote{font-size:13px; color:var(--ink-2); border-left:2px solid var(--laurel); padding:4px 0 4px 12px}
+
+/* verdict */
+.verdict{display:grid; grid-template-columns:150px minmax(0,1fr) auto; gap:28px; align-items:center; padding:26px 28px; position:relative; overflow:hidden}
+.seal{width:132px; height:132px; position:relative; opacity:.15; transform:scale(.7) rotate(-14deg); transition:opacity .4s, transform .7s cubic-bezier(.3,1.6,.4,1)}
+.s6 .seal{opacity:1; transform:scale(1) rotate(-8deg)}
+.seal svg{width:100%; height:100%}
+.seal .ring-t{font:500 9.5px var(--f-code); letter-spacing:.18em; fill:var(--laurel)}
+.seal .word{font:700 24px var(--f-display); text-anchor:middle}
+.v-pass .seal .word{fill:var(--keep)} .v-incomplete .seal .word{fill:var(--flag)} .v-wrong .seal .word{fill:var(--strike)}
+.seal .outer{fill:none; stroke:var(--laurel); stroke-width:1.5}
+.seal .inner{fill:color-mix(in srgb, var(--laurel) 8%, transparent); stroke:var(--laurel); stroke-width:.8; stroke-dasharray:2 3}
+.rec{font:500 clamp(19px,2.1vw,25px)/1.35 var(--f-body); max-width:58ch}
+.v-meta{display:flex; flex-wrap:wrap; gap:8px 20px; margin-top:14px; font-size:13.5px; color:var(--ink-2)}
+.v-meta b{font-weight:500; color:var(--ink)}
+.stance-pill{display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:500; padding:4px 10px; border-radius:99px; border:1px solid currentColor; white-space:nowrap}
+.stance-pill::before{content:""; width:7px; height:7px; border-radius:50%; background:currentColor}
+.sp-a{color:var(--opt-a)} .sp-b{color:var(--opt-b)} .sp-c{color:var(--cond)} .sp-n{color:var(--ink-3)}
+.v-side{display:grid; gap:10px; justify-items:end; text-align:right}
+.big{font:600 34px/1 var(--f-display)}
+.big small{font:400 13px var(--f-body); color:var(--ink-3); display:block; margin-top:6px}
+
+/* pending sections */
+.wait{display:none; padding:26px; color:var(--ink-3); font-size:14px; align-items:center; gap:12px}
+.pending > .body{display:none}
+.verdict > .body{display:contents}
+.verdict.pending > .body{display:none}
+.verdict .wait{grid-column:1/-1}
+.pending > .wait{display:flex}
+.shimmer{display:inline-block; width:120px; height:10px; border-radius:6px; background:linear-gradient(90deg, var(--panel-2), var(--line), var(--panel-2)); background-size:200% 100%; animation:shim 1.4s linear infinite}
+
+/* debate */
+.cards{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:18px}
+.card{min-width:0; padding:20px 20px 16px; display:grid; gap:14px; align-content:start; scroll-margin-top:90px; transition:box-shadow .3s, border-color .3s}
+.card.hl{border-color:var(--signal); box-shadow:var(--glow)}
+.card-h{display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:center}
+.avatar{width:42px; height:42px; border-radius:50%; display:grid; place-items:center; background:var(--panel-2); border:2px solid var(--line-2)}
+.avatar svg{width:26px; height:26px}
+.card-h h3{font:500 16px/1.2 var(--f-display)}
+.card-h .conf{font-size:12px; color:var(--ink-3); margin-top:4px; display:flex; align-items:center; gap:8px}
+.meter{width:70px; height:5px; border-radius:4px; background:var(--panel-2); overflow:hidden; display:inline-block}
+.meter i{display:block; height:100%; background:var(--ink-2); border-radius:4px}
+.summary{color:var(--ink-2); font-size:14.5px}
+.tally{display:flex; gap:14px; font-size:12.5px; color:var(--ink-3)}
+.tally b{font-weight:500}
+.tally .k b{color:var(--keep)} .tally .f b{color:var(--flag)} .tally .x b{color:var(--strike)}
+.claims{list-style:none; margin:0; padding:0; display:grid; gap:10px}
+.claim > div{min-width:0}
+.claim{display:grid; grid-template-columns:18px minmax(0,1fr); gap:10px; font-size:14px}
+.claim .st{width:16px; height:16px; margin-top:3px; border-radius:50%; border:1.5px solid var(--line-2); display:grid; place-items:center}
+.claim .txt{background-image:linear-gradient(var(--strike), var(--strike)); background-size:0% 1.5px; background-repeat:no-repeat; background-position:0 58%; transition:background-size .8s var(--ease), color .5s}
+.claim .calc{display:block; font:400 12.5px var(--f-code); color:var(--ink-3); margin-top:3px}
+.claim .why{display:none; font-size:12.5px; margin-top:5px; padding:6px 9px; border-radius:8px}
+.claim .chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px}
+.s3 .claim.keep .st{border-color:var(--keep); background:color-mix(in srgb, var(--keep) 18%, transparent)}
+.s3 .claim.keep .st::after{content:""; width:6px; height:3px; border-left:1.5px solid var(--keep); border-bottom:1.5px solid var(--keep); transform:rotate(-45deg) translate(1px,-1px)}
+.s3 .claim.flag .st{border-color:var(--flag); background:var(--flag)}
+.s3 .claim.flag .why{display:block; color:var(--flag); background:color-mix(in srgb, var(--flag) 10%, transparent)}
+.s3 .claim.flag{animation:flagonce 1.2s var(--ease) 1}
+.s3 .claim.strike .st{border-color:var(--strike)}
+.s3 .claim.strike .st::after{content:"×"; color:var(--strike); font:600 13px/1 var(--f-body)}
+.s3 .claim.strike .txt{background-size:100% 1.5px; color:var(--ink-3)}
+.s3 .claim.strike .why{display:block; color:var(--strike); background:color-mix(in srgb, var(--strike) 10%, transparent)}
+.chip{font:500 12px/1 var(--f-code); padding:5px 8px; border-radius:6px; border:1px solid var(--line-2); background:var(--panel-2); color:var(--ink-2); cursor:pointer; transition:all .15s}
+.chip:hover{border-color:var(--signal); color:var(--ink)}
+.chip.old{border-style:dashed; text-decoration:line-through; text-decoration-color:var(--ink-3)}
+.chip.low{border-style:dashed}
+.blocker{display:none; border:1px solid color-mix(in srgb, var(--strike) 50%, transparent); background:color-mix(in srgb, var(--strike) 8%, transparent); border-radius:var(--r-md); padding:14px; gap:8px}
+.s3 .blocker{display:grid}
+.blocker h4{margin:0; font:600 13.5px var(--f-body); color:var(--strike); display:flex; gap:8px; align-items:center}
+.blocker .fix{font-size:13.5px; color:var(--ink-2)}
+.blocker .fix b{color:var(--ink); font-weight:500}
+.scores-row{display:flex; flex-wrap:wrap; gap:8px 16px; font-size:12.5px; color:var(--ink-3); border-top:1px solid var(--line); padding-top:12px}
+.scores-row b{font:500 12.5px var(--f-code); color:var(--ink)}
+.handoff{font-size:12.5px; color:var(--ink-3)}
+
+/* memo */
+.memo{display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:20px}
+.box{padding:22px; display:grid; gap:14px; align-content:start}
+.box h3{font:500 15px/1.3 var(--f-display)}
+.conds{list-style:none; margin:0; padding:0; display:grid; gap:10px}
+.conds li{display:grid; grid-template-columns:22px minmax(0,1fr); gap:10px; font-size:14.5px}
+.conds li::before{content:""; width:16px; height:16px; margin-top:3px; border-radius:5px; border:1.5px solid var(--signal)}
+.plan{list-style:none; margin:0; padding:0; display:grid; gap:0; counter-reset:p}
+.plan li{counter-increment:p; display:grid; grid-template-columns:34px minmax(0,1fr); gap:12px; font-size:14.5px; padding-bottom:16px; position:relative}
+.plan li::before{content:counter(p); width:28px; height:28px; border-radius:50%; display:grid; place-items:center; font:500 12px var(--f-display); background:var(--panel-2); border:1px solid var(--line-2); color:var(--signal)}
+.plan li:not(:last-child)::after{content:""; position:absolute; left:13.5px; top:30px; bottom:2px; width:1.5px; background:var(--line)}
+.table-wrap{overflow-x:auto; margin:0 -6px}
+table{border-collapse:collapse; width:100%; font-size:14px}
+th{font-weight:500; color:var(--ink-3); text-align:left; font-size:12.5px; padding:8px 6px; border-bottom:1px solid var(--line)}
+td{padding:10px 6px; border-bottom:1px solid var(--line); vertical-align:top}
+td.num{font:500 15px var(--f-code); white-space:nowrap; text-align:right}
+td .f{font:400 12px var(--f-code); color:var(--ink-3)}
+.dissent{list-style:none; padding:0; margin:0; display:grid; gap:10px}
+.dissent li{font-size:14px; padding-left:14px; border-left:2px solid var(--line-2)}
+.dissent li b{font-weight:500}
+.drafts{display:grid; gap:8px}
+.draft{display:grid; grid-template-columns:auto auto minmax(0,1fr); gap:10px; align-items:start; font-size:13.5px}
+.vtag{font:600 11px/1 var(--f-display); padding:5px 8px; border-radius:6px; letter-spacing:.04em}
+.vtag.PASS{background:color-mix(in srgb, var(--keep) 18%, transparent); color:var(--keep)}
+.vtag.INCOMPLETE{background:color-mix(in srgb, var(--flag) 18%, transparent); color:var(--flag)}
+.vtag.WRONG{background:color-mix(in srgb, var(--strike) 18%, transparent); color:var(--strike)}
+.watch{list-style:none; margin:0; padding:0; display:grid; gap:6px; font-size:14px}
+.by{font-size:12.5px; color:var(--ink-3)}
+.watch li::before{content:"◎"; color:var(--signal); margin-right:8px}
+
+/* scorecard */
+.sc{padding:22px; display:grid; gap:14px}
+.sc table td{vertical-align:middle}
+.sbar{display:grid; grid-template-columns:minmax(60px,1fr) 34px; gap:10px; align-items:center}
+.sbar .track{height:10px}
+.sbar .track i{width:0}
+.s3 .sbar .track i{width:var(--w)}
+.sbar.a .track i{background:var(--opt-a)} .sbar.b .track i{background:var(--opt-b)}
+.sbar span{font:500 13px var(--f-code); text-align:right}
+.owners{font-size:12.5px; color:var(--ink-3)}
+tr.total td{border-bottom:0; padding-top:14px}
+.tot{font:600 26px/1 var(--f-display)}
+.tot.win{color:var(--signal); text-shadow:0 0 24px color-mix(in srgb, var(--signal) 40%, transparent)}
+.blocked-note{display:flex; gap:10px; align-items:flex-start; font-size:13.5px; color:var(--ink-2); padding:12px 14px; border-radius:var(--r-md); border:1px dashed color-mix(in srgb, var(--strike) 55%, transparent)}
+.blocked-note b{color:var(--strike); font-weight:600}
+
+/* sign-off */
+.sign{padding:22px; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:28px}
+.field{display:grid; gap:6px; font-size:13px; color:var(--ink-2)}
+.field input, .field textarea{background:var(--panel-2); border:1px solid var(--line-2); border-radius:10px; padding:10px 12px; font-size:14.5px; color:var(--ink)}
+.field textarea{min-height:84px; resize:vertical}
+.field .err{color:var(--strike); font-size:12.5px; min-height:1em}
+.actions{display:flex; gap:10px; flex-wrap:wrap}
+.log{list-style:none; margin:0; padding:0; display:grid; gap:12px}
+.log li{display:grid; grid-template-columns:12px minmax(0,1fr); gap:12px; font-size:14px}
+.log li::before{content:""; width:10px; height:10px; border-radius:50%; margin-top:6px; background:var(--human); box-shadow:0 0 0 4px color-mix(in srgb, var(--human) 20%, transparent)}
+.log .who{font-weight:500} .log .when{font:400 12px var(--f-code); color:var(--ink-3)}
+.log .act{color:var(--human); font-weight:600}
+.footnote{font-size:13px; color:var(--ink-3); text-align:center}
+
+/* drawer */
+.scrim{position:fixed; inset:0; background:rgba(3,10,12,.5); opacity:0; pointer-events:none; transition:opacity .3s; z-index:40}
+.scrim.on{opacity:1; pointer-events:auto}
+.drawer{position:fixed; top:0; right:0; bottom:0; width:min(460px, 100%); z-index:41; background:var(--panel); border-left:1px solid var(--line-2);
+  transform:translateX(102%); transition:transform .45s var(--ease); display:grid; grid-template-rows:auto 1fr; box-shadow:-30px 0 60px -30px rgba(0,0,0,.5);
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px); padding-right:env(safe-area-inset-right,0px)}
+.drawer.on{transform:none}
+.d-head{display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line)}
+.d-head b{font:500 15px var(--f-display)}
+.d-body{overflow:auto; padding:22px 20px 40px; display:grid; gap:16px; align-content:start}
+.fid{font:600 28px/1 var(--f-display); color:var(--laurel)}
+.fstate{display:flex; gap:8px; flex-wrap:wrap}
+.pill{font-size:12px; padding:3px 9px; border-radius:99px; border:1px solid var(--line-2); color:var(--ink-2)}
+.pill.high{color:var(--keep); border-color:color-mix(in srgb, var(--keep) 50%, transparent)}
+.pill.medium{color:var(--flag); border-color:color-mix(in srgb, var(--flag) 50%, transparent)}
+.pill.low{color:var(--strike); border-color:color-mix(in srgb, var(--strike) 50%, transparent)}
+.fstmt{font-size:17px; line-height:1.5}
+.fval{font:600 30px/1.1 var(--f-code); color:var(--ink)}
+.fval small{font:400 14px var(--f-body); color:var(--ink-3); margin-left:6px}
+.dl{display:grid; grid-template-columns:110px minmax(0,1fr); gap:8px 12px; font-size:13.5px}
+.dl dt{color:var(--ink-3)} .dl dd{margin:0}
+.old-banner{padding:12px 14px; border-radius:var(--r-md); background:color-mix(in srgb, var(--flag) 12%, transparent); color:var(--flag); font-size:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+.cited{display:grid; gap:8px; font-size:13.5px; color:var(--ink-2)}
+.cited div{padding:8px 10px; border-radius:8px; background:var(--panel-2)}
+.crit-grid{display:grid; gap:8px}
+.crit-row{display:grid; grid-template-columns:minmax(0,1fr) 70px; gap:8px}
+.wsum{font-size:13px} .wsum.bad{color:var(--flag)} .wsum.ok{color:var(--keep)}
+
+/* toast */
+.toast{position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom,0px)); transform:translate(-50%, 30px); opacity:0; z-index:60;
+  background:var(--panel-2); border:1px solid var(--line-2); border-left:3px solid var(--human); padding:12px 16px; border-radius:12px; font-size:14px;
+  box-shadow:var(--shadow); transition:all .35s var(--ease); max-width:calc(100% - 32px)}
+.toast.on{opacity:1; transform:translate(-50%,0)}
+
+.error-panel{padding:16px 18px; border-radius:var(--r-md); border:1px solid color-mix(in srgb, var(--strike) 50%, transparent); background:color-mix(in srgb, var(--strike) 8%, transparent); color:var(--ink)}
+.error-panel b{color:var(--strike)}
+
+@keyframes beat{50%{opacity:.35}}
+@keyframes flow{to{stroke-dashoffset:-20}}
+@keyframes seatpulse{50%{fill:color-mix(in srgb, var(--signal) 22%, var(--panel-2))}}
+@keyframes shim{to{background-position:-200% 0}}
+@keyframes flagonce{0%{background:color-mix(in srgb, var(--flag) 16%, transparent)}100%{background:transparent}}
+
+@media (max-width: 1080px){
+  .hero{grid-template-columns:minmax(0,1fr)}
+  .stage{grid-template-columns:minmax(0,1fr)}
+  .memo{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width: 760px){
+  .cards{grid-template-columns:minmax(0,1fr)}
+  .verdict{grid-template-columns:minmax(0,1fr); gap:18px; padding:22px}
+  .v-side{justify-items:start; text-align:left}
+  .seal{width:104px; height:104px}
+  .sign{grid-template-columns:minmax(0,1fr)}
+  .picker{max-width:100%; flex:1 1 200px}
+  .card-h{grid-template-columns:auto minmax(0,1fr)}
+  .card-h .stance-pill{grid-column:1/-1; justify-self:start}
+  .claim .calc{overflow-wrap:anywhere}
+  .brand span{display:none}
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important; transition:none!important}
+}
+</style>
+
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="#top" aria-label="Colosseum home">
+      <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="var(--panel-2)"/><path d="M12 44a20 20 0 0 1 40 0" fill="none" stroke="var(--laurel)" stroke-width="5" stroke-linecap="round"/><path d="M20 44a12 12 0 0 1 24 0" fill="none" stroke="var(--signal)" stroke-width="5" stroke-linecap="round"/></svg>
+      <div><b>Colosseum</b><span>Six advisers argue it out. A moderator checks every claim. You decide.</span></div>
+    </a>
+    <span class="mode" id="mode">Sample run</span>
+    <select class="picker" id="picker" aria-label="Open a saved run"></select>
+    <button class="btn primary" id="newBtn" type="button">New decision</button>
+    <button class="btn icon-btn ghost" id="themeBtn" type="button" aria-label="Switch light or dark theme">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="page" id="top">
+  <section class="hero">
+    <div>
+      <span class="qid" id="qid">DEC-001</span>
+      <h1 class="question" id="question">Loading the decision…</h1>
+      <div class="options" id="options"></div>
+      <ul class="constraints" id="constraints" aria-label="Constraints"></ul>
+    </div>
+    <aside class="panel rail" aria-label="Pipeline progress">
+      <div class="rail-top"><b>Run progress</b><span class="clock tabnum" id="clock">0:00</span></div>
+      <ol class="steps" id="steps"></ol>
+      <div class="error-panel" id="runError" hidden></div>
+      <button class="btn" id="replayBtn" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+        Replay the debate</button>
+    </aside>
+  </section>
+
+  <section class="stage">
+    <div class="panel arena" aria-label="The arena">
+      <svg id="arena" viewBox="0 0 1000 480" role="img" aria-label="Advisers seated around the decision"></svg>
+      <div class="legend">
+        <span><i style="border-color:var(--signal)"></i>Selected by routing</span>
+        <span><i style="border-color:var(--opt-b)"></i>Backs option B</span>
+        <span><i style="border-color:var(--opt-a)"></i>Backs option A</span>
+        <span><i style="border-color:var(--cond)"></i>Conditional</span>
+        <span><i style="border-color:var(--strike)"></i>Raised a blocking finding</span>
+      </div>
+    </div>
+    <aside class="panel routing" aria-label="Why these advisers">
+      <h3>Why these advisers</h3>
+      <p class="why">The harness writes a routing query from the brief, embeds it, and compares it with each adviser's capabilities. Advisers close to the best match join the debate; some rules always add an adviser.</p>
+      <div id="routeRows"></div>
+      <p class="quote" id="routeQuery"></p>
+    </aside>
+  </section>
+
+  <section class="panel verdict" id="verdict" data-from="5">
+    <div class="wait"><span class="shimmer"></span>The moderator is checking the memo.</div>
+    <div class="body">
+      <div class="seal" aria-hidden="true">
+        <svg viewBox="0 0 140 140">
+          <defs><path id="sealArc" d="M70 70 m-54 0 a54 54 0 1 1 108 0 a54 54 0 1 1 -108 0"/></defs>
+          <circle class="outer" cx="70" cy="70" r="66"/>
+          <circle class="inner" cx="70" cy="70" r="44"/>
+          <text class="ring-t"><textPath href="#sealArc" startOffset="0">MODERATOR VERDICT · COLOSSEUM · CHECKED ·</textPath></text>
+          <text class="word" x="70" y="78" id="sealWord">PASS</text>
+        </svg>
+      </div>
+      <div>
+        <p class="rec" id="rec"></p>
+        <div class="v-meta" id="vmeta"></div>
+      </div>
+      <div class="v-side" id="vside"></div>
+    </div>
+  </section>
+
+  <section id="debate" data-from="2">
+    <div class="sec-h"><h2>The debate</h2><p id="debateTally"></p></div>
+    <div class="wait panel"><span class="shimmer"></span>Advisers are building their positions.</div>
+    <div class="body cards" id="cards"></div>
+  </section>
+
+  <section id="scorecard" data-from="3">
+    <div class="sec-h"><h2>Weighted scorecard</h2><p>Computed in code from each owner adviser's scores. The moderator and the Scribe can't change it.</p></div>
+    <div class="wait panel"><span class="shimmer"></span>Waiting for the scorecard.</div>
+    <div class="body panel sc" id="sc"></div>
+  </section>
+
+  <section id="memo" data-from="4">
+    <div class="sec-h"><h2>Decision memo</h2><p>Written by the Scribe from accepted claims only.</p></div>
+    <div class="wait panel"><span class="shimmer"></span>The Scribe is writing the memo.</div>
+    <div class="body memo" id="memoBody"></div>
+  </section>
+
+  <section id="signoff" data-from="6">
+    <div class="sec-h"><h2>Sign-off</h2><p>Recommendations are advisory. A named person approves or overrides every decision.</p></div>
+    <div class="wait panel"><span class="shimmer"></span>Sign-off opens when the run is finished.</div>
+    <div class="body panel sign">
+      <form id="signForm" novalidate>
+        <div style="display:grid; gap:14px">
+          <div class="field"><label for="signName">Your name and role</label><input id="signName" autocomplete="name" placeholder="For example, Priya Raman, Head of Payments"></div>
+          <div class="field"><label for="signReason">Reason (needed to override)</label><textarea id="signReason" placeholder="What you decided and why"></textarea><span class="err" id="signErr" role="alert"></span></div>
+          <div class="actions">
+            <button class="btn primary" type="submit" id="approveBtn" data-action="approve">Approve recommendation</button>
+            <button class="btn danger" type="button" id="overrideBtn">Override</button>
+          </div>
+        </div>
+      </form>
+      <div>
+        <h3 style="font:500 15px var(--f-display); margin-bottom:12px">Decision record</h3>
+        <ul class="log" id="log"></ul>
+      </div>
+    </div>
+  </section>
+
+  <p class="footnote">Legion Capital, Arvanta Payments, Brevis Pay and every figure here are fictional, built for the Colosseum demo. Powered by Gemini on Vertex AI, Google ADK, Agent Search, BigQuery and Firestore.</p>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="dTitle">
+  <div class="d-head"><b id="dTitle">Evidence</b><button class="btn icon-btn ghost" id="dClose" type="button" aria-label="Close panel">✕</button></div>
+  <div class="d-body" id="dBody"></div>
+</aside>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const FACTS = {"FIN-01": {"fact_id": "FIN-01", "domain": "finance", "topic": "volume", "statement": "Legion Capital processed 10.0 million payment transactions worth about ₹1,500 crore in September 2026 (average ₹1,500).", "entity": "Legion Capital", "metric": "monthly_payment_volume", "value_num": 1500, "value_text": "", "unit": "INR crore / month", "as_of": "2026-09-30", "superseded_by": "", "source_type": "table", "source_ref": "transactions_monthly", "reliability": "high"}, "FIN-02": {"fact_id": "FIN-02", "domain": "finance", "topic": "fees", "statement": "Arvanta Payments charges a blended fee of 0.20% of payment volume.", "entity": "Arvanta Payments", "metric": "blended_fee_pct", "value_num": 0.2, "value_text": "", "unit": "% of volume", "as_of": "2023-04-01", "superseded_by": "", "source_type": "document", "source_ref": "Arvanta_MSA_Excerpt.pdf §4.1", "reliability": "high"}, "FIN-03": {"fact_id": "FIN-03", "domain": "finance", "topic": "fees", "statement": "Brevis Pay's final quote (15 Sep 2026) is a blended fee of 0.176% of volume, 12% below Arvanta.", "entity": "Brevis Pay", "metric": "blended_fee_pct", "value_num": 0.176, "value_text": "", "unit": "% of volume", "as_of": "2026-09-15", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Draft_Agreement.pdf Schedule 1", "reliability": "high"}, "FIN-04": {"fact_id": "FIN-04", "domain": "finance", "topic": "fees", "statement": "Brevis Pay's India-only hosting add-on, needed to keep fraud scoring in India, costs a flat ₹6 lakh a month.", "entity": "Brevis Pay", "metric": "india_hosting_addon", "value_num": 6, "value_text": "", "unit": "INR lakh / month", "as_of": "2026-09-15", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Draft_Agreement.pdf Schedule 1 item 4", "reliability": "high"}, "FIN-05": {"fact_id": "FIN-05", "domain": "finance", "topic": "one_time_cost", "statement": "The one-time cost of migrating to Brevis Pay (engineering, certification, testing) is estimated at ₹40 lakh.", "entity": "Legion Capital", "metric": "migration_cost", "value_num": 40, "value_text": "", "unit": "INR lakh one-time", "as_of": "2026-09-25", "superseded_by": "", "source_type": "document", "source_ref": "Ops_Review_Q3_2026.pdf §5", "reliability": "medium"}, "FIN-06": {"fact_id": "FIN-06", "domain": "finance", "topic": "treasury", "statement": "Treasury estimates that Brevis Pay's T+1 card settlement (vs Arvanta's T+2) would cut funding cost by about ₹4 lakh a month on the 40% slice.", "entity": "Brevis Pay", "metric": "float_benefit", "value_num": 4, "value_text": "", "unit": "INR lakh / month", "as_of": "2026-09-24", "superseded_by": "", "source_type": "document", "source_ref": "Board_Minutes_Sep2026.pdf item 3", "reliability": "medium"}, "FIN-07": {"fact_id": "FIN-07", "domain": "finance", "topic": "treasury", "statement": "Legion Capital's cost of funds is 9.5% a year.", "entity": "Legion Capital", "metric": "cost_of_funds_pct", "value_num": 9.5, "value_text": "", "unit": "% per year", "as_of": "2026-09-24", "superseded_by": "", "source_type": "document", "source_ref": "Board_Minutes_Sep2026.pdf item 3", "reliability": "high"}, "FIN-08": {"fact_id": "FIN-08", "domain": "finance", "topic": "fees", "statement": "Dispute handling fees: Arvanta ₹150 and Brevis ₹250 per dispute. About 2,000 disputes a month arise on the 40% slice.", "entity": "Brevis Pay", "metric": "dispute_fee_delta", "value_num": 2, "value_text": "", "unit": "INR lakh / month", "as_of": "2026-09-15", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Draft_Agreement.pdf Schedule 1 item 2; Arvanta_MSA_Excerpt.pdf §4.3; Ops_Review_Q3_2026.pdf §1", "reliability": "high"}, "FIN-09": {"fact_id": "FIN-09", "domain": "finance", "topic": "budget", "statement": "FY27 payments-cost budget is ₹33 crore; the current run-rate is ₹36 crore a year (9% over budget).", "entity": "Legion Capital", "metric": "payments_cost_run_rate", "value_num": 36, "value_text": "", "unit": "INR crore / year", "as_of": "2026-09-24", "superseded_by": "", "source_type": "document", "source_ref": "Board_Minutes_Sep2026.pdf item 2", "reliability": "high"}, "FIN-10": {"fact_id": "FIN-10", "domain": "finance", "topic": "forecast", "statement": "Payment volume is forecast to grow 25% over the next 12 months.", "entity": "Legion Capital", "metric": "volume_growth_forecast_pct", "value_num": 25, "value_text": "", "unit": "% next 12 months", "as_of": "2026-07-01", "superseded_by": "", "source_type": "document", "source_ref": "Legion_Strategy_OKRs_FY27.pdf §2", "reliability": "medium"}, "FIN-11": {"fact_id": "FIN-11", "domain": "finance", "topic": "targets", "statement": "The board's FY27 target is to cut the cost-to-income ratio from 48% to 42%.", "entity": "Legion Capital", "metric": "cost_to_income_target_pct", "value_num": 42, "value_text": "", "unit": "%", "as_of": "2026-09-24", "superseded_by": "", "source_type": "document", "source_ref": "Board_Minutes_Sep2026.pdf item 2", "reliability": "high"}, "FIN-12": {"fact_id": "FIN-12", "domain": "finance", "topic": "fees", "statement": "An early internal email (March 2026) estimated that Brevis would be 18% cheaper than Arvanta.", "entity": "Brevis Pay", "metric": "estimated_saving_pct", "value_num": 18, "value_text": "", "unit": "%", "as_of": "2026-03-12", "superseded_by": "FIN-03", "source_type": "document", "source_ref": "Finance_Email_Mar2026.pdf", "reliability": "low"}, "BUS-01": {"fact_id": "BUS-01", "domain": "business", "topic": "pipeline", "statement": "30 cross-border SME merchants in the sales pipeline, worth about ₹45 crore a month, need international card acceptance, which only Brevis Pay supports.", "entity": "Legion Capital", "metric": "cross_border_pipeline", "value_num": 45, "value_text": "", "unit": "INR crore / month", "as_of": "2026-09-30", "superseded_by": "", "source_type": "table", "source_ref": "sales_pipeline", "reliability": "high"}, "BUS-02": {"fact_id": "BUS-02", "domain": "business", "topic": "okr", "statement": "FY27 OKR: no single payment gateway should carry more than 70% of volume by 31 March 2027.", "entity": "Legion Capital", "metric": "max_vendor_share_pct", "value_num": 70, "value_text": "", "unit": "%", "as_of": "2026-04-01", "superseded_by": "", "source_type": "document", "source_ref": "Legion_Strategy_OKRs_FY27.pdf §3 OKR 2.1", "reliability": "high"}, "BUS-03": {"fact_id": "BUS-03", "domain": "business", "topic": "market", "statement": "Competitor Vireo Finance moved to a multi-gateway setup in June 2026 and now advertises '99.9% payment uptime' to SME merchants.", "entity": "Vireo Finance", "metric": "competitor_move", "value_num": null, "value_text": "multi-gateway since Jun 2026", "unit": "", "as_of": "2026-07-15", "superseded_by": "", "source_type": "document", "source_ref": "Legion_Strategy_OKRs_FY27.pdf §5", "reliability": "medium"}, "BUS-04": {"fact_id": "BUS-04", "domain": "business", "topic": "product", "statement": "Legion Pay Later (BNPL at checkout) is planned for Q1 FY28 (Apr–Jun 2027). Brevis Pay has native EMI/BNPL APIs; Arvanta would need a 4-month custom build.", "entity": "Legion Capital", "metric": "bnpl_build_months_on_arvanta", "value_num": 4, "value_text": "", "unit": "months", "as_of": "2026-07-15", "superseded_by": "", "source_type": "document", "source_ref": "Legion_Strategy_OKRs_FY27.pdf §4", "reliability": "medium"}, "BUS-05": {"fact_id": "BUS-05", "domain": "business", "topic": "vendor_offer", "statement": "Arvanta has offered an 8% fee cut if Legion commits 100% of volume for 3 more years.", "entity": "Arvanta Payments", "metric": "counter_offer_discount_pct", "value_num": 8, "value_text": "", "unit": "%", "as_of": "2026-09-24", "superseded_by": "", "source_type": "document", "source_ref": "Board_Minutes_Sep2026.pdf item 4", "reliability": "high"}, "BUS-06": {"fact_id": "BUS-06", "domain": "business", "topic": "revenue", "statement": "Expected fee revenue from the cross-border pipeline is about ₹1.08 crore a year (0.2% take rate on ₹45 crore a month).", "entity": "Legion Capital", "metric": "cross_border_revenue", "value_num": 1.08, "value_text": "", "unit": "INR crore / year", "as_of": "2026-09-30", "superseded_by": "", "source_type": "document", "source_ref": "Legion_Strategy_OKRs_FY27.pdf §4", "reliability": "medium"}, "BUS-07": {"fact_id": "BUS-07", "domain": "business", "topic": "partners", "statement": "Two of Legion's top five co-lending partners already settle through Brevis Pay.", "entity": "Brevis Pay", "metric": "co_lending_partners_on_brevis", "value_num": 2, "value_text": "", "unit": "partners", "as_of": "2026-07-15", "superseded_by": "", "source_type": "document", "source_ref": "Legion_Strategy_OKRs_FY27.pdf §5", "reliability": "medium"}, "BUS-08": {"fact_id": "BUS-08", "domain": "business", "topic": "sales", "statement": "In Q2–Q3 FY27, 70% of lost SME deals cited lack of international card acceptance.", "entity": "Legion Capital", "metric": "lost_deals_citing_intl_cards_pct", "value_num": 70, "value_text": "", "unit": "%", "as_of": "2026-09-30", "superseded_by": "", "source_type": "document", "source_ref": "Legion_Strategy_OKRs_FY27.pdf §5", "reliability": "medium"}, "BUS-09": {"fact_id": "BUS-09", "domain": "business", "topic": "timeline", "statement": "The board wants cross-border card acceptance live by 31 March 2027.", "entity": "Legion Capital", "metric": "cross_border_deadline", "value_num": null, "value_text": "2027-03-31", "unit": "date", "as_of": "2026-09-24", "superseded_by": "", "source_type": "document", "source_ref": "Board_Minutes_Sep2026.pdf item 5", "reliability": "high"}, "BUS-10": {"fact_id": "BUS-10", "domain": "business", "topic": "concentration_risk", "statement": "Arvanta's 14 June 2026 outage delayed ₹2.3 crore of loan collections; ₹11 lakh of wrongly charged late fees had to be waived for 1,900 borrowers.", "entity": "Arvanta Payments", "metric": "outage_collections_delayed", "value_num": 2.3, "value_text": "", "unit": "INR crore", "as_of": "2026-06-14", "superseded_by": "", "source_type": "document", "source_ref": "Board_Minutes_Sep2026.pdf item 6", "reliability": "high"}, "BUS-11": {"fact_id": "BUS-11", "domain": "business", "topic": "vendor_maturity", "statement": "Brevis Pay is 3 years old with about 1,200 merchants; Arvanta is 9 years old with about 40,000 merchants.", "entity": "Brevis Pay", "metric": "vendor_merchant_count", "value_num": 1200, "value_text": "", "unit": "merchants", "as_of": "2026-07-15", "superseded_by": "", "source_type": "document", "source_ref": "Legion_Strategy_OKRs_FY27.pdf §5", "reliability": "medium"}, "CUS-01": {"fact_id": "CUS-01", "domain": "customer", "topic": "complaints", "statement": "Settlement-delay complaints about Arvanta rose from 120 (July) to 210 (August) to 340 (September 2026).", "entity": "Arvanta Payments", "metric": "settlement_delay_tickets", "value_num": 340, "value_text": "", "unit": "tickets / month", "as_of": "2026-09-30", "superseded_by": "", "source_type": "table", "source_ref": "support_tickets_monthly", "reliability": "high"}, "CUS-02": {"fact_id": "CUS-02", "domain": "customer", "topic": "churn_risk", "statement": "Four large merchants (M-104, M-221, M-307, M-412), together about ₹38 crore a month, have threatened to leave over settlement delays.", "entity": "Legion Capital", "metric": "merchants_threatening_exit_volume", "value_num": 38, "value_text": "", "unit": "INR crore / month", "as_of": "2026-09-30", "superseded_by": "", "source_type": "document", "source_ref": "Customer_Insights_Q3_2026.pdf §2", "reliability": "high"}, "CUS-03": {"fact_id": "CUS-03", "domain": "customer", "topic": "complaints", "statement": "About 900 failed EMI auto-debit complaints arrive each month; in 14% of them the borrower was wrongly charged a late fee.", "entity": "Legion Capital", "metric": "failed_emi_debit_tickets", "value_num": 900, "value_text": "", "unit": "tickets / month", "as_of": "2026-09-30", "superseded_by": "", "source_type": "table", "source_ref": "support_tickets_monthly", "reliability": "high"}, "CUS-04": {"fact_id": "CUS-04", "domain": "customer", "topic": "conversion", "statement": "In the Brevis pilot (2% of traffic, Aug–Sep 2026), mobile checkout conversion was 3.1 points higher than on Arvanta.", "entity": "Brevis Pay", "metric": "mobile_conversion_uplift_pts", "value_num": 3.1, "value_text": "", "unit": "percentage points", "as_of": "2026-09-30", "superseded_by": "", "source_type": "document", "source_ref": "Customer_Insights_Q3_2026.pdf §3", "reliability": "medium"}, "CUS-05": {"fact_id": "CUS-05", "domain": "customer", "topic": "complaints", "statement": "During the pilot, complaints from Coral Bank and Tamra Bank customers were 40% higher on Brevis than on Arvanta.", "entity": "Brevis Pay", "metric": "bank_specific_complaint_uplift_pct", "value_num": 40, "value_text": "", "unit": "%", "as_of": "2026-09-30", "superseded_by": "", "source_type": "document", "source_ref": "Customer_Insights_Q3_2026.pdf §3", "reliability": "medium"}, "CUS-06": {"fact_id": "CUS-06", "domain": "customer", "topic": "satisfaction", "statement": "Legion's merchant NPS is 41 against an industry benchmark of 50.", "entity": "Legion Capital", "metric": "merchant_nps", "value_num": 41, "value_text": "", "unit": "score", "as_of": "2026-09-30", "superseded_by": "", "source_type": "document", "source_ref": "Customer_Insights_Q3_2026.pdf §1", "reliability": "medium"}, "CUS-07": {"fact_id": "CUS-07", "domain": "customer", "topic": "refunds", "statement": "Average refund turnaround is 5.2 days on Arvanta and 3.0 days on Brevis (pilot).", "entity": "Brevis Pay", "metric": "refund_turnaround_days", "value_num": 3.0, "value_text": "", "unit": "days", "as_of": "2026-09-30", "superseded_by": "", "source_type": "document", "source_ref": "Customer_Insights_Q3_2026.pdf §3", "reliability": "medium"}, "CUS-08": {"fact_id": "CUS-08", "domain": "customer", "topic": "accessibility", "statement": "Brevis checkout supports 11 Indian languages; Arvanta supports 4.", "entity": "Brevis Pay", "metric": "checkout_languages", "value_num": 11, "value_text": "", "unit": "languages", "as_of": "2026-09-30", "superseded_by": "", "source_type": "document", "source_ref": "Customer_Insights_Q3_2026.pdf §4", "reliability": "medium"}, "CUS-09": {"fact_id": "CUS-09", "domain": "customer", "topic": "churn", "statement": "Monthly merchant churn was 2.1% in September 2026, up from 1.4% in Q1 FY27.", "entity": "Legion Capital", "metric": "merchant_churn_pct", "value_num": 2.1, "value_text": "", "unit": "% per month", "as_of": "2026-09-30", "superseded_by": "", "source_type": "document", "source_ref": "Customer_Insights_Q3_2026.pdf §2", "reliability": "high"}, "CUS-10": {"fact_id": "CUS-10", "domain": "customer", "topic": "grievance", "statement": "20 of 340 settlement complaints in September (about 6%) breached the 30-day grievance-resolution limit.", "entity": "Legion Capital", "metric": "grievance_breaches", "value_num": 20, "value_text": "", "unit": "tickets", "as_of": "2026-09-30", "superseded_by": "", "source_type": "table", "source_ref": "support_tickets_monthly", "reliability": "high"}, "CUS-11": {"fact_id": "CUS-11", "domain": "customer", "topic": "reviews", "statement": "22% of 1-star app reviews in Q3 mention 'payment failed'.", "entity": "Legion Capital", "metric": "one_star_reviews_payment_failed_pct", "value_num": 22, "value_text": "", "unit": "%", "as_of": "2026-09-30", "superseded_by": "", "source_type": "document", "source_ref": "Customer_Insights_Q3_2026.pdf §4", "reliability": "medium"}, "CUS-12": {"fact_id": "CUS-12", "domain": "customer", "topic": "support_cost", "statement": "Each support ticket costs about ₹180 to handle.", "entity": "Legion Capital", "metric": "cost_per_ticket", "value_num": 180, "value_text": "", "unit": "INR", "as_of": "2026-09-30", "superseded_by": "", "source_type": "document", "source_ref": "Customer_Insights_Q3_2026.pdf §1", "reliability": "medium"}, "LEG-01": {"fact_id": "LEG-01", "domain": "legal", "topic": "exit_terms", "statement": "Arvanta MSA: a ₹25 lakh early-exit fee applies if Legion's volume with Arvanta falls below 80% (the minimum commitment) before 31 March 2028.", "entity": "Arvanta Payments", "metric": "early_exit_fee", "value_num": 25, "value_text": "", "unit": "INR lakh one-time", "as_of": "2023-04-01", "superseded_by": "", "source_type": "document", "source_ref": "Arvanta_MSA_Excerpt.pdf §9.2", "reliability": "high"}, "LEG-02": {"fact_id": "LEG-02", "domain": "legal", "topic": "exit_terms", "statement": "Arvanta MSA: Legion must give 90 days' written notice before reducing volume.", "entity": "Arvanta Payments", "metric": "notice_period_days", "value_num": 90, "value_text": "", "unit": "days", "as_of": "2023-04-01", "superseded_by": "", "source_type": "document", "source_ref": "Arvanta_MSA_Excerpt.pdf §9.1", "reliability": "high"}, "LEG-03": {"fact_id": "LEG-03", "domain": "legal", "topic": "renewal", "statement": "Arvanta MSA renews automatically for 2 years unless notice is given 6 months before 31 March 2028.", "entity": "Arvanta Payments", "metric": "auto_renewal_years", "value_num": 2, "value_text": "", "unit": "years", "as_of": "2023-04-01", "superseded_by": "", "source_type": "document", "source_ref": "Arvanta_MSA_Excerpt.pdf §2", "reliability": "high"}, "LEG-04": {"fact_id": "LEG-04", "domain": "legal", "topic": "data_location", "statement": "The Brevis draft agreement has no clause on where data is stored or processed.", "entity": "Brevis Pay", "metric": "data_location_clause", "value_num": null, "value_text": "missing", "unit": "", "as_of": "2026-09-15", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Draft_Agreement.pdf §7", "reliability": "high"}, "LEG-05": {"fact_id": "LEG-05", "domain": "legal", "topic": "liability", "statement": "Brevis draft caps liability at 3 months' fees; Arvanta's cap is 12 months' fees.", "entity": "Brevis Pay", "metric": "liability_cap_months", "value_num": 3, "value_text": "", "unit": "months of fees", "as_of": "2026-09-15", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Draft_Agreement.pdf §9; Arvanta_MSA_Excerpt.pdf §8.1", "reliability": "high"}, "LEG-06": {"fact_id": "LEG-06", "domain": "legal", "topic": "pricing_terms", "statement": "Brevis draft lets Brevis change prices with 30 days' notice.", "entity": "Brevis Pay", "metric": "price_change_notice_days", "value_num": 30, "value_text": "", "unit": "days", "as_of": "2026-09-15", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Draft_Agreement.pdf Schedule 1 note", "reliability": "high"}, "LEG-07": {"fact_id": "LEG-07", "domain": "legal", "topic": "governing_law", "statement": "Brevis draft uses Singapore law with arbitration in Singapore; Arvanta's contract uses Indian law and Mumbai courts.", "entity": "Brevis Pay", "metric": "governing_law", "value_num": null, "value_text": "Singapore", "unit": "", "as_of": "2026-09-15", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Draft_Agreement.pdf §12; Arvanta_MSA_Excerpt.pdf §11", "reliability": "high"}, "LEG-08": {"fact_id": "LEG-08", "domain": "legal", "topic": "audit_rights", "statement": "The Brevis draft gives no audit or inspection rights to Legion or the RBI. Legion's policy and RBI outsourcing norms require them.", "entity": "Brevis Pay", "metric": "audit_rights_clause", "value_num": null, "value_text": "missing", "unit": "", "as_of": "2026-09-15", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Draft_Agreement.pdf (Legal review note 2); Legion_InfoSec_Vendor_Policy.pdf §7", "reliability": "high"}, "LEG-09": {"fact_id": "LEG-09", "domain": "legal", "topic": "data_protection", "statement": "Arvanta's data processing agreement (aligned to the DPDP Act 2023) is signed; Brevis has not yet provided one.", "entity": "Brevis Pay", "metric": "dpa_status", "value_num": null, "value_text": "not provided", "unit": "", "as_of": "2026-09-15", "superseded_by": "", "source_type": "document", "source_ref": "Arvanta_MSA_Excerpt.pdf §7.2; Brevis_Draft_Agreement.pdf (Legal review note 3)", "reliability": "high"}, "LEG-10": {"fact_id": "LEG-10", "domain": "legal", "topic": "indemnity", "statement": "Brevis indemnifies only for 'gross negligence'; Arvanta indemnifies for 'negligence'.", "entity": "Brevis Pay", "metric": "indemnity_standard", "value_num": null, "value_text": "gross negligence", "unit": "", "as_of": "2026-09-15", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Draft_Agreement.pdf §10; Arvanta_MSA_Excerpt.pdf §8.2", "reliability": "high"}, "LEG-11": {"fact_id": "LEG-11", "domain": "legal", "topic": "licensing", "statement": "Both Arvanta (since 2021) and Brevis (since 2025) are RBI-authorised payment aggregators.", "entity": "Brevis Pay", "metric": "rbi_pa_authorised", "value_num": null, "value_text": "yes", "unit": "", "as_of": "2026-09-15", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Draft_Agreement.pdf recital B; Arvanta_MSA_Excerpt.pdf recital B", "reliability": "high"}, "SEC-01": {"fact_id": "SEC-01", "domain": "infosec", "topic": "data_location", "statement": "Brevis Pay's fraud-scoring sub-processor, Sentrix Risk Pte Ltd, is based in Singapore and receives card data (tokenised card number, BIN and device data).", "entity": "Sentrix Risk Pte Ltd", "metric": "card_data_processed_outside_india", "value_num": null, "value_text": "yes", "unit": "", "as_of": "2026-09-01", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Security_Pack.pdf §3 sub-processor list", "reliability": "high"}, "SEC-02": {"fact_id": "SEC-02", "domain": "infosec", "topic": "policy", "statement": "Legion policy: any vendor processing payment or card data must store and process it only in India.", "entity": "Legion Capital", "metric": "data_localisation_rule", "value_num": null, "value_text": "India only", "unit": "", "as_of": "2025-04-01", "superseded_by": "", "source_type": "document", "source_ref": "Legion_InfoSec_Vendor_Policy.pdf §4.1", "reliability": "high"}, "SEC-03": {"fact_id": "SEC-03", "domain": "infosec", "topic": "certification", "statement": "Brevis Pay's latest SOC 2 Type II report covers 1 Aug 2024 to 31 Jul 2025, so it is about 14 months old.", "entity": "Brevis Pay", "metric": "soc2_report_age_months", "value_num": 14, "value_text": "", "unit": "months", "as_of": "2026-09-01", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Security_Pack.pdf §1", "reliability": "high"}, "SEC-04": {"fact_id": "SEC-04", "domain": "infosec", "topic": "pen_test", "statement": "Brevis Pay's June 2026 penetration test has one high-severity finding (missing rate limiting on the refund API), open since 20 August 2026 (47 days).", "entity": "Brevis Pay", "metric": "open_high_findings", "value_num": 1, "value_text": "", "unit": "findings", "as_of": "2026-10-06", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Security_Pack.pdf §4", "reliability": "high"}, "SEC-05": {"fact_id": "SEC-05", "domain": "infosec", "topic": "data_location", "statement": "Brevis Pay's India-only hosting add-on moves fraud scoring to its Mumbai region and can be switched on within 3 weeks of ordering.", "entity": "Brevis Pay", "metric": "india_hosting_lead_time_weeks", "value_num": 3, "value_text": "", "unit": "weeks", "as_of": "2026-09-01", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Security_Pack.pdf §3.2", "reliability": "high"}, "SEC-06": {"fact_id": "SEC-06", "domain": "infosec", "topic": "incidents", "statement": "In October 2025, a misconfigured Brevis log bucket exposed merchant contact data (no card data). Brevis reported it to CERT-In 9 days later.", "entity": "Brevis Pay", "metric": "certin_report_delay_hours", "value_num": 216, "value_text": "", "unit": "hours", "as_of": "2025-11-06", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Security_Pack.pdf §5", "reliability": "high"}, "SEC-07": {"fact_id": "SEC-07", "domain": "infosec", "topic": "policy", "statement": "Legion policy: incidents must be reported to CERT-In within 6 hours, and vendors must notify Legion within 2 hours.", "entity": "Legion Capital", "metric": "vendor_notification_hours", "value_num": 2, "value_text": "", "unit": "hours", "as_of": "2025-04-01", "superseded_by": "", "source_type": "document", "source_ref": "Legion_InfoSec_Vendor_Policy.pdf §5", "reliability": "high"}, "SEC-08": {"fact_id": "SEC-08", "domain": "infosec", "topic": "incidents", "statement": "Arvanta reported its November 2025 minor security incident to CERT-In within 5 hours.", "entity": "Arvanta Payments", "metric": "certin_report_delay_hours", "value_num": 5, "value_text": "", "unit": "hours", "as_of": "2025-11-20", "superseded_by": "", "source_type": "document", "source_ref": "Legion_InfoSec_Vendor_Policy.pdf Appendix A", "reliability": "high"}, "SEC-09": {"fact_id": "SEC-09", "domain": "infosec", "topic": "certification", "statement": "Brevis Pay's PCI DSS v4.0 attestation is valid until June 2027; Arvanta's is valid until February 2027.", "entity": "Brevis Pay", "metric": "pci_dss_valid_until", "value_num": null, "value_text": "2027-06-30", "unit": "date", "as_of": "2026-09-01", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Security_Pack.pdf §2; Legion_InfoSec_Vendor_Policy.pdf Appendix A", "reliability": "high"}, "SEC-10": {"fact_id": "SEC-10", "domain": "infosec", "topic": "access_control", "statement": "Brevis enforces MFA and single sign-on on merchant dashboards; Arvanta's MFA is optional for merchant admin users.", "entity": "Brevis Pay", "metric": "merchant_dashboard_mfa", "value_num": null, "value_text": "enforced", "unit": "", "as_of": "2026-09-01", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Security_Pack.pdf §6; Legion_InfoSec_Vendor_Policy.pdf Appendix A", "reliability": "high"}, "SEC-11": {"fact_id": "SEC-11", "domain": "infosec", "topic": "vendor_review", "statement": "Arvanta's annual vendor risk assessment was last done in November 2025 and is due again in November 2026.", "entity": "Arvanta Payments", "metric": "last_vendor_assessment", "value_num": null, "value_text": "2025-11", "unit": "", "as_of": "2025-11-15", "superseded_by": "", "source_type": "document", "source_ref": "Legion_InfoSec_Vendor_Policy.pdf Appendix A", "reliability": "high"}, "SEC-12": {"fact_id": "SEC-12", "domain": "infosec", "topic": "tokenisation", "statement": "Both gateways support RBI card-on-file tokenisation.", "entity": "Brevis Pay", "metric": "cof_tokenisation", "value_num": null, "value_text": "supported", "unit": "", "as_of": "2026-09-01", "superseded_by": "", "source_type": "document", "source_ref": "Brevis_Security_Pack.pdf §6", "reliability": "high"}, "OPS-01": {"fact_id": "OPS-01", "domain": "ops", "topic": "success_rate", "statement": "Overall payment success rate: Arvanta 97.8% (12 months); Brevis 97.6% (pilot, Aug–Sep 2026).", "entity": "Brevis Pay", "metric": "success_rate_pct", "value_num": 97.6, "value_text": "", "unit": "%", "as_of": "2026-09-30", "superseded_by": "", "source_type": "table", "source_ref": "transactions_monthly", "reliability": "high"}, "OPS-02": {"fact_id": "OPS-02", "domain": "ops", "topic": "success_rate", "statement": "At Coral Bank and Tamra Bank (18% of volume), Brevis succeeds 94.8% and 95.2% of the time, against Arvanta's 97.5%.", "entity": "Brevis Pay", "metric": "success_rate_weak_banks_pct", "value_num": 94.8, "value_text": "", "unit": "%", "as_of": "2026-09-30", "superseded_by": "", "source_type": "table", "source_ref": "transactions_monthly", "reliability": "high"}, "OPS-03": {"fact_id": "OPS-03", "domain": "ops", "topic": "success_rate", "statement": "At all other banks (82% of volume), Brevis succeeds 98.2% of the time, against Arvanta's 97.9%.", "entity": "Brevis Pay", "metric": "success_rate_other_banks_pct", "value_num": 98.2, "value_text": "", "unit": "%", "as_of": "2026-09-30", "superseded_by": "", "source_type": "table", "source_ref": "transactions_monthly", "reliability": "high"}, "OPS-04": {"fact_id": "OPS-04", "domain": "ops", "topic": "uptime", "statement": "Uptime over the last 12 months: Arvanta 99.82%, Brevis 99.95%.", "entity": "Brevis Pay", "metric": "uptime_pct", "value_num": 99.95, "value_text": "", "unit": "%", "as_of": "2026-09-30", "superseded_by": "", "source_type": "table", "source_ref": "gateway_health_monthly", "reliability": "high"}, "OPS-05": {"fact_id": "OPS-05", "domain": "ops", "topic": "latency", "statement": "95th-percentile payment latency: Arvanta 1.9 seconds, Brevis 1.4 seconds.", "entity": "Brevis Pay", "metric": "p95_latency_ms", "value_num": 1400, "value_text": "", "unit": "ms", "as_of": "2026-09-30", "superseded_by": "", "source_type": "table", "source_ref": "gateway_health_monthly", "reliability": "high"}, "OPS-06": {"fact_id": "OPS-06", "domain": "ops", "topic": "incidents", "statement": "Major availability incidents in the last 12 months: Arvanta 3 (including a 4-hour outage on 14 June 2026); Brevis 1.", "entity": "Arvanta Payments", "metric": "major_incidents_12m", "value_num": 3, "value_text": "", "unit": "incidents", "as_of": "2026-09-30", "superseded_by": "", "source_type": "table", "source_ref": "incidents", "reliability": "high"}, "OPS-07": {"fact_id": "OPS-07", "domain": "ops", "topic": "mandates", "statement": "UPI AutoPay mandate success: Arvanta 96.1% (12 months), Brevis 97.4% (pilot).", "entity": "Brevis Pay", "metric": "autopay_success_pct", "value_num": 97.4, "value_text": "", "unit": "%", "as_of": "2026-09-30", "superseded_by": "", "source_type": "table", "source_ref": "mandates_monthly", "reliability": "high"}, "OPS-08": {"fact_id": "OPS-08", "domain": "ops", "topic": "coverage", "statement": "Brevis does not support eNACH for two small banks (about 2% of mandates); those must stay on Arvanta.", "entity": "Brevis Pay", "metric": "enach_unsupported_share_pct", "value_num": 2, "value_text": "", "unit": "% of mandates", "as_of": "2026-09-25", "superseded_by": "", "source_type": "document", "source_ref": "Ops_Review_Q3_2026.pdf §3", "reliability": "high"}, "OPS-09": {"fact_id": "OPS-09", "domain": "ops", "topic": "migration", "statement": "Internal estimate: migrating to Brevis takes 6 weeks with 4 engineers.", "entity": "Legion Capital", "metric": "migration_weeks", "value_num": 6, "value_text": "", "unit": "weeks", "as_of": "2026-09-25", "superseded_by": "", "source_type": "document", "source_ref": "Ops_Review_Q3_2026.pdf §5", "reliability": "high"}, "OPS-10": {"fact_id": "OPS-10", "domain": "ops", "topic": "capacity", "statement": "Only 3 payments engineers are free from November 2026, so the 6-week plan is likely to slip to about 8 weeks.", "entity": "Legion Capital", "metric": "engineers_available", "value_num": 3, "value_text": "", "unit": "engineers", "as_of": "2026-09-25", "superseded_by": "", "source_type": "document", "source_ref": "Ops_Review_Q3_2026.pdf §5", "reliability": "high"}, "OPS-11": {"fact_id": "OPS-11", "domain": "ops", "topic": "routing", "statement": "Legion's payment routing layer can split traffic by issuing bank and payment method.", "entity": "Legion Capital", "metric": "bank_level_routing", "value_num": null, "value_text": "supported", "unit": "", "as_of": "2026-09-25", "superseded_by": "", "source_type": "document", "source_ref": "Ops_Review_Q3_2026.pdf §4", "reliability": "high"}, "OPS-12": {"fact_id": "OPS-12", "domain": "ops", "topic": "reconciliation", "statement": "Brevis offers a real-time settlement and reconciliation API; Arvanta provides daily files.", "entity": "Brevis Pay", "metric": "realtime_recon", "value_num": null, "value_text": "yes", "unit": "", "as_of": "2026-09-25", "superseded_by": "", "source_type": "document", "source_ref": "Ops_Review_Q3_2026.pdf §4", "reliability": "high"}, "OPS-13": {"fact_id": "OPS-13", "domain": "ops", "topic": "migration", "statement": "Brevis's sales deck claims migration can be done 'in under 4 weeks'.", "entity": "Brevis Pay", "metric": "vendor_claimed_migration_weeks", "value_num": 4, "value_text": "", "unit": "weeks", "as_of": "2026-08-20", "superseded_by": "", "source_type": "document", "source_ref": "Ops_Review_Q3_2026.pdf Appendix (vendor claims)", "reliability": "low"}};
+const SAMPLE = {
+ "run_id": "run_DEC-001_sample",
+ "status": "done",
+ "created_at": "2026-10-15T12:12:58Z",
+ "brief": {
+  "decision_id": "DEC-001",
+  "question": "Should Legion Capital move 40% of its payment volume (about ₹600 crore a month) from Arvanta Payments to Brevis Pay?",
+  "options": {
+   "A": "Stay with Arvanta Payments for 100% of volume",
+   "B": "Move 40% of volume to Brevis Pay"
+  },
+  "constraints": [
+   "Payment data must be stored and processed only in India",
+   "A decision is needed within 2 weeks",
+   "No more than one gateway migration this financial year",
+   "Overall payment success rate must not fall"
+  ],
+  "criteria": [
+   {
+    "name": "Cost",
+    "weight": 0.25,
+    "owners": [
+     "finance"
+    ],
+    "good_looks_like": "Lower total cost after any fixes needed"
+   },
+   {
+    "name": "Security & compliance",
+    "weight": 0.25,
+    "owners": [
+     "infosec",
+     "legal"
+    ],
+    "good_looks_like": "Meets every data, security and regulatory rule; a blocking finding overrides the score"
+   },
+   {
+    "name": "Reliability",
+    "weight": 0.2,
+    "owners": [
+     "ops"
+    ],
+    "good_looks_like": "No drop in payment success rate or uptime"
+   },
+   {
+    "name": "Growth",
+    "weight": 0.2,
+    "owners": [
+     "business"
+    ],
+    "good_looks_like": "Unlocks new merchants and products; meets the vendor-concentration OKR"
+   },
+   {
+    "name": "Customer impact",
+    "weight": 0.1,
+    "owners": [
+     "customer"
+    ],
+    "good_looks_like": "Fewer complaints, faster settlements and refunds, lower churn"
+   }
+  ],
+  "context": "Legion Capital Ltd: Fictional RBI-registered NBFC (digital personal and SME loans) with a merchant checkout product, Legion Pay. All payment volume currently goes through Arvanta Payments; Brevis Pay has run a 2% pilot since August 2026."
+ },
+ "routing": {
+  "decision_id": "DEC-001",
+  "routing_query": "Gateway migration decision for an NBFC: compare fees, one-time migration and exit costs, data residency and sub-processors, contract terms and audit rights, payment success and uptime by bank, merchant growth and vendor-concentration targets, and customer complaints and settlement times.",
+  "scores": [
+   {
+    "adviser_id": "finance",
+    "similarity": 0.812,
+    "best_matching_capability": "One-time investment, migration and exit costs",
+    "selected": true,
+    "reason": "above margin"
+   },
+   {
+    "adviser_id": "infosec",
+    "similarity": 0.794,
+    "best_matching_capability": "Where data is stored and processed, including sub-processors",
+    "selected": true,
+    "reason": "above margin"
+   },
+   {
+    "adviser_id": "legal",
+    "similarity": 0.781,
+    "best_matching_capability": "Contracts, terms, notice periods, exit fees and renewals",
+    "selected": true,
+    "reason": "above margin"
+   },
+   {
+    "adviser_id": "ops",
+    "similarity": 0.763,
+    "best_matching_capability": "Payment success rates, uptime and latency by bank",
+    "selected": true,
+    "reason": "above margin"
+   },
+   {
+    "adviser_id": "business",
+    "similarity": 0.702,
+    "best_matching_capability": "Strategy, OKRs and growth pipeline",
+    "selected": true,
+    "reason": "always-include rule: vendor concentration OKR"
+   },
+   {
+    "adviser_id": "customer",
+    "similarity": 0.668,
+    "best_matching_capability": "Complaints, settlement times and churn",
+    "selected": true,
+    "reason": "always-include rule: customer-facing change"
+   }
+  ],
+  "selected": [
+   "finance",
+   "infosec",
+   "legal",
+   "ops",
+   "business",
+   "customer"
+  ],
+  "created_at": "2026-10-15T12:13:04Z"
+ },
+ "positions": [
+  {
+   "adviser_id": "finance",
+   "stance": "favours_B",
+   "confidence": 0.78,
+   "summary": "Moving 40% saves about ₹10.4 lakh a month after the hosting add-on, dispute fees and faster settlement, and pays back its ₹65 lakh one-time cost in about 6 months. A 15% first phase avoids the exit fee but barely breaks even.",
+   "conditions": [
+    "Phase the move so the exit fee is paid only once the larger saving starts"
+   ],
+   "claims": [
+    {
+     "claim_id": "finance-1",
+     "text": "The 40% slice under decision is about ₹600 crore a month.",
+     "evidence_ids": [
+      "FIN-01",
+      "BRIEF"
+     ],
+     "kind": "calculation",
+     "formula": "0.40 × 1500",
+     "value": 600,
+     "unit": "INR crore / month"
+    },
+    {
+     "claim_id": "finance-2",
+     "text": "Brevis's fee is 0.024 points lower, a gross saving of ₹14.4 lakh a month on the 40% slice.",
+     "evidence_ids": [
+      "FIN-01",
+      "FIN-02",
+      "FIN-03"
+     ],
+     "kind": "calculation",
+     "formula": "600 crore × (0.20% − 0.176%)",
+     "value": 14.4,
+     "unit": "INR lakh / month"
+    },
+    {
+     "claim_id": "finance-3",
+     "text": "Net of the ₹6 lakh hosting add-on, ₹2 lakh extra dispute fees and ₹4 lakh lower funding cost, the monthly benefit is ₹10.4 lakh.",
+     "evidence_ids": [
+      "FIN-04",
+      "FIN-06",
+      "FIN-08"
+     ],
+     "kind": "calculation",
+     "formula": "14.4 − 6 − 2 + 4",
+     "value": 10.4,
+     "unit": "INR lakh / month"
+    },
+    {
+     "claim_id": "finance-4",
+     "text": "One-time cost is ₹65 lakh (₹40 lakh migration plus ₹25 lakh exit fee), so payback is about 6.25 months.",
+     "evidence_ids": [
+      "FIN-05",
+      "LEG-01"
+     ],
+     "kind": "calculation",
+     "formula": "(40 + 25) ÷ 10.4",
+     "value": 6.25,
+     "unit": "months"
+    },
+    {
+     "claim_id": "finance-5",
+     "text": "A 15% first phase keeps Arvanta at 85%, so no exit fee; its net benefit is about ₹0.15 lakh a month because the add-on is a flat fee.",
+     "evidence_ids": [
+      "FIN-03",
+      "FIN-04",
+      "LEG-01"
+     ],
+     "kind": "calculation",
+     "formula": "5.4 − 6 − 0.75 + 1.5",
+     "value": 0.15,
+     "unit": "INR lakh / month"
+    },
+    {
+     "claim_id": "finance-6",
+     "text": "Brevis would be 18% cheaper than Arvanta.",
+     "evidence_ids": [
+      "FIN-12"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": 18,
+     "unit": "%"
+    }
+   ],
+   "criterion_scores": [
+    {
+     "criterion": "Cost",
+     "option": "A",
+     "score": 2,
+     "reason": "Run-rate is 9% over budget with no relief",
+     "evidence_ids": [
+      "FIN-09"
+     ]
+    },
+    {
+     "criterion": "Cost",
+     "option": "B",
+     "score": 4,
+     "reason": "₹10.4 lakh a month net, 6-month payback",
+     "evidence_ids": [
+      "FIN-03",
+      "FIN-05"
+     ]
+    }
+   ],
+   "blocking_findings": [],
+   "handoffs": [
+    "legal: confirm the exit-fee threshold and notice period"
+   ]
+  },
+  {
+   "adviser_id": "business",
+   "stance": "favours_B",
+   "confidence": 0.74,
+   "summary": "Only Brevis unlocks the ₹45 crore cross-border pipeline the board wants live by March 2027, and a second gateway meets the 70% vendor-concentration OKR. Waiting costs deals now.",
+   "conditions": [],
+   "claims": [
+    {
+     "claim_id": "business-1",
+     "text": "30 cross-border SME merchants worth about ₹45 crore a month need international card acceptance, which only Brevis supports.",
+     "evidence_ids": [
+      "BUS-01"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "business-2",
+     "text": "The FY27 OKR caps any single gateway at 70% of volume by 31 March 2027; a 40% move meets it, a 15% phase alone doesn't.",
+     "evidence_ids": [
+      "BUS-02"
+     ],
+     "kind": "calculation",
+     "formula": "100 − 40 = 60 ≤ 70",
+     "value": 60,
+     "unit": "% on Arvanta"
+    },
+    {
+     "claim_id": "business-3",
+     "text": "70% of SME deals lost in Q2–Q3 cited missing international card acceptance.",
+     "evidence_ids": [
+      "BUS-08"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "business-4",
+     "text": "Arvanta's June outage delayed ₹2.3 crore of collections and forced ₹11 lakh of fee waivers.",
+     "evidence_ids": [
+      "BUS-10"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    }
+   ],
+   "criterion_scores": [
+    {
+     "criterion": "Growth",
+     "option": "A",
+     "score": 2,
+     "reason": "No cross-border acceptance; OKR missed",
+     "evidence_ids": [
+      "BUS-01",
+      "BUS-02"
+     ]
+    },
+    {
+     "criterion": "Growth",
+     "option": "B",
+     "score": 5,
+     "reason": "Unlocks pipeline and BNPL APIs",
+     "evidence_ids": [
+      "BUS-01",
+      "BUS-04"
+     ]
+    }
+   ],
+   "blocking_findings": [],
+   "handoffs": []
+  },
+  {
+   "adviser_id": "customer",
+   "stance": "favours_B",
+   "confidence": 0.66,
+   "summary": "Settlement complaints on Arvanta nearly tripled in three months and four large merchants are threatening to leave. Brevis refunds faster and converts better, but Coral and Tamra Bank customers complained more in the pilot.",
+   "conditions": [
+    "Keep Coral Bank and Tamra Bank traffic on Arvanta until Brevis's success rate there matches"
+   ],
+   "claims": [
+    {
+     "claim_id": "customer-1",
+     "text": "Settlement-delay complaints rose from 120 in July to 340 in September 2026.",
+     "evidence_ids": [
+      "CUS-01"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "customer-2",
+     "text": "Four merchants worth about ₹38 crore a month have threatened to leave over settlement delays.",
+     "evidence_ids": [
+      "CUS-02"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "customer-3",
+     "text": "Refunds take 3.0 days on Brevis against 5.2 days on Arvanta.",
+     "evidence_ids": [
+      "CUS-07"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "customer-4",
+     "text": "Coral and Tamra Bank customers complained 40% more on Brevis during the pilot.",
+     "evidence_ids": [
+      "CUS-05"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    }
+   ],
+   "criterion_scores": [
+    {
+     "criterion": "Customer impact",
+     "option": "A",
+     "score": 2,
+     "reason": "Rising complaints and churn",
+     "evidence_ids": [
+      "CUS-01",
+      "CUS-09"
+     ]
+    },
+    {
+     "criterion": "Customer impact",
+     "option": "B",
+     "score": 4,
+     "reason": "Faster refunds, better conversion",
+     "evidence_ids": [
+      "CUS-04",
+      "CUS-07"
+     ]
+    }
+   ],
+   "blocking_findings": [],
+   "handoffs": [
+    "ops: route Coral and Tamra Bank traffic separately"
+   ]
+  },
+  {
+   "adviser_id": "legal",
+   "stance": "favours_A",
+   "confidence": 0.71,
+   "summary": "The Brevis draft is much weaker than Arvanta's contract: no data-location clause, no audit rights for Legion or the RBI, Singapore law and no signed DPA. Don't sign until these are fixed. Moving 40% also triggers Arvanta's ₹25 lakh exit fee.",
+   "conditions": [
+    "Data-location clause: store and process in India only",
+    "Audit and inspection rights for Legion and the RBI",
+    "Indian governing law and Mumbai courts",
+    "24-month price lock",
+    "Signed DPDP-aligned DPA",
+    "Vendor notifies Legion of incidents within 2 hours"
+   ],
+   "claims": [
+    {
+     "claim_id": "legal-1",
+     "text": "Arvanta's ₹25 lakh exit fee applies if its share falls below 80% before 31 March 2028.",
+     "evidence_ids": [
+      "LEG-01"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "legal-2",
+     "text": "Legion must give Arvanta 90 days' written notice before reducing volume.",
+     "evidence_ids": [
+      "LEG-02"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "legal-3",
+     "text": "The Brevis draft gives no audit or inspection rights to Legion or the RBI, which RBI outsourcing norms require.",
+     "evidence_ids": [
+      "LEG-08"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "legal-4",
+     "text": "Brevis lets itself change prices on 30 days' notice and uses Singapore law.",
+     "evidence_ids": [
+      "LEG-06",
+      "LEG-07"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "legal-5",
+     "text": "Brevis has not provided a data processing agreement.",
+     "evidence_ids": [
+      "LEG-09"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    }
+   ],
+   "criterion_scores": [
+    {
+     "criterion": "Security & compliance",
+     "option": "A",
+     "score": 4,
+     "reason": "Signed DPA, Indian law, audit rights",
+     "evidence_ids": [
+      "LEG-09",
+      "LEG-07"
+     ]
+    },
+    {
+     "criterion": "Security & compliance",
+     "option": "B",
+     "score": 2,
+     "reason": "Draft lacks audit rights, DPA and data clause",
+     "evidence_ids": [
+      "LEG-04",
+      "LEG-08",
+      "LEG-09"
+     ]
+    }
+   ],
+   "blocking_findings": [],
+   "handoffs": []
+  },
+  {
+   "adviser_id": "infosec",
+   "stance": "favours_A",
+   "confidence": 0.82,
+   "summary": "Brevis sends card data to a fraud-scoring sub-processor in Singapore, which breaks Legion's India-only rule. It also has an open high-severity pen-test finding and a SOC 2 report 14 months old. All three are fixable before go-live.",
+   "conditions": [
+    "Switch on the India-only hosting add-on before any volume moves",
+    "Close the open high-severity pen-test finding",
+    "Provide a current SOC 2 Type II report"
+   ],
+   "claims": [
+    {
+     "claim_id": "infosec-1",
+     "text": "Brevis's fraud-scoring sub-processor, Sentrix Risk Pte Ltd, is in Singapore and receives tokenised card data.",
+     "evidence_ids": [
+      "SEC-01"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "infosec-2",
+     "text": "Legion policy requires vendors to store and process payment data only in India.",
+     "evidence_ids": [
+      "SEC-02"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "infosec-3",
+     "text": "The India-only add-on moves fraud scoring to Mumbai within 3 weeks of ordering.",
+     "evidence_ids": [
+      "SEC-05"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "infosec-4",
+     "text": "A high-severity pen-test finding on the refund API has been open for 47 days.",
+     "evidence_ids": [
+      "SEC-04"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "infosec-5",
+     "text": "Brevis's latest SOC 2 Type II report is about 14 months old.",
+     "evidence_ids": [
+      "SEC-03"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    }
+   ],
+   "criterion_scores": [
+    {
+     "criterion": "Security & compliance",
+     "option": "A",
+     "score": 4,
+     "reason": "Compliant today",
+     "evidence_ids": [
+      "SEC-08",
+      "SEC-12"
+     ]
+    },
+    {
+     "criterion": "Security & compliance",
+     "option": "B",
+     "score": 1,
+     "reason": "Breaks the India-only rule until fixed",
+     "evidence_ids": [
+      "SEC-01",
+      "SEC-02"
+     ]
+    }
+   ],
+   "blocking_findings": [
+    {
+     "text": "Card data is processed in Singapore by Sentrix Risk, breaking Legion's India-only processing rule.",
+     "evidence_ids": [
+      "SEC-01",
+      "SEC-02"
+     ],
+     "fix": "Order the India-only hosting add-on so fraud scoring runs in Mumbai, and confirm it in the contract before any volume moves."
+    }
+   ],
+   "handoffs": [
+    "legal: add a data-location clause"
+   ]
+  },
+  {
+   "adviser_id": "ops",
+   "stance": "conditional",
+   "confidence": 0.69,
+   "summary": "Brevis has better uptime and latency and wins at 82% of banks, but loses badly at Coral and Tamra Bank. Our routing layer can split by bank, so move only the traffic Brevis handles well. With 3 engineers free, plan for 8 weeks.",
+   "conditions": [
+    "Route Coral Bank, Tamra Bank and the two eNACH banks to Arvanta",
+    "Plan for an 8-week migration"
+   ],
+   "claims": [
+    {
+     "claim_id": "ops-1",
+     "text": "Uptime over 12 months is 99.95% on Brevis against 99.82% on Arvanta.",
+     "evidence_ids": [
+      "OPS-04"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "ops-2",
+     "text": "At Coral and Tamra Bank (18% of volume) Brevis succeeds 94.8–95.2% of the time against Arvanta's 97.5%.",
+     "evidence_ids": [
+      "OPS-02"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "ops-3",
+     "text": "At the other 82% of volume Brevis succeeds 98.2% of the time against 97.9%.",
+     "evidence_ids": [
+      "OPS-03"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "ops-4",
+     "text": "The routing layer can split traffic by issuing bank and payment method.",
+     "evidence_ids": [
+      "OPS-11"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "ops-5",
+     "text": "Brevis says migration can be done in under 4 weeks.",
+     "evidence_ids": [
+      "OPS-13"
+     ],
+     "kind": "fact",
+     "formula": null,
+     "value": null,
+     "unit": null
+    },
+    {
+     "claim_id": "ops-6",
+     "text": "With only 3 engineers free from November, migration will take about 8 weeks.",
+     "evidence_ids": [
+      "OPS-09",
+      "OPS-10"
+     ],
+     "kind": "calculation",
+     "formula": "6 weeks × 4 ÷ 3",
+     "value": 8,
+     "unit": "weeks"
+    }
+   ],
+   "criterion_scores": [
+    {
+     "criterion": "Reliability",
+     "option": "A",
+     "score": 3,
+     "reason": "Lower uptime, 3 major incidents",
+     "evidence_ids": [
+      "OPS-04",
+      "OPS-06"
+     ]
+    },
+    {
+     "criterion": "Reliability",
+     "option": "B",
+     "score": 4,
+     "reason": "Better uptime if weak banks stay on Arvanta",
+     "evidence_ids": [
+      "OPS-03",
+      "OPS-04",
+      "OPS-11"
+     ]
+    }
+   ],
+   "blocking_findings": [],
+   "handoffs": []
+  }
+ ],
+ "claim_verdicts": [
+  {
+   "claim_id": "finance-1",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "finance-2",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "finance-3",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "finance-4",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "finance-5",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "finance-6",
+   "status": "STRIKE",
+   "check": "superseded",
+   "reason": "FIN-12 was replaced by FIN-03: the final quote is 12% cheaper, not 18%."
+  },
+  {
+   "claim_id": "business-1",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "business-2",
+   "status": "FLAG",
+   "check": "number_check",
+   "reason": "True for the full 40% move only. A 15% first phase leaves Arvanta at 85%, above the 70% OKR."
+  },
+  {
+   "claim_id": "business-3",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "business-4",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "customer-1",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "customer-2",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "customer-3",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "customer-4",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "legal-1",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "legal-2",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "legal-3",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "legal-4",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "legal-5",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "infosec-1",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "infosec-2",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "infosec-3",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "infosec-4",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "infosec-5",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "ops-1",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "ops-2",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "ops-3",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "ops-4",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "ops-5",
+   "status": "FLAG",
+   "check": "low_reliability",
+   "reason": "OPS-13 is a vendor sales claim (low reliability). Ops' own estimate is 6–8 weeks."
+  },
+  {
+   "claim_id": "ops-6",
+   "status": "KEEP",
+   "check": "ok",
+   "reason": "Evidence found, current and consistent."
+  },
+  {
+   "claim_id": "infosec-B1",
+   "status": "FLAG",
+   "check": "blocking_protected",
+   "reason": "Blocking finding kept. The fix cites SEC-05; the contract clause still has to be confirmed by Legal."
+  }
+ ],
+ "scorecard": {
+  "rows": [
+   {
+    "criterion": "Cost",
+    "weight": 0.25,
+    "scores": {
+     "A": 2,
+     "B": 4
+    },
+    "evidence_ids": [
+     "FIN-03",
+     "FIN-05",
+     "FIN-09"
+    ],
+    "owners": [
+     "finance"
+    ]
+   },
+   {
+    "criterion": "Security & compliance",
+    "weight": 0.25,
+    "scores": {
+     "A": 4,
+     "B": 1.5
+    },
+    "evidence_ids": [
+     "SEC-01",
+     "LEG-08",
+     "LEG-09"
+    ],
+    "owners": [
+     "infosec",
+     "legal"
+    ]
+   },
+   {
+    "criterion": "Reliability",
+    "weight": 0.2,
+    "scores": {
+     "A": 3,
+     "B": 4
+    },
+    "evidence_ids": [
+     "OPS-03",
+     "OPS-04"
+    ],
+    "owners": [
+     "ops"
+    ]
+   },
+   {
+    "criterion": "Growth",
+    "weight": 0.2,
+    "scores": {
+     "A": 2,
+     "B": 5
+    },
+    "evidence_ids": [
+     "BUS-01",
+     "BUS-02"
+    ],
+    "owners": [
+     "business"
+    ]
+   },
+   {
+    "criterion": "Customer impact",
+    "weight": 0.1,
+    "scores": {
+     "A": 2,
+     "B": 4
+    },
+    "evidence_ids": [
+     "CUS-01",
+     "CUS-07"
+    ],
+    "owners": [
+     "customer"
+    ]
+   }
+  ],
+  "weighted_totals": {
+   "A": 2.7,
+   "B": 3.57
+  },
+  "blocked_options": {
+   "B": [
+    "Card data is processed in Singapore (SEC-01) until the India-only add-on is live."
+   ]
+  }
+ },
+ "memo": {
+  "decision_id": "DEC-001",
+  "recommendation": "Approve a phased move to Brevis Pay. Start with about 15% of volume once the conditions below are met, then scale to 40% after a 60-day review, before 31 March 2027.",
+  "stance": "conditional",
+  "confidence": 0.74,
+  "conditions": [
+   "Brevis commits in the contract to India-only processing and switches on its India-only fraud-scoring add-on before any volume moves (SEC-01, SEC-05; InfoSec, Legal)",
+   "Brevis closes the open high-severity pen-test finding on its refund API (SEC-04; InfoSec)",
+   "Brevis provides a current SOC 2 Type II report (SEC-03; InfoSec)",
+   "Contract fixes before signing: Indian governing law, audit rights for Legion and the RBI, a 24-month price lock, a signed DPA and 2-hour incident notice (LEG-06, LEG-07, LEG-08, LEG-09; Legal)",
+   "Coral Bank, Tamra Bank and the two eNACH banks stay on Arvanta so the overall success rate doesn't fall (OPS-02, OPS-08, CUS-05; Ops, Customer)"
+  ],
+  "phased_plan": [
+   "Now: serve Arvanta 90 days' notice and negotiate the contract fixes (LEG-02).",
+   "Phase 1: route about 15% of volume to Brevis, excluding Coral, Tamra and the eNACH banks. Arvanta keeps 85%, so no exit fee (LEG-01).",
+   "60-day review: check success rate by bank, settlement complaints and the pen-test fix.",
+   "Phase 2: scale to 40% before 31 March 2027 to meet the 70% vendor OKR and the board's cross-border deadline, accepting the ₹25 lakh exit fee (BUS-02, BUS-09)."
+  ],
+  "scorecard": {
+   "rows": [
+    {
+     "criterion": "Cost",
+     "weight": 0.25,
+     "scores": {
+      "A": 2,
+      "B": 4
+     },
+     "evidence_ids": [
+      "FIN-03",
+      "FIN-05",
+      "FIN-09"
+     ],
+     "owners": [
+      "finance"
+     ]
+    },
+    {
+     "criterion": "Security & compliance",
+     "weight": 0.25,
+     "scores": {
+      "A": 4,
+      "B": 1.5
+     },
+     "evidence_ids": [
+      "SEC-01",
+      "LEG-08",
+      "LEG-09"
+     ],
+     "owners": [
+      "infosec",
+      "legal"
+     ]
+    },
+    {
+     "criterion": "Reliability",
+     "weight": 0.2,
+     "scores": {
+      "A": 3,
+      "B": 4
+     },
+     "evidence_ids": [
+      "OPS-03",
+      "OPS-04"
+     ],
+     "owners": [
+      "ops"
+     ]
+    },
+    {
+     "criterion": "Growth",
+     "weight": 0.2,
+     "scores": {
+      "A": 2,
+      "B": 5
+     },
+     "evidence_ids": [
+      "BUS-01",
+      "BUS-02"
+     ],
+     "owners": [
+      "business"
+     ]
+    },
+    {
+     "criterion": "Customer impact",
+     "weight": 0.1,
+     "scores": {
+      "A": 2,
+      "B": 4
+     },
+     "evidence_ids": [
+      "CUS-01",
+      "CUS-07"
+     ],
+     "owners": [
+      "customer"
+     ]
+    }
+   ],
+   "weighted_totals": {
+    "A": 2.7,
+    "B": 3.57
+   },
+   "blocked_options": {
+    "B": [
+     "Card data is processed in Singapore (SEC-01) until the India-only add-on is live."
+    ]
+   }
+  },
+  "key_numbers": [
+   {
+    "claim_id": "k1",
+    "text": "Volume moving to Brevis at 40%",
+    "evidence_ids": [
+     "BRIEF",
+     "FIN-01"
+    ],
+    "kind": "calculation",
+    "formula": "0.40 × 1500",
+    "value": 600,
+    "unit": "₹ crore / month"
+   },
+   {
+    "claim_id": "k2",
+    "text": "Net monthly benefit at 40%",
+    "evidence_ids": [
+     "FIN-02",
+     "FIN-03",
+     "FIN-04",
+     "FIN-06",
+     "FIN-08"
+    ],
+    "kind": "calculation",
+    "formula": "14.4 − 6 − 2 + 4",
+    "value": 10.4,
+    "unit": "₹ lakh / month"
+   },
+   {
+    "claim_id": "k3",
+    "text": "One-time cost at 40%",
+    "evidence_ids": [
+     "FIN-05",
+     "LEG-01"
+    ],
+    "kind": "calculation",
+    "formula": "40 + 25",
+    "value": 65,
+    "unit": "₹ lakh"
+   },
+   {
+    "claim_id": "k4",
+    "text": "Payback at 40%",
+    "evidence_ids": [
+     "FIN-05",
+     "LEG-01"
+    ],
+    "kind": "calculation",
+    "formula": "65 ÷ 10.4",
+    "value": 6.25,
+    "unit": "months"
+   },
+   {
+    "claim_id": "k5",
+    "text": "Net monthly benefit at 15% (no exit fee)",
+    "evidence_ids": [
+     "FIN-03",
+     "FIN-04",
+     "LEG-01"
+    ],
+    "kind": "calculation",
+    "formula": "5.4 − 6 − 0.75 + 1.5",
+    "value": 0.15,
+    "unit": "₹ lakh / month"
+   },
+   {
+    "claim_id": "k6",
+    "text": "Arvanta share after the full move",
+    "evidence_ids": [
+     "BUS-02"
+    ],
+    "kind": "calculation",
+    "formula": "100 − 40",
+    "value": 60,
+    "unit": "% of volume"
+   }
+  ],
+  "blocking_findings": [
+   {
+    "text": "Card data is processed in Singapore by Sentrix Risk, breaking Legion's India-only processing rule.",
+    "evidence_ids": [
+     "SEC-01",
+     "SEC-02"
+    ],
+    "fix": "Order the India-only hosting add-on so fraud scoring runs in Mumbai, and confirm it in the contract before any volume moves."
+   }
+  ],
+  "dissent": [
+   "Legal favours staying with Arvanta until the Brevis contract matches Arvanta's on liability, law and audit rights (LEG-05, LEG-07, LEG-08).",
+   "InfoSec favours waiting: Brevis is a younger vendor that took 9 days to report a 2025 incident against a 6-hour rule (SEC-06, SEC-07).",
+   "Business wants to move faster: every month without cross-border acceptance costs deals (BUS-01, BUS-08)."
+  ],
+  "assumptions": [
+   "The 25% volume growth forecast holds (FIN-10).",
+   "Brevis's pilot success rates hold at higher volume (OPS-03)."
+  ],
+  "numbers_to_watch": [
+   "Success rate at Coral and Tamra Bank, weekly (OPS-02)",
+   "Settlement-delay complaints, monthly (CUS-01)",
+   "Brevis pen-test finding status (SEC-04)",
+   "Merchant churn (CUS-09)"
+  ],
+  "evidence_index": [
+   "BRIEF",
+   "BUS-02",
+   "FIN-01",
+   "FIN-02",
+   "FIN-03",
+   "FIN-04",
+   "FIN-05",
+   "FIN-06",
+   "FIN-08",
+   "LEG-01"
+  ]
+ },
+ "memo_revisions": [
+  {
+   "decision_id": "DEC-001",
+   "recommendation": "Approve a phased move to Brevis Pay. Start with about 15% of volume once the conditions below are met, then scale to 40% after a 60-day review, before 31 March 2027.",
+   "stance": "conditional",
+   "confidence": 0.74,
+   "conditions": [
+    "Brevis commits in the contract to India-only processing and switches on its India-only fraud-scoring add-on before any volume moves (SEC-01, SEC-05; InfoSec, Legal)",
+    "Brevis closes the open high-severity pen-test finding on its refund API (SEC-04; InfoSec)",
+    "Contract fixes before signing: Indian governing law, audit rights for Legion and the RBI, a 24-month price lock, a signed DPA and 2-hour incident notice (LEG-06, LEG-07, LEG-08, LEG-09; Legal)",
+    "Coral Bank, Tamra Bank and the two eNACH banks stay on Arvanta so the overall success rate doesn't fall (OPS-02, OPS-08, CUS-05; Ops, Customer)"
+   ],
+   "phased_plan": [
+    "Now: serve Arvanta 90 days' notice and negotiate the contract fixes (LEG-02).",
+    "Phase 1: route about 15% of volume to Brevis, excluding Coral, Tamra and the eNACH banks. Arvanta keeps 85%, so no exit fee (LEG-01).",
+    "60-day review: check success rate by bank, settlement complaints and the pen-test fix.",
+    "Phase 2: scale to 40% before 31 March 2027 to meet the 70% vendor OKR and the board's cross-border deadline, accepting the ₹25 lakh exit fee (BUS-02, BUS-09)."
+   ],
+   "scorecard": {
+    "rows": [
+     {
+      "criterion": "Cost",
+      "weight": 0.25,
+      "scores": {
+       "A": 2,
+       "B": 4
+      },
+      "evidence_ids": [
+       "FIN-03",
+       "FIN-05",
+       "FIN-09"
+      ],
+      "owners": [
+       "finance"
+      ]
+     },
+     {
+      "criterion": "Security & compliance",
+      "weight": 0.25,
+      "scores": {
+       "A": 4,
+       "B": 1.5
+      },
+      "evidence_ids": [
+       "SEC-01",
+       "LEG-08",
+       "LEG-09"
+      ],
+      "owners": [
+       "infosec",
+       "legal"
+      ]
+     },
+     {
+      "criterion": "Reliability",
+      "weight": 0.2,
+      "scores": {
+       "A": 3,
+       "B": 4
+      },
+      "evidence_ids": [
+       "OPS-03",
+       "OPS-04"
+      ],
+      "owners": [
+       "ops"
+      ]
+     },
+     {
+      "criterion": "Growth",
+      "weight": 0.2,
+      "scores": {
+       "A": 2,
+       "B": 5
+      },
+      "evidence_ids": [
+       "BUS-01",
+       "BUS-02"
+      ],
+      "owners": [
+       "business"
+      ]
+     },
+     {
+      "criterion": "Customer impact",
+      "weight": 0.1,
+      "scores": {
+       "A": 2,
+       "B": 4
+      },
+      "evidence_ids": [
+       "CUS-01",
+       "CUS-07"
+      ],
+      "owners": [
+       "customer"
+      ]
+     }
+    ],
+    "weighted_totals": {
+     "A": 2.7,
+     "B": 3.57
+    },
+    "blocked_options": {
+     "B": [
+      "Card data is processed in Singapore (SEC-01) until the India-only add-on is live."
+     ]
+    }
+   },
+   "key_numbers": [
+    {
+     "claim_id": "k1",
+     "text": "Volume moving to Brevis at 40%",
+     "evidence_ids": [
+      "BRIEF",
+      "FIN-01"
+     ],
+     "kind": "calculation",
+     "formula": "0.40 × 1500",
+     "value": 600,
+     "unit": "₹ crore / month"
+    },
+    {
+     "claim_id": "k2",
+     "text": "Net monthly benefit at 40%",
+     "evidence_ids": [
+      "FIN-02",
+      "FIN-03",
+      "FIN-04",
+      "FIN-06",
+      "FIN-08"
+     ],
+     "kind": "calculation",
+     "formula": "14.4 − 6 − 2 + 4",
+     "value": 10.4,
+     "unit": "₹ lakh / month"
+    },
+    {
+     "claim_id": "k3",
+     "text": "One-time cost at 40%",
+     "evidence_ids": [
+      "FIN-05",
+      "LEG-01"
+     ],
+     "kind": "calculation",
+     "formula": "40 + 25",
+     "value": 65,
+     "unit": "₹ lakh"
+    },
+    {
+     "claim_id": "k4",
+     "text": "Payback at 40%",
+     "evidence_ids": [
+      "FIN-05",
+      "LEG-01"
+     ],
+     "kind": "calculation",
+     "formula": "65 ÷ 10.4",
+     "value": 6.25,
+     "unit": "months"
+    },
+    {
+     "claim_id": "k5",
+     "text": "Net monthly benefit at 15% (no exit fee)",
+     "evidence_ids": [
+      "FIN-03",
+      "FIN-04",
+      "LEG-01"
+     ],
+     "kind": "calculation",
+     "formula": "5.4 − 6 − 0.75 + 1.5",
+     "value": 0.15,
+     "unit": "₹ lakh / month"
+    },
+    {
+     "claim_id": "k6",
+     "text": "Arvanta share after the full move",
+     "evidence_ids": [
+      "BUS-02"
+     ],
+     "kind": "calculation",
+     "formula": "100 − 40",
+     "value": 60,
+     "unit": "% of volume"
+    }
+   ],
+   "blocking_findings": [
+    {
+     "text": "Card data is processed in Singapore by Sentrix Risk, breaking Legion's India-only processing rule.",
+     "evidence_ids": [
+      "SEC-01",
+      "SEC-02"
+     ],
+     "fix": "Order the India-only hosting add-on so fraud scoring runs in Mumbai, and confirm it in the contract before any volume moves."
+    }
+   ],
+   "dissent": [
+    "Legal favours staying with Arvanta until the Brevis contract matches Arvanta's on liability, law and audit rights (LEG-05, LEG-07, LEG-08).",
+    "InfoSec favours waiting: Brevis is a younger vendor that took 9 days to report a 2025 incident against a 6-hour rule (SEC-06, SEC-07).",
+    "Business wants to move faster: every month without cross-border acceptance costs deals (BUS-01, BUS-08)."
+   ],
+   "assumptions": [
+    "The 25% volume growth forecast holds (FIN-10).",
+    "Brevis's pilot success rates hold at higher volume (OPS-03)."
+   ],
+   "numbers_to_watch": [
+    "Success rate at Coral and Tamra Bank, weekly (OPS-02)",
+    "Settlement-delay complaints, monthly (CUS-01)",
+    "Brevis pen-test finding status (SEC-04)",
+    "Merchant churn (CUS-09)"
+   ],
+   "evidence_index": [
+    "BRIEF",
+    "BUS-02",
+    "FIN-01",
+    "FIN-02",
+    "FIN-03",
+    "FIN-04",
+    "FIN-05",
+    "FIN-06",
+    "FIN-08",
+    "LEG-01"
+   ]
+  },
+  {
+   "decision_id": "DEC-001",
+   "recommendation": "Approve a phased move to Brevis Pay. Start with about 15% of volume once the conditions below are met, then scale to 40% after a 60-day review, before 31 March 2027.",
+   "stance": "conditional",
+   "confidence": 0.74,
+   "conditions": [
+    "Brevis commits in the contract to India-only processing and switches on its India-only fraud-scoring add-on before any volume moves (SEC-01, SEC-05; InfoSec, Legal)",
+    "Brevis closes the open high-severity pen-test finding on its refund API (SEC-04; InfoSec)",
+    "Brevis provides a current SOC 2 Type II report (SEC-03; InfoSec)",
+    "Contract fixes before signing: Indian governing law, audit rights for Legion and the RBI, a 24-month price lock, a signed DPA and 2-hour incident notice (LEG-06, LEG-07, LEG-08, LEG-09; Legal)",
+    "Coral Bank, Tamra Bank and the two eNACH banks stay on Arvanta so the overall success rate doesn't fall (OPS-02, OPS-08, CUS-05; Ops, Customer)"
+   ],
+   "phased_plan": [
+    "Now: serve Arvanta 90 days' notice and negotiate the contract fixes (LEG-02).",
+    "Phase 1: route about 15% of volume to Brevis, excluding Coral, Tamra and the eNACH banks. Arvanta keeps 85%, so no exit fee (LEG-01).",
+    "60-day review: check success rate by bank, settlement complaints and the pen-test fix.",
+    "Phase 2: scale to 40% before 31 March 2027 to meet the 70% vendor OKR and the board's cross-border deadline, accepting the ₹25 lakh exit fee (BUS-02, BUS-09)."
+   ],
+   "scorecard": {
+    "rows": [
+     {
+      "criterion": "Cost",
+      "weight": 0.25,
+      "scores": {
+       "A": 2,
+       "B": 4
+      },
+      "evidence_ids": [
+       "FIN-03",
+       "FIN-05",
+       "FIN-09"
+      ],
+      "owners": [
+       "finance"
+      ]
+     },
+     {
+      "criterion": "Security & compliance",
+      "weight": 0.25,
+      "scores": {
+       "A": 4,
+       "B": 1.5
+      },
+      "evidence_ids": [
+       "SEC-01",
+       "LEG-08",
+       "LEG-09"
+      ],
+      "owners": [
+       "infosec",
+       "legal"
+      ]
+     },
+     {
+      "criterion": "Reliability",
+      "weight": 0.2,
+      "scores": {
+       "A": 3,
+       "B": 4
+      },
+      "evidence_ids": [
+       "OPS-03",
+       "OPS-04"
+      ],
+      "owners": [
+       "ops"
+      ]
+     },
+     {
+      "criterion": "Growth",
+      "weight": 0.2,
+      "scores": {
+       "A": 2,
+       "B": 5
+      },
+      "evidence_ids": [
+       "BUS-01",
+       "BUS-02"
+      ],
+      "owners": [
+       "business"
+      ]
+     },
+     {
+      "criterion": "Customer impact",
+      "weight": 0.1,
+      "scores": {
+       "A": 2,
+       "B": 4
+      },
+      "evidence_ids": [
+       "CUS-01",
+       "CUS-07"
+      ],
+      "owners": [
+       "customer"
+      ]
+     }
+    ],
+    "weighted_totals": {
+     "A": 2.7,
+     "B": 3.57
+    },
+    "blocked_options": {
+     "B": [
+      "Card data is processed in Singapore (SEC-01) until the India-only add-on is live."
+     ]
+    }
+   },
+   "key_numbers": [
+    {
+     "claim_id": "k1",
+     "text": "Volume moving to Brevis at 40%",
+     "evidence_ids": [
+      "BRIEF",
+      "FIN-01"
+     ],
+     "kind": "calculation",
+     "formula": "0.40 × 1500",
+     "value": 600,
+     "unit": "₹ crore / month"
+    },
+    {
+     "claim_id": "k2",
+     "text": "Net monthly benefit at 40%",
+     "evidence_ids": [
+      "FIN-02",
+      "FIN-03",
+      "FIN-04",
+      "FIN-06",
+      "FIN-08"
+     ],
+     "kind": "calculation",
+     "formula": "14.4 − 6 − 2 + 4",
+     "value": 10.4,
+     "unit": "₹ lakh / month"
+    },
+    {
+     "claim_id": "k3",
+     "text": "One-time cost at 40%",
+     "evidence_ids": [
+      "FIN-05",
+      "LEG-01"
+     ],
+     "kind": "calculation",
+     "formula": "40 + 25",
+     "value": 65,
+     "unit": "₹ lakh"
+    },
+    {
+     "claim_id": "k4",
+     "text": "Payback at 40%",
+     "evidence_ids": [
+      "FIN-05",
+      "LEG-01"
+     ],
+     "kind": "calculation",
+     "formula": "65 ÷ 10.4",
+     "value": 6.25,
+     "unit": "months"
+    },
+    {
+     "claim_id": "k5",
+     "text": "Net monthly benefit at 15% (no exit fee)",
+     "evidence_ids": [
+      "FIN-03",
+      "FIN-04",
+      "LEG-01"
+     ],
+     "kind": "calculation",
+     "formula": "5.4 − 6 − 0.75 + 1.5",
+     "value": 0.15,
+     "unit": "₹ lakh / month"
+    },
+    {
+     "claim_id": "k6",
+     "text": "Arvanta share after the full move",
+     "evidence_ids": [
+      "BUS-02"
+     ],
+     "kind": "calculation",
+     "formula": "100 − 40",
+     "value": 60,
+     "unit": "% of volume"
+    }
+   ],
+   "blocking_findings": [
+    {
+     "text": "Card data is processed in Singapore by Sentrix Risk, breaking Legion's India-only processing rule.",
+     "evidence_ids": [
+      "SEC-01",
+      "SEC-02"
+     ],
+     "fix": "Order the India-only hosting add-on so fraud scoring runs in Mumbai, and confirm it in the contract before any volume moves."
+    }
+   ],
+   "dissent": [
+    "Legal favours staying with Arvanta until the Brevis contract matches Arvanta's on liability, law and audit rights (LEG-05, LEG-07, LEG-08).",
+    "InfoSec favours waiting: Brevis is a younger vendor that took 9 days to report a 2025 incident against a 6-hour rule (SEC-06, SEC-07).",
+    "Business wants to move faster: every month without cross-border acceptance costs deals (BUS-01, BUS-08)."
+   ],
+   "assumptions": [
+    "The 25% volume growth forecast holds (FIN-10).",
+    "Brevis's pilot success rates hold at higher volume (OPS-03)."
+   ],
+   "numbers_to_watch": [
+    "Success rate at Coral and Tamra Bank, weekly (OPS-02)",
+    "Settlement-delay complaints, monthly (CUS-01)",
+    "Brevis pen-test finding status (SEC-04)",
+    "Merchant churn (CUS-09)"
+   ],
+   "evidence_index": [
+    "BRIEF",
+    "BUS-02",
+    "FIN-01",
+    "FIN-02",
+    "FIN-03",
+    "FIN-04",
+    "FIN-05",
+    "FIN-06",
+    "FIN-08",
+    "LEG-01"
+   ]
+  }
+ ],
+ "final_verdicts": [
+  {
+   "verdict": "INCOMPLETE",
+   "revision_number": 0,
+   "issues": [
+    {
+     "kind": "missing_condition",
+     "detail": "InfoSec's condition for a current SOC 2 Type II report is supported by an accepted claim but missing from the memo.",
+     "evidence_ids": [
+      "SEC-03"
+     ]
+    }
+   ],
+   "revision_instructions": "Add the current SOC 2 Type II report as a condition, citing SEC-03."
+  },
+  {
+   "verdict": "PASS",
+   "revision_number": 1,
+   "issues": [],
+   "revision_instructions": ""
+  }
+ ],
+ "final_verdict": {
+  "verdict": "PASS",
+  "revision_number": 1,
+  "issues": [],
+  "revision_instructions": ""
+ },
+ "human_decisions": [],
+ "metrics": {
+  "routing_s": 6.2,
+  "advisers_s": 214.0,
+  "moderating_s": 58.4,
+  "scoring_s": 0.3,
+  "writing_s": 71.5,
+  "checking_s": 62.8,
+  "facts_considered": 125,
+  "latency_s": 413.2
+ }
+};
+</script>
+<script>
+(() => {
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const NS = "http://www.w3.org/2000/svg";
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const ADVISERS = {
+  finance:  { name: "Finance",  glyph: "rupee" },
+  business: { name: "Business", glyph: "bars" },
+  customer: { name: "Customer", glyph: "person" },
+  legal:    { name: "Legal",    glyph: "scales" },
+  infosec:  { name: "InfoSec & Data Privacy", short: "InfoSec", glyph: "shield" },
+  ops:      { name: "Ops & Engineering", short: "Ops", glyph: "gear" },
+};
+const SEAT_ORDER = ["finance", "business", "customer", "legal", "infosec", "ops"];
+const STAGES = [
+  { key: "routing",    label: "Routing" },
+  { key: "advisers",   label: "Advisers debate" },
+  { key: "moderating", label: "Claim checks" },
+  { key: "scoring",    label: "Scorecard" },
+  { key: "writing",    label: "Memo" },
+  { key: "checking",   label: "Final check" },
+  { key: "done",       label: "Ready for sign-off" },
+];
+const ROUTING = { floor: 0.55, margin: 0.06 };
+
+const state = { mode: "sample", runs: [], runId: null, vm: null, poll: null, replaying: false, stageIdx: 6 };
+
+/* ---------------- helpers ---------------- */
+function advName(id, short) { const a = ADVISERS[id]; return a ? (short && a.short) || a.name : (id || "Adviser"); }
+function last(a) { return Array.isArray(a) && a.length ? a[a.length - 1] : null; }
+function stanceKey(s) {
+  s = String(s || "").toLowerCase();
+  if (s.includes("_b") || s === "b") return "b";
+  if (s.includes("_a") || s === "a") return "a";
+  if (s.includes("cond")) return "c";
+  return "n";
+}
+function stanceLabel(k, opts) {
+  if (k === "a") return "Backs option A";
+  if (k === "b") return "Backs option B";
+  if (k === "c") return "Conditional";
+  return "Not enough evidence";
+}
+function shortOpt(t, fb) { if (!t) return fb; t = String(t); return t.length > 28 ? t.slice(0, 26).trim() + "…" : t; }
+function fmtDur(s) { if (s == null || isNaN(s)) return ""; s = Math.round(s); if (s < 60) return s + " s"; return Math.floor(s / 60) + " min " + String(s % 60).padStart(2, "0") + " s"; }
+function fmtClock(s) { s = Math.max(0, Math.round(s || 0)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+function fmtNum(v, unit) {
+  if (v == null || v === "") return "";
+  const n = Number(v); const t = isNaN(n) ? v : n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  unit = unit || "";
+  if (unit.startsWith("₹ ")) return "₹" + t + " " + unit.slice(2);
+  if (unit === "%" ) return t + "%";
+  return (t + " " + unit).trim();
+}
+function fmtTime(iso) { if (!iso) return ""; const d = new Date(iso); if (isNaN(d)) return String(iso); return d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }
+function upper(s) { return String(s || "").toUpperCase(); }
+
+function chip(id) {
+  const f = FACTS[id] || {};
+  const cls = ["chip"]; if (f.superseded_by) cls.push("old"); else if (f.reliability === "low") cls.push("low");
+  return `<button type="button" class="${cls.join(" ")}" data-ev="${esc(id)}" title="Open evidence ${esc(id)}">${esc(id)}</button>`;
+}
+// turn "(SEC-01, LEG-08; InfoSec)" style references in text into chips
+const EVID_G = /\b(?:FIN|BUS|CUS|LEG|SEC|OPS)-\d{2,3}\b|\bBRIEF\b/g;
+const EVID_T = /\b(?:FIN|BUS|CUS|LEG|SEC|OPS)-\d{2,3}\b|\bBRIEF\b/;
+function withChips(text) {
+  const raw = String(text || "");
+  const ids = [...new Set(raw.match(EVID_G) || [])];
+  let by = "";
+  const clean = raw.replace(/\s*\(([^)]*)\)\s*\.?\s*$/, (m, inner) => {
+    if (!EVID_T.test(inner)) return m;
+    by = inner.replace(EVID_G, "").replace(/^[\s,;]+|[\s,;]+$/g, "").replace(/\s*[;,]\s*[;,]\s*/g, ", ");
+    return m.trim().endsWith(".") ? "." : "";
+  });
+  return { text: clean, ids, by };
+}
+function byLine(w) { return w.by ? `<span class="by">Raised by ${esc(w.by)}</span>` : ""; }
+
+/* ---------------- adapter: API run -> view model ---------------- */
+function toViewModel(run) {
+  run = run || {};
+  const brief = run.brief || {};
+  const routing = run.routing || {};
+  let positions = run.positions || [];
+  if (!Array.isArray(positions)) positions = Object.entries(positions).map(([k, v]) => ({ adviser_id: k, ...v }));
+  const verdictList = run.claim_verdicts || run.verdicts || [];
+  const verdicts = {};
+  (Array.isArray(verdictList) ? verdictList : Object.values(verdictList)).forEach(v => { if (v && v.claim_id) verdicts[v.claim_id] = v; });
+  const memoRevs = (run.memo_revisions || run.memo_versions || []).map(m => (m && m.memo) ? m.memo : m).filter(Boolean);
+  const memo = run.memo || last(memoRevs);
+  let finals = run.final_verdicts || run.verdict_history || [];
+  if (!finals.length && Array.isArray(run.memo_revisions)) finals = run.memo_revisions.map(m => m && m.verdict).filter(Boolean);
+  const final = run.final_verdict || last(finals);
+  if (final && !finals.length) finals = [final];
+  const scorecard = run.scorecard || (memo && memo.scorecard) || null;
+  let decisions = run.human_decisions || (run.human_decision ? [run.human_decision] : []);
+  if (!Array.isArray(decisions)) decisions = Object.values(decisions);
+  const scores = (routing.scores || []).map(s => ({
+    id: s.adviser_id, sim: Number(s.similarity ?? s.score ?? 0), selected: !!s.selected,
+    reason: s.reason || "", cap: s.best_matching_capability || "",
+  }));
+  const selected = routing.selected || scores.filter(s => s.selected).map(s => s.id);
+  let status = String(run.status || "").toLowerCase();
+  if (!status) status = final ? "done" : (memo ? "checking" : positions.length ? "moderating" : "routing");
+  const stageIdx = status === "done" ? 6 : status === "failed" ? -2 : Math.max(0, STAGES.findIndex(s => s.key === status));
+  const posById = {}; positions.forEach(p => posById[p.adviser_id] = p);
+  const blocking = positions.filter(p => (p.blocking_findings || []).length).map(p => p.adviser_id);
+  return { run, id: run.run_id, brief, opts: brief.options || {}, routing, scores, selected, positions, posById, verdicts,
+           memo, memoRevs, finals, final, scorecard, decisions, status, stageIdx, blocking, metrics: run.metrics || {},
+           created: run.created_at, error: run.error };
+}
+
+/* ---------------- rendering ---------------- */
+function renderHero(vm) {
+  const b = vm.brief;
+  $("#qid").textContent = b.decision_id || "Decision";
+  $("#question").textContent = b.question || "Untitled decision";
+  $("#options").innerHTML = Object.entries(vm.opts).map(([k, v]) =>
+    `<div class="opt ${k.toLowerCase()}"><i>${esc(k)}</i><span>${esc(v)}</span></div>`).join("");
+  $("#constraints").innerHTML = (b.constraints || []).map(c => `<li>${esc(c)}</li>`).join("");
+}
+
+function renderSteps(vm) {
+  const idx = state.stageIdx, failed = vm.status === "failed";
+  const failStage = failed ? String(vm.run.failed_stage || vm.run.stage || "").toLowerCase() : "";
+  const failIdx = failed ? Math.max(0, STAGES.findIndex(s => s.key === failStage)) : -1;
+  $("#steps").innerHTML = STAGES.map((s, i) => {
+    let cls = "";
+    if (failed) cls = i < failIdx ? "done" : i === failIdx ? "failed" : "";
+    else cls = i < idx || idx === 6 ? "done" : i === idx ? "now" : "";
+    const t = vm.metrics[s.key + "_s"];
+    return `<li class="${cls}"><span class="dot"></span><span>${s.label}</span><span class="t">${cls === "done" && t != null ? fmtDur(t) : ""}</span></li>`;
+  }).join("");
+  const err = $("#runError");
+  if (failed) { err.hidden = false; err.innerHTML = `<b>Run stopped${failStage ? " at " + esc(failStage) : ""}.</b> ${esc(vm.error || vm.run.error_message || "See the server log for details.")}`; }
+  else err.hidden = true;
+}
+
+function glyph(kind) {
+  switch (kind) {
+    case "rupee": return `<text class="glyph-t" y="8">₹</text>`;
+    case "bars": return `<path class="glyph" d="M-10 9V2M-3 9V-3M4 9V-8M11 9V-1"/>`;
+    case "person": return `<g class="glyph"><circle cx="0" cy="-5" r="5"/><path d="M-10 11c1.5-6 5-8.5 10-8.5s8.5 2.5 10 8.5"/></g>`;
+    case "scales": return `<g class="glyph"><path d="M0-11V10M-7 10h14M-11-6h22"/><path d="M-11-6l-4 8h8zM11-6l-4 8h8z"/></g>`;
+    case "shield": return `<path class="glyph" d="M0-12l10 4v7c0 7-5 11-10 13-5-2-10-6-10-13v-7z"/>`;
+    case "gear": return `<g class="glyph"><circle r="5"/><circle r="10" stroke-dasharray="4 3.2"/></g>`;
+  }
+  return "";
+}
+
+function renderArena(vm) {
+  const svg = $("#arena");
+  const cx = 500, cy = 430;
+  const tiers = [[250, 175], [340, 245], [440, 320]];
+  let html = `<defs><radialGradient id="fg"><stop offset="0" stop-color="currentColor" stop-opacity="1"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></radialGradient></defs>`;
+  tiers.forEach(([rx, ry], i) => { html += `<path class="tier ${i === 1 ? "t2" : ""}" d="M${cx - rx} ${cy} A${rx} ${ry} 0 0 1 ${cx + rx} ${cy}"/>`; });
+  const ids = SEAT_ORDER.filter(id => ADVISERS[id]);
+  vm.scores.forEach(s => { if (!ids.includes(s.id)) ids.push(s.id); });
+  const n = ids.length, a0 = 166, a1 = 14;
+  const seats = ids.map((id, i) => {
+    const ang = (a0 - (a0 - a1) * (n === 1 ? .5 : i / (n - 1))) * Math.PI / 180;
+    return { id, x: cx + 385 * Math.cos(ang), y: cy - 268 * Math.sin(ang) };
+  });
+  // links first (below seats)
+  seats.forEach(s => {
+    const sel = vm.selected.includes(s.id);
+    const ex = cx + (s.x - cx) * .22, ey = cy - 40;
+    html += `<path class="link ${sel ? "on" : ""}" d="M${s.x.toFixed(1)} ${(s.y + 40).toFixed(1)} Q${((s.x + ex) / 2).toFixed(1)} ${(ey - 20).toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}"/>`;
+  });
+  html += `<ellipse class="floor-glow" cx="${cx}" cy="${cy - 10}" rx="210" ry="70" style="color:var(--signal)" fill="url(#fg)"/>`;
+  html += `<ellipse class="floor" cx="${cx}" cy="${cy - 10}" rx="160" ry="44"/>`;
+  const mk = stanceKey(vm.memo && vm.memo.stance);
+  const floorLine = vm.memo ? (mk === "c" ? "Conditional, in phases" : mk === "b" ? "Recommends option B" : mk === "a" ? "Recommends option A" : "Recommendation ready") : "Debate in progress";
+  html += `<text class="floor-t1" x="${cx}" y="${cy - 18}" text-anchor="middle">${esc(vm.brief.decision_id || "DECISION")}</text>`;
+  html += `<text class="floor-t2" x="${cx}" y="${cy + 4}" text-anchor="middle">${esc(floorLine)}</text>`;
+  const C = 2 * Math.PI * 45;
+  seats.forEach(s => {
+    const sc = vm.scores.find(x => x.id === s.id);
+    const sim = sc ? sc.sim : 0;
+    const pos = vm.posById[s.id];
+    const cls = ["seat"];
+    if (vm.selected.includes(s.id)) cls.push("is-selected");
+    if (pos) cls.push("stance-" + stanceKey(pos.stance));
+    if (vm.blocking.includes(s.id)) cls.push("is-blocking");
+    const off = C * (1 - Math.max(0, Math.min(1, sim)));
+    html += `<g class="${cls.join(" ")}" data-adv="${esc(s.id)}" transform="translate(${s.x.toFixed(1)} ${s.y.toFixed(1)})" tabindex="0" role="button" aria-label="${esc(advName(s.id))}, routing score ${sim.toFixed(2)}">
+      <circle class="score" r="45" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90)"/>
+      <circle class="ring" r="37"/>
+      <circle class="body" r="33"/>
+      ${glyph((ADVISERS[s.id] || {}).glyph)}
+      <g class="shield" transform="translate(27 -27)"><path d="M0-11l9 3.5v6c0 6.5-4.5 10-9 12-4.5-2-9-5.5-9-12v-6z"/><text y="4">!</text></g>
+      <text class="name" y="68">${esc(advName(s.id, true))}</text>
+      <text class="sub" y="86">${sc ? sim.toFixed(2) : "not scored"}</text>
+    </g>`;
+  });
+  svg.innerHTML = html;
+  $$(".seat", svg).forEach(g => {
+    const id = g.dataset.adv;
+    g.addEventListener("click", () => focusCard(id));
+    g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); focusCard(id); } });
+    g.addEventListener("mouseenter", () => highlight(id, true));
+    g.addEventListener("mouseleave", () => highlight(id, false));
+  });
+}
+
+function highlight(id, on) {
+  $$(`[data-adv="${CSS.escape(id)}"]`).forEach(el => el.classList.toggle("hl", on));
+}
+function focusCard(id) {
+  const card = $(`#card-${CSS.escape(id)}`);
+  if (!card) return;
+  card.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
+  card.classList.add("hl"); setTimeout(() => card.classList.remove("hl"), 1600);
+}
+
+function renderRouting(vm) {
+  const rows = [...vm.scores].sort((a, b) => b.sim - a.sim);
+  const top = rows.length ? rows[0].sim : 0;
+  const margin = Math.max(0, top - ROUTING.margin);
+  $("#routeRows").innerHTML = rows.map(r => {
+    const rule = /rule/i.test(r.reason);
+    return `<div class="r-row" data-adv="${esc(r.id)}">
+      <div class="r-top"><b>${esc(advName(r.id))}</b><span class="v tabnum">${r.sim.toFixed(2)}</span></div>
+      <div class="track" title="Dashed lines: selection floor ${ROUTING.floor} and margin ${margin.toFixed(2)}"><i style="--w:${(r.sim * 100).toFixed(1)}%"></i>
+        <span class="mark" style="left:${ROUTING.floor * 100}%"></span><span class="mark" style="left:${margin * 100}%"></span></div>
+      <div class="r-why ${rule ? "rule" : ""}" title="${esc(r.cap ? "Closest capability: " + r.cap : "")}">${r.selected ? "Selected" : "Not selected"}${r.reason ? ": " + esc(r.reason) : ""}</div>
+    </div>`;
+  }).join("") || `<p class="muted">Routing hasn't run yet.</p>`;
+  $$("#routeRows .r-row").forEach(r => {
+    r.addEventListener("mouseenter", () => highlight(r.dataset.adv, true));
+    r.addEventListener("mouseleave", () => highlight(r.dataset.adv, false));
+  });
+  $("#routeQuery").textContent = vm.routing.routing_query ? "Routing query: " + vm.routing.routing_query : "";
+}
+
+function renderVerdict(vm) {
+  const box = $("#verdict");
+  const v = upper(vm.final && vm.final.verdict) || "PENDING";
+  box.classList.remove("v-pass", "v-incomplete", "v-wrong");
+  box.classList.add("v-" + v.toLowerCase());
+  const sw = $("#sealWord"); sw.textContent = v; sw.style.fontSize = v.length > 6 ? "13px" : v.length > 4 ? "19px" : "";
+  const m = vm.memo || {};
+  $("#rec").textContent = m.recommendation || "No recommendation yet.";
+  const k = stanceKey(m.stance);
+  const revs = Math.max(0, vm.finals.length - 1);
+  const revText = revs === 0 ? "Passed the final check first time" : revs === 1 ? "Sent back once by the moderator, then passed" : `Sent back ${revs} times by the moderator`;
+  const verdictText = v === "PASS" ? revText : v === "INCOMPLETE" ? "The moderator found gaps it could not close. Read the issues before signing." : v === "WRONG" ? "The moderator found errors. Don't act on this memo." : "";
+  $("#vmeta").innerHTML = `<span class="stance-pill sp-${k}">${esc(k === "c" ? "Conditional recommendation" : stanceLabel(k, vm.opts))}</span>
+    <span>${esc(verdictText)}</span>`;
+  const conf = m.confidence != null ? Math.round(m.confidence * 100) + "%" : "–";
+  const dur = vm.metrics.latency_s ? fmtDur(vm.metrics.latency_s) : "";
+  $("#vside").innerHTML = `<div class="big tabnum">${conf}<small>confidence</small></div>
+    ${dur ? `<div class="muted" style="font-size:13px">Debated in ${dur}${vm.metrics.facts_considered ? `, ${vm.metrics.facts_considered} facts considered` : ""}</div>` : ""}`;
+}
+
+function renderCards(vm) {
+  const order = [...vm.scores].sort((a, b) => b.sim - a.sim).map(s => s.id);
+  vm.positions.forEach(p => { if (!order.includes(p.adviser_id)) order.push(p.adviser_id); });
+  let kept = 0, flagged = 0, struck = 0;
+  const cards = order.filter(id => vm.posById[id]).map(id => {
+    const p = vm.posById[id];
+    const k = stanceKey(p.stance);
+    let ck = 0, cf = 0, cx = 0;
+    const claims = (p.claims || []).map(c => {
+      const v = vm.verdicts[c.claim_id];
+      const st = (upper(v && v.status) || "KEEP");
+      const cls = st === "STRIKE" ? "strike" : st === "FLAG" ? "flag" : "keep";
+      if (cls === "keep") ck++; else if (cls === "flag") cf++; else cx++;
+      const calc = c.formula ? `<span class="calc">${esc(c.formula)}${c.value != null ? " = " + esc(fmtNum(c.value, c.unit)) : ""}</span>` : "";
+      const label = cls === "strike" ? "Struck by the moderator: " : cls === "flag" ? "Flagged: " : "";
+      return `<li class="claim ${cls}"><span class="st" aria-hidden="true"></span><div><span class="txt">${esc(c.text)}</span>${calc}
+        ${v && cls !== "keep" ? `<span class="why">${label}${esc(v.reason)}</span>` : ""}
+        <div class="chips">${(c.evidence_ids || []).map(chip).join("")}</div></div></li>`;
+    }).join("");
+    kept += ck; flagged += cf; struck += cx;
+    const blocks = (p.blocking_findings || []).map((b, i) => {
+      const bv = vm.verdicts[`${id}-B${i + 1}`];
+      return `<div class="blocker"><h4><svg width="14" height="16" viewBox="-10 -12 20 26"><path d="M0-11l9 3.5v6c0 6.5-4.5 10-9 12-4.5-2-9-5.5-9-12v-6z" fill="currentColor"/></svg>Blocking finding</h4>
+        <div>${esc(b.text)}</div>
+        <div class="fix"><b>Fix that clears it:</b> ${esc(b.fix)}</div>
+        <div class="chips" style="display:flex;gap:6px;flex-wrap:wrap">${(b.evidence_ids || []).map(chip).join("")}</div>
+        ${bv ? `<div class="muted" style="font-size:12.5px">Moderator: ${esc(bv.reason)}</div>` : ""}</div>`;
+    }).join("");
+    const crit = {};
+    (p.criterion_scores || []).forEach(s => { (crit[s.criterion] = crit[s.criterion] || {})[s.option] = s.score; });
+    const scoresRow = Object.entries(crit).map(([c, o]) => `<span>${esc(c)}: ${Object.entries(o).map(([opt, sc]) => `${esc(opt)} <b>${esc(sc)}</b>`).join(" · ")}</span>`).join("");
+    const conf = Math.round((p.confidence || 0) * 100);
+    return `<article class="panel card" id="card-${esc(id)}" data-adv="${esc(id)}">
+      <div class="card-h">
+        <div class="avatar" style="border-color:var(--${k === "a" ? "opt-a" : k === "b" ? "opt-b" : k === "c" ? "cond" : "line-2"})"><svg viewBox="-16 -16 32 32">${glyph((ADVISERS[id] || {}).glyph).replace('class="glyph-t" y="8"', 'class="glyph-t" y="7" style="fill:var(--ink);font:600 17px var(--f-display);text-anchor:middle"').replace(/class="glyph"/g, 'fill="none" stroke="var(--ink)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"')}</svg></div>
+        <div><h3>${esc(advName(id))}</h3><div class="conf">Confidence <span class="meter"><i style="width:${conf}%"></i></span> ${conf}%</div></div>
+        <span class="stance-pill sp-${k}">${esc(stanceLabel(k, vm.opts))}</span>
+      </div>
+      <p class="summary">${esc(p.summary)}</p>
+      ${blocks}
+      <div class="tally"><span class="k"><b>${ck}</b> kept</span><span class="f"><b>${cf}</b> flagged</span><span class="x"><b>${cx}</b> struck</span></div>
+      <ul class="claims">${claims}</ul>
+      ${scoresRow ? `<div class="scores-row">${scoresRow}</div>` : ""}
+    </article>`;
+  });
+  $("#cards").innerHTML = cards.join("") || `<p class="muted">No adviser positions yet.</p>`;
+  const nAdv = cards.length;
+  $("#debateTally").textContent = nAdv ? `${nAdv} advisers, ${kept + flagged + struck} claims: ${kept} kept, ${flagged} flagged, ${struck} struck by the moderator.` : "";
+  $$("#cards .card").forEach(c => {
+    c.addEventListener("mouseenter", () => highlight(c.dataset.adv, true));
+    c.addEventListener("mouseleave", () => highlight(c.dataset.adv, false));
+  });
+}
+
+function renderScorecard(vm) {
+  const sc = vm.scorecard;
+  if (!sc || !(sc.rows || []).length) { $("#sc").innerHTML = `<p class="muted">No scorecard yet.</p>`; return; }
+  const opts = Object.keys(vm.opts).length ? Object.keys(vm.opts) : Object.keys(sc.weighted_totals || {});
+  const owners = {};
+  (vm.brief.criteria || []).forEach(c => owners[c.name] = c.owners || []);
+  const totals = sc.weighted_totals || {};
+  const best = opts.reduce((b, o) => (totals[o] ?? -1) > (totals[b] ?? -1) ? o : b, opts[0]);
+  const rows = sc.rows.map(r => {
+    const ow = r.owners || owners[r.criterion] || [];
+    return `<tr><td><div>${esc(r.criterion)}</div><div class="owners">${ow.map(o => esc(advName(o, true))).join(", ")}${(r.missing_owners || []).length ? ` · missing: ${r.missing_owners.map(o => esc(advName(o, true))).join(", ")}` : ""}</div></td>
+      <td class="num tabnum" style="text-align:left">${Math.round((r.weight || 0) * 100)}%</td>
+      ${opts.map(o => { const s = r.scores ? r.scores[o] : null; return `<td><div class="sbar ${o.toLowerCase()}"><div class="track"><i style="--w:${s == null ? 0 : (s / 5 * 100)}%"></i></div><span class="tabnum">${s == null ? "–" : esc(s)}</span></div></td>`; }).join("")}
+      <td>${(r.evidence_ids || []).slice(0, 3).map(chip).join(" ")}</td></tr>`;
+  }).join("");
+  const blocked = sc.blocked_options || {};
+  const notes = Object.entries(blocked).filter(([, v]) => (v || []).length).map(([o, v]) =>
+    `<div class="blocked-note"><b>Option ${esc(o)} is blocked</b><span>${v.map(esc).join(" ")} The recommendation must clear this with a condition, or a person must override it.</span></div>`).join("");
+  $("#sc").innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>Criterion and owners</th><th>Weight</th>${opts.map(o => `<th>Option ${esc(o)}</th>`).join("")}<th>Evidence</th></tr></thead>
+    <tbody>${rows}
+    <tr class="total"><td><b style="font-weight:500">Weighted total</b><div class="owners">Out of 5</div></td><td></td>
+      ${opts.map(o => `<td><span class="tot tabnum ${o === best ? "win" : ""}">${totals[o] != null ? Number(totals[o]).toFixed(2) : "–"}</span>${blocked[o] && blocked[o].length ? ` <span class="pill low">blocked</span>` : ""}</td>`).join("")}<td></td></tr>
+    </tbody></table></div>${notes}`;
+}
+
+function renderMemo(vm) {
+  const m = vm.memo;
+  if (!m) { $("#memoBody").innerHTML = `<p class="muted">No memo yet.</p>`; return; }
+  const condItems = (m.conditions || []).map(c => { const w = withChips(c); return `<li><div>${esc(w.text)}<div class="chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">${w.ids.map(chip).join("")}${byLine(w)}</div></div></li>`; }).join("");
+  const planItems = (m.phased_plan || []).map(c => { const w = withChips(c); return `<li><div>${esc(w.text)} ${w.ids.map(chip).join(" ")}</div></li>`; }).join("");
+  const nums = (m.key_numbers || []).map(k => `<tr><td>${esc(k.text)}<div class="f">${k.formula ? esc(k.formula) : ""}</div></td>
+     <td class="num tabnum">${esc(fmtNum(k.value, k.unit))}</td><td>${(k.evidence_ids || []).map(chip).join(" ")}</td></tr>`).join("");
+  const dissent = (m.dissent || []).map(d => { const w = withChips(d); const mm = w.text.match(/^([A-Za-z&\s]+?)(:|\s(favours|wants|says))/);
+    return `<li>${mm ? `<b>${esc(mm[1])}</b>${esc(w.text.slice(mm[1].length))}` : esc(w.text)} ${w.ids.map(chip).join(" ")}</li>`; }).join("");
+  const watch = (m.numbers_to_watch || []).map(d => { const w = withChips(d); return `<li>${esc(w.text)} ${w.ids.map(chip).join(" ")}</li>`; }).join("");
+  const drafts = vm.finals.map((f, i) => {
+    const v = upper(f.verdict);
+    const issue = (f.issues || [])[0];
+    const txt = v === "PASS" ? "Makes sense, complete and correct." : issue ? issue.detail : (f.revision_instructions || "");
+    return `<div class="draft"><span class="muted code">Draft ${i + 1}</span><span class="vtag ${esc(v)}">${esc(v)}</span><span>${esc(txt)}</span></div>`;
+  }).join("");
+  $("#memoBody").innerHTML = `
+    <div class="panel box"><h3>Conditions before any volume moves</h3><ul class="conds">${condItems || "<li>No conditions.</li>"}</ul></div>
+    <div class="panel box"><h3>Phased plan</h3><ol class="plan">${planItems || "<li><div>Single phase.</div></li>"}</ol></div>
+    <div class="panel box"><h3>Key numbers</h3><div class="table-wrap"><table><thead><tr><th>What</th><th style="text-align:right">Value</th><th>Evidence</th></tr></thead><tbody>${nums}</tbody></table></div></div>
+    <div class="panel box"><h3>Dissent on record</h3><ul class="dissent">${dissent || "<li>No adviser disagreed.</li>"}</ul>
+      <h3 style="margin-top:8px">Numbers to watch</h3><ul class="watch">${watch}</ul>
+      ${drafts ? `<h3 style="margin-top:8px">Moderator's final check</h3><div class="drafts">${drafts}</div>` : ""}</div>`;
+}
+
+function renderLog(vm) {
+  const items = vm.decisions.map(d => {
+    const act = String(d.action || "").toLowerCase() === "override" ? "Overrode" : "Approved";
+    return `<li><div><span class="act">${act}</span> by <span class="who">${esc(d.decided_by || "Unnamed")}</span>
+      <div class="when">${esc(fmtTime(d.decided_at))}</div>${(d.reason || d.note) ? `<div class="muted" style="margin-top:4px">${esc(d.reason || d.note)}</div>` : ""}</div></li>`;
+  });
+  $("#log").innerHTML = items.length ? items.join("") : `<li style="grid-template-columns:1fr" class="muted">No one has signed this decision yet. The record keeps every approval and override.</li>`;
+}
+
+function applyStage(idx, working) {
+  state.stageIdx = idx;
+  const root = $("#top");
+  for (let i = 0; i <= 6; i++) root.classList.toggle("s" + i, idx >= i);
+  root.classList.toggle("working", !!working);
+  $$("[data-from]").forEach(sec => sec.classList.toggle("pending", idx < Number(sec.dataset.from)));
+  if (state.vm) renderSteps(state.vm);
+}
+
+function renderAll(vm) {
+  const safe = (name, fn) => { try { fn(vm); } catch (e) { console.error("[colosseum] " + name + " failed", e); } };
+  safe("hero", renderHero); safe("arena", renderArena); safe("routing", renderRouting);
+  safe("verdict", renderVerdict); safe("cards", renderCards); safe("scorecard", renderScorecard);
+  safe("memo", renderMemo); safe("log", renderLog);
+  const idx = vm.status === "failed" ? Math.max(1, ...[vm.positions.length ? 2 : 0]) : vm.stageIdx;
+  applyStage(idx, vm.status === "advisers");
+  updateClock();
+}
+
+/* ---------------- clock ---------------- */
+let clockTimer = null;
+function updateClock() {
+  const vm = state.vm; if (!vm) return;
+  let s = vm.metrics.latency_s;
+  if (vm.status !== "done" && vm.status !== "failed" && vm.created) s = (Date.now() - new Date(vm.created).getTime()) / 1000;
+  $("#clock").textContent = fmtClock(s || 0);
+}
+
+/* ---------------- replay: the one orchestrated moment ---------------- */
+async function replay() {
+  if (!state.vm || state.replaying) return;
+  if (reduced) { toast("Replay is off because your system asks for reduced motion."); return; }
+  state.replaying = true; $("#replayBtn").disabled = true;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const t0 = performance.now(); const total = state.vm.metrics.latency_s || 0;
+  const tick = setInterval(() => { $("#clock").textContent = fmtClock(Math.min(total, (performance.now() - t0) / 9000 * total)); }, 80);
+  applyStage(-1, false); await sleep(500);
+  applyStage(0, false); await sleep(1300);
+  applyStage(1, true); await sleep(2000);
+  applyStage(2, false); await sleep(1100);
+  applyStage(3, false); await sleep(1500);
+  applyStage(4, false); await sleep(1000);
+  applyStage(5, false); await sleep(900);
+  applyStage(6, false);
+  clearInterval(tick); updateClock();
+  state.replaying = false; $("#replayBtn").disabled = false;
+}
+
+/* ---------------- evidence drawer ---------------- */
+function openDrawer(title, html) {
+  $("#dTitle").textContent = title; $("#dBody").innerHTML = html;
+  $("#drawer").classList.add("on"); $("#scrim").classList.add("on"); $("#drawer").setAttribute("aria-hidden", "false");
+  setTimeout(() => $("#dClose").focus(), 50);
+}
+function closeDrawer() { $("#drawer").classList.remove("on"); $("#scrim").classList.remove("on"); $("#drawer").setAttribute("aria-hidden", "true"); }
+
+async function getFact(id) {
+  if (state.mode === "live") {
+    try { const r = await fetch(`/facts/${encodeURIComponent(id)}`); if (r.ok) { const f = await r.json(); FACTS[id] = { ...(FACTS[id] || {}), ...f }; return FACTS[id]; } } catch (e) {}
+  }
+  return FACTS[id];
+}
+async function showEvidence(id) {
+  if (id === "BRIEF") {
+    const b = state.vm ? state.vm.brief : {};
+    openDrawer("Evidence", `<div class="fid">BRIEF</div><p class="fstmt">${esc(b.question || "")}</p><p class="muted">Numbers quoted from the decision brief itself.</p>`);
+    return;
+  }
+  const f = await getFact(id);
+  const citing = [];
+  (state.vm ? state.vm.positions : []).forEach(p => (p.claims || []).forEach(c => { if ((c.evidence_ids || []).includes(id)) citing.push({ who: advName(p.adviser_id, true), c, v: state.vm.verdicts[c.claim_id] }); }));
+  if (!f) {
+    openDrawer("Evidence", `<div class="fid">${esc(id)}</div><p class="muted">This evidence ID isn't in the fact store. Document passages and live data appear here once the API serves them.</p>`);
+    return;
+  }
+  const val = f.value_num != null && f.value_num !== "" ? fmtNum(f.value_num, "") : (f.value_text || "");
+  openDrawer("Evidence", `
+    <div class="fid">${esc(f.fact_id || id)}</div>
+    <div class="fstate"><span class="pill ${esc(f.reliability)}">${esc(f.reliability || "unknown")} reliability</span><span class="pill">${esc(advName(f.domain))}</span>${f.topic ? `<span class="pill">${esc(f.topic)}</span>` : ""}</div>
+    ${f.superseded_by ? `<div class="old-banner">Out of date. Replaced by ${chip(f.superseded_by)}</div>` : ""}
+    <p class="fstmt">${esc(f.statement)}</p>
+    ${val ? `<div class="fval tabnum">${esc(val)}<small>${esc(f.unit || "")}</small></div>` : ""}
+    <dl class="dl"><dt>Source</dt><dd>${esc(f.source_ref)}</dd><dt>Source type</dt><dd>${esc(f.source_type)}</dd><dt>As of</dt><dd>${esc(f.as_of)}</dd><dt>About</dt><dd>${esc(f.entity)}</dd></dl>
+    ${citing.length ? `<div class="cited"><b style="font-weight:500;color:var(--ink)">Cited in this debate</b>${citing.map(x => `<div><b style="font-weight:500">${esc(x.who)}</b>${x.v && upper(x.v.status) !== "KEEP" ? ` <span class="vtag ${upper(x.v.status) === "STRIKE" ? "WRONG" : "INCOMPLETE"}">${upper(x.v.status) === "STRIKE" ? "STRUCK" : "FLAGGED"}</span>` : ""}<br>${esc(x.c.text)}</div>`).join("")}</div>` : ""}`);
+}
+
+/* ---------------- new decision ---------------- */
+async function openNewDecision() {
+  let brief = state.vm ? state.vm.brief : SAMPLE.brief;
+  if (state.mode === "live") { try { const r = await fetch("/briefs/sample"); if (r.ok) brief = await r.json(); } catch (e) {} }
+  const crit = (brief.criteria || []).map((c, i) => `<div class="crit-row"><input class="cname" id="cn${i}" value="${esc(c.name)}" aria-label="Criterion name"><input class="cw tabnum" id="cw${i}" type="number" min="0" max="100" value="${Math.round(c.weight * 100)}" aria-label="Weight percent"></div>`).join("");
+  openDrawer("New decision", `
+    <p class="muted">${state.mode === "live" ? "Starts a real debate. Expect about 5 to 8 minutes." : "This preview isn't connected to the Colosseum API, so it replays the sample debate instead."}</p>
+    <div class="field"><label for="nq">Question</label><textarea id="nq">${esc(brief.question)}</textarea></div>
+    <div class="field"><label for="nA">Option A</label><input id="nA" value="${esc((brief.options || {}).A)}"></div>
+    <div class="field"><label for="nB">Option B</label><input id="nB" value="${esc((brief.options || {}).B)}"></div>
+    <div class="field"><label for="nc">Constraints, one per line</label><textarea id="nc">${esc((brief.constraints || []).join("\n"))}</textarea></div>
+    <div class="field"><label for="nx">Context</label><textarea id="nx">${esc(brief.context || "")}</textarea></div>
+    <div class="field"><span>Criteria and weights (%)</span><div class="crit-grid">${crit}</div><span class="wsum" id="wsum"></span></div>
+    <button class="btn primary" id="startBtn" type="button">Start the debate</button>`);
+  const sumCheck = () => { const t = $$(".cw").reduce((a, i) => a + (Number(i.value) || 0), 0); const el = $("#wsum"); el.textContent = `Weights add up to ${t}%` + (t === 100 ? "" : ". They must add up to 100%."); el.className = "wsum " + (t === 100 ? "ok" : "bad"); $("#startBtn").disabled = t !== 100; };
+  $$(".cw").forEach(i => i.addEventListener("input", sumCheck)); sumCheck();
+  $("#startBtn").addEventListener("click", async () => {
+    const nb = JSON.parse(JSON.stringify(brief));
+    nb.question = $("#nq").value.trim(); nb.options = { A: $("#nA").value.trim(), B: $("#nB").value.trim() };
+    nb.constraints = $("#nc").value.split("\n").map(s => s.trim()).filter(Boolean); nb.context = $("#nx").value.trim();
+    nb.criteria = (nb.criteria || []).map((c, i) => ({ ...c, name: $("#cn" + i).value.trim() || c.name, weight: (Number($("#cw" + i).value) || 0) / 100 }));
+    if (state.mode !== "live") { closeDrawer(); toast("Replaying the sample debate."); window.scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" }); replay(); return; }
+    $("#startBtn").disabled = true; $("#startBtn").textContent = "Starting…";
+    try {
+      const r = await fetch("/decisions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(nb) });
+      if (!r.ok) throw new Error(`The API answered ${r.status}. ${await r.text()}`);
+      const { run_id } = await r.json();
+      closeDrawer(); toast("Debate started. Advisers are joining.");
+      await loadRunList(); await openRun(run_id);
+    } catch (e) {
+      $("#startBtn").disabled = false; $("#startBtn").textContent = "Start the debate";
+      toast("Couldn't start the debate: " + e.message);
+    }
+  });
+}
+
+/* ---------------- sign-off ---------------- */
+async function signOff(action) {
+  const vm = state.vm; if (!vm) return;
+  const name = $("#signName").value.trim(), reason = $("#signReason").value.trim();
+  const err = $("#signErr");
+  if (!name) { err.textContent = "Add your name and role so the record shows who decided."; $("#signName").focus(); return; }
+  if (action === "override" && !reason) { err.textContent = "An override needs a reason. Say what you decided instead and why."; $("#signReason").focus(); return; }
+  err.textContent = "";
+  const entry = { action, reason, note: reason, decided_by: name, decided_at: new Date().toISOString() };
+  if (state.mode === "live") {
+    try {
+      const r = await fetch(`/runs/${encodeURIComponent(vm.id)}/decision`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, reason, decided_by: name }) });
+      if (!r.ok) throw new Error(`The API answered ${r.status}`);
+    } catch (e) { err.textContent = "Couldn't save the decision: " + e.message + ". Try again."; return; }
+  }
+  vm.decisions.push(entry); renderLog(vm);
+  $("#signReason").value = "";
+  toast((action === "override" ? "Override recorded" : "Approval recorded") + (state.mode === "live" ? "." : " in this preview only."));
+}
+
+/* ---------------- toast ---------------- */
+let toastT;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 3600); }
+
+/* ---------------- data loading ---------------- */
+async function fetchJSON(url, ms = 4000) {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
+  try { const r = await fetch(url, { signal: ctl.signal, headers: { Accept: "application/json" } });
+        if (!r.ok) throw new Error(String(r.status));
+        const ct = r.headers.get("content-type") || ""; if (!ct.includes("json")) throw new Error("not json");
+        return await r.json(); }
+  finally { clearTimeout(t); }
+}
+async function detectApi() {
+  if (/(^|[?#&])demo\b/.test(location.search + location.hash)) return false;
+  try { const runs = await fetchJSON("/runs?limit=25", 2500); return Array.isArray(runs) ? runs : Array.isArray(runs.runs) ? runs.runs : false; }
+  catch (e) { return false; }
+}
+async function loadRunList() {
+  try { const r = await fetchJSON("/runs?limit=25"); state.runs = Array.isArray(r) ? r : (r.runs || []); } catch (e) { console.warn("[colosseum] run list failed", e); }
+  fillPicker();
+}
+function fillPicker() {
+  const p = $("#picker");
+  if (state.mode !== "live") { p.innerHTML = `<option value="sample">DEC-001 sample run (Legion Capital)</option>`; return; }
+  p.innerHTML = state.runs.map(r => {
+    const fv = r.final_verdict; const v = upper(typeof fv === "string" ? fv : fv && fv.verdict) || upper(r.status);
+    return `<option value="${esc(r.run_id)}">${esc(fmtTime(r.created_at))}  ${esc(r.run_id.replace(/^run_/, ""))}  ${esc(v)}</option>`;
+  }).join("") + `<option value="sample">Sample run (offline)</option>`;
+  if (state.runId) p.value = state.runId;
+}
+async function openRun(id) {
+  clearInterval(state.poll); state.poll = null; clearInterval(clockTimer); clockTimer = null;
+  state.runId = id;
+  if (id === "sample" || state.mode !== "live") { state.vm = toViewModel(SAMPLE); renderAll(state.vm); fillPicker(); $("#picker").value = "sample"; return; }
+  try {
+    const run = await fetchJSON(`/runs/${encodeURIComponent(id)}`, 8000);
+    state.vm = toViewModel(run); renderAll(state.vm); fillPicker();
+    if (!["done", "failed"].includes(state.vm.status)) {
+      clockTimer = setInterval(updateClock, 1000);
+      state.poll = setInterval(async () => {
+        try {
+          const nr = await fetchJSON(`/runs/${encodeURIComponent(id)}`, 8000);
+          const nvm = toViewModel(nr); state.vm = nvm; renderAll(nvm);
+          if (["done", "failed"].includes(nvm.status)) { clearInterval(state.poll); clearInterval(clockTimer); loadRunList(); toast(nvm.status === "done" ? "Debate finished. The memo is ready for sign-off." : "The run stopped. See the progress panel."); }
+        } catch (e) { console.warn("[colosseum] poll failed", e); }
+      }, 3000);
+    }
+  } catch (e) {
+    toast("Couldn't open that run (" + e.message + "). Showing the sample instead.");
+    state.vm = toViewModel(SAMPLE); renderAll(state.vm);
+  }
+}
+
+/* ---------------- wiring ---------------- */
+function initTheme() {
+  const btn = $("#themeBtn");
+  let saved = null; try { saved = localStorage.getItem("colosseum-theme"); } catch (e) {}
+  if (saved) document.documentElement.setAttribute("data-theme", saved);
+  btn.addEventListener("click", () => {
+    const cur = document.documentElement.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    const next = cur === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("colosseum-theme", next); } catch (e) {}
+  });
+}
+function initEvents() {
+  document.addEventListener("click", e => { const c = e.target.closest("[data-ev]"); if (c) { e.preventDefault(); showEvidence(c.dataset.ev); } });
+  $("#dClose").addEventListener("click", closeDrawer); $("#scrim").addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+  $("#replayBtn").addEventListener("click", () => { window.scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" }); replay(); });
+  $("#newBtn").addEventListener("click", openNewDecision);
+  $("#picker").addEventListener("change", e => openRun(e.target.value));
+  $("#signForm").addEventListener("submit", e => { e.preventDefault(); signOff("approve"); });
+  $("#overrideBtn").addEventListener("click", () => signOff("override"));
+}
+
+async function boot() {
+  try { initTheme(); } catch (e) { console.error(e); }
+  try { initEvents(); } catch (e) { console.error(e); }
+  // render the sample at once so the page is never empty, then switch to live data if the API answers
+  state.vm = toViewModel(SAMPLE); renderAll(state.vm); fillPicker();
+  const runs = await detectApi();
+  if (runs) {
+    state.mode = "live"; state.runs = runs;
+    const m = $("#mode"); m.textContent = "Live"; m.classList.add("live");
+    const pick = runs.find(r => String(r.status).toLowerCase() === "done") || runs[0];
+    if (pick) await openRun(pick.run_id); else fillPicker();
+  }
+}
+boot();
+})();
+</script>
