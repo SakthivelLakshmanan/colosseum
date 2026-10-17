@@ -650,6 +650,7 @@ async def run_advisers(
     brief: DecisionBrief,
     packs: dict[str, EvidencePack] | list[EvidencePack] | None = None,
     timeout_s: Optional[float] = None,
+    on_adviser_done: Optional[Callable[[str, Optional[AdviserPosition], Optional[str], float], Any]] = None,
 ) -> dict[str, AdviserPosition | str]:
     """Run multiple advisers concurrently with timeout clock starting when first slot is acquired.
 
@@ -672,7 +673,7 @@ async def run_advisers(
     else:
         pack_map = {}
 
-    async def _execute_single(aid: str) -> tuple[str, AdviserPosition | str, float, float]:
+    async def _execute_single(aid: str) -> tuple[str, Optional[AdviserPosition], Optional[str], float, float]:
         pack = pack_map.get(aid) or build_pack(aid, brief)
         launch_t = time.time()
         slot_event = asyncio.Event()
@@ -740,7 +741,7 @@ async def run_advisers(
             print(log_msg, flush=True)
             logger.info(log_msg)
 
-            return aid, position, total_t, waited_s
+            return aid, position, None, total_t, waited_s
 
         except (asyncio.TimeoutError, TimeoutError):
             if not adviser_task.done():
@@ -748,7 +749,6 @@ async def run_advisers(
             total_t = time.time() - launch_t
             waited_s = (slot_time[0] - launch_t) if slot_time else 0.0
             call_count, total_gemini_s, slowest_s = get_caller_stats(f"{aid}_adviser")
-            msg = f"Timeout after {effective_timeout:.0f}s"
             logger.warning(
                 "Adviser '%s' timed out after %.2fs (waited %.2fs, gemini_calls=%d, slowest=%.1fs)",
                 aid,
@@ -757,31 +757,44 @@ async def run_advisers(
                 call_count,
                 slowest_s,
             )
-            return aid, msg, total_t, waited_s
+            return aid, None, "timeout", total_t, waited_s
         except Exception as exc:
             if not adviser_task.done():
                 adviser_task.cancel()
             total_t = time.time() - launch_t
             waited_s = (slot_time[0] - launch_t) if slot_time else 0.0
             call_count, total_gemini_s, slowest_s = get_caller_stats(f"{aid}_adviser")
-            msg = f"Error: {exc}"
             logger.error("Adviser '%s' encountered error: %s", aid, exc)
-            return aid, msg, total_t, waited_s
+            return aid, None, str(exc), total_t, waited_s
         finally:
             if not wait_slot_task.done():
                 wait_slot_task.cancel()
 
-    tasks = [_execute_single(aid) for aid in adviser_ids]
-    completed = await asyncio.gather(*tasks)
+    tasks = [asyncio.create_task(_execute_single(aid)) for aid in adviser_ids]
 
     results: dict[str, AdviserPosition | str] = {}
     _last_adviser_durations.clear()
     _last_adviser_slot_waits.clear()
 
-    for aid, pos_or_err, total_t, waited_s in completed:
-        results[aid] = pos_or_err
+    for fut in asyncio.as_completed(tasks):
+        aid, pos, err, total_t, waited_s = await fut
+        if err == "timeout":
+            results[aid] = f"Timeout after {effective_timeout:.0f}s"
+        elif err:
+            results[aid] = f"Error: {err}"
+        else:
+            results[aid] = pos
+
         _last_adviser_durations[aid] = total_t
         _last_adviser_slot_waits[aid] = waited_s
+
+        if on_adviser_done:
+            try:
+                cb_res = on_adviser_done(aid, pos, err, total_t)
+                if asyncio.iscoroutine(cb_res):
+                    await cb_res
+            except Exception as cb_exc:
+                logger.warning("on_adviser_done callback failed for %s: %s", aid, cb_exc)
 
     return results
 
@@ -791,7 +804,16 @@ def run_advisers_sync(
     brief: DecisionBrief,
     packs: dict[str, EvidencePack] | list[EvidencePack] | None = None,
     timeout_s: Optional[float] = None,
+    on_adviser_done: Optional[Callable[[str, Optional[AdviserPosition], Optional[str], float], Any]] = None,
 ) -> dict[str, AdviserPosition | str]:
     """Synchronous convenience wrapper for run_advisers."""
-    return asyncio.run(run_advisers(adviser_ids, brief, packs, timeout_s))
+    return asyncio.run(
+        run_advisers(
+            adviser_ids,
+            brief,
+            packs,
+            timeout_s,
+            on_adviser_done=on_adviser_done,
+        )
+    )
 

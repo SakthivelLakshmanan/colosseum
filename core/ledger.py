@@ -1,14 +1,18 @@
 """Firestore ledger for runs, routing logs, decisions, and cached embeddings."""
 from __future__ import annotations
 
+import asyncio
 from datetime import date, datetime, timezone
 from enum import Enum
+import logging
 from typing import Any, Optional
 
 from google.cloud import firestore
 from pydantic import BaseModel
 
 from core.settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 _db: Optional[firestore.Client] = None
 
@@ -90,6 +94,127 @@ def update_status(run_id: str, status: str, progress_note: str | None = None) ->
         },
         merge=True,
     )
+
+
+def init_adviser_statuses(run_id: str, adviser_ids: list[str]) -> None:
+    """Initialize adviser_status map with 'working' state for each selected adviser, and empty positions_live."""
+    try:
+        db = get_db()
+        settings = get_settings()
+        collection_name = settings.firestore.collections.runs
+        doc_ref = db.collection(collection_name).document(run_id)
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        status_map = {
+            aid: {
+                "state": "working",
+                "started_at": now_iso,
+                "finished_at": None,
+                "seconds": None,
+                "error": None,
+            }
+            for aid in adviser_ids
+        }
+
+        doc_ref.set(
+            {
+                "adviser_status": status_map,
+                "positions_live": {},
+                "updated_at": now_iso,
+            },
+            merge=True,
+        )
+    except Exception as exc:
+        logger.warning("Failed to initialize adviser statuses for run %s: %s", run_id, exc)
+
+
+def save_adviser_result_sync(
+    run_id: str,
+    adviser_id: str,
+    position: Any = None,
+    error: str | None = None,
+    seconds: float | None = None,
+    started_at: str | None = None,
+    finished_at: str | None = None,
+) -> None:
+    """Synchronous implementation of save_adviser_result using Firestore update() with dotted paths.
+
+    Dotted paths ensure concurrent writes never overwrite each other.
+    """
+    db = get_db()
+    settings = get_settings()
+    collection_name = settings.firestore.collections.runs
+    doc_ref = db.collection(collection_name).document(run_id)
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if error == "timeout":
+        state = "timeout"
+    elif error:
+        state = "failed"
+    else:
+        state = "done"
+
+    if started_at is None and seconds is not None:
+        try:
+            started_at = datetime.fromtimestamp(
+                datetime.now(timezone.utc).timestamp() - seconds,
+                tz=timezone.utc,
+            ).isoformat()
+        except Exception:
+            started_at = None
+
+    status_data = {
+        "state": state,
+        "started_at": started_at,
+        "finished_at": finished_at or now_iso,
+        "seconds": seconds,
+        "error": error,
+    }
+
+    update_data: dict[str, Any] = {
+        f"adviser_status.{adviser_id}": status_data,
+        "updated_at": now_iso,
+    }
+
+    if position is not None:
+        update_data[f"positions_live.{adviser_id}"] = _serialize(position)
+
+    doc_ref.update(update_data)
+
+
+async def save_adviser_result(
+    run_id: str,
+    adviser_id: str,
+    position: Any = None,
+    error: str | None = None,
+    seconds: float | None = None,
+    started_at: str | None = None,
+    finished_at: str | None = None,
+) -> None:
+    """Save an adviser's result to Firestore the moment it finishes.
+
+    Uses one Firestore update() with dotted paths (positions_live.<id>, adviser_status.<id>)
+    so concurrent writes never overwrite each other. Runs via asyncio.to_thread.
+    If a write fails, logs it and continues; never crashes the run.
+    """
+    try:
+        await asyncio.to_thread(
+            save_adviser_result_sync,
+            run_id,
+            adviser_id,
+            position,
+            error,
+            seconds,
+            started_at,
+            finished_at,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to save adviser result for run %s, adviser %s: %s",
+            run_id,
+            adviser_id,
+            exc,
+        )
 
 
 def save_section(run_id: str, key: str, data: Any) -> None:

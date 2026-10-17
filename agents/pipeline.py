@@ -70,6 +70,8 @@ def run_decision(
     routing: Optional[RoutingDecision] = None
     evidence_packs: list[EvidencePack] = []
     positions: dict[str, AdviserPosition] = {}
+    adviser_status: dict[str, Any] = {}
+    positions_live: dict[str, Any] = {}
     claim_verdicts: list[ClaimVerdict] = []
     scorecard: Optional[Scorecard] = None
     memo_versions: list[Memo] = []
@@ -108,12 +110,6 @@ def run_decision(
         selected_advisers = routing.selected
 
         # Step 2: Evidence packs
-        current_stage = "evidence_packs"
-        try:
-            ledger.update_status(run_id, "evidence_packs", "Building evidence packs")
-        except Exception as exc:
-            logger.warning("Failed to update status in ledger: %s", exc)
-
         t0 = time.time()
         evidence_packs = []
         for aid in selected_advisers:
@@ -132,11 +128,37 @@ def run_decision(
         current_stage = "advisers"
         try:
             ledger.update_status(run_id, "advisers", f"Running {len(selected_advisers)} advisers in parallel")
+            ledger.init_adviser_statuses(run_id, selected_advisers)
         except Exception as exc:
             logger.warning("Failed to update status in ledger: %s", exc)
 
+        async def _on_adviser_done(aid: str, pos: AdviserPosition | None, err: str | None, secs: float):
+            state_str = "timeout" if err == "timeout" else ("failed" if err else "done")
+            now_iso = datetime.now(timezone.utc).isoformat()
+            adviser_status[aid] = {
+                "state": state_str,
+                "started_at": None,
+                "finished_at": now_iso,
+                "seconds": secs,
+                "error": err,
+            }
+            if pos is not None:
+                positions_live[aid] = pos.model_dump(mode="json") if hasattr(pos, "model_dump") else pos
+            await ledger.save_adviser_result(
+                run_id=run_id,
+                adviser_id=aid,
+                position=pos,
+                error=err,
+                seconds=secs,
+            )
+
         t0 = time.time()
-        positions_map = run_advisers_sync(selected_advisers, brief=brief_obj, packs=evidence_packs)
+        positions_map = run_advisers_sync(
+            selected_advisers,
+            brief=brief_obj,
+            packs=evidence_packs,
+            on_adviser_done=_on_adviser_done,
+        )
         metrics["advisers_time_s"] = round(time.time() - t0, 3)
         model_used["advisers"] = getattr(settings.models, "adviser", "gemini-3.8-flash")
 
@@ -306,11 +328,9 @@ def run_decision(
         # Step 7: Done
         metrics["total_time_s"] = round(time.time() - start_total_t, 3)
         final_status = "done"
-        if final_verdicts and final_verdicts[-1].verdict == MemoVerdictType.incomplete:
-            final_status = "INCOMPLETE"
         try:
-            status_note = "Decision pipeline stopped: upstream_gap in scorecard" if final_status == "INCOMPLETE" else "Decision pipeline completed successfully"
-            ledger.update_status(run_id, final_status, status_note)
+            status_note = "Decision pipeline stopped: upstream_gap in scorecard" if (final_verdicts and final_verdicts[-1].verdict == MemoVerdictType.incomplete) else "Decision pipeline completed successfully"
+            ledger.update_status(run_id, "done", status_note)
             ledger.save_section(run_id, "metrics", metrics)
             ledger.save_section(run_id, "model_used", model_used)
         except Exception as exc:
@@ -322,6 +342,8 @@ def run_decision(
             routing=routing if isinstance(routing, RoutingDecision) else None,
             evidence_packs=evidence_packs,
             positions=list(positions.values()),
+            adviser_status=adviser_status,
+            positions_live=positions_live,
             claim_verdicts=claim_verdicts,
             scorecard=scorecard,
             memo=memo_versions[-1] if memo_versions else None,
@@ -353,6 +375,8 @@ def run_decision(
             routing=routing if isinstance(routing, RoutingDecision) else None,
             evidence_packs=evidence_packs,
             positions=list(positions.values()),
+            adviser_status=adviser_status,
+            positions_live=positions_live,
             claim_verdicts=claim_verdicts,
             scorecard=scorecard,
             memo=memo_versions[-1] if memo_versions else None,

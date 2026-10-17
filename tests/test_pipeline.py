@@ -128,6 +128,7 @@ def test_run_decision_end_to_end_orchestration(mock_brief):
          patch("agents.pipeline.check_memo", side_effect=check_returns) as mock_check, \
          patch("core.ledger.create_run"), \
          patch("core.ledger.update_status"), \
+         patch("core.ledger.init_adviser_statuses"), \
          patch("core.ledger.save_section"), \
          patch("core.ledger.save_routing"):
 
@@ -242,6 +243,7 @@ def test_fake_run_saves_memo_and_final_verdict(mock_brief):
          patch("agents.pipeline.check_memo", side_effect=tracking_check_memo), \
          patch("core.ledger.create_run"), \
          patch("core.ledger.update_status"), \
+         patch("core.ledger.init_adviser_statuses"), \
          patch("core.ledger.save_routing"), \
          patch("core.ledger.save_memo", side_effect=tracking_save_memo) as mock_save_memo, \
          patch("core.ledger.save_final_verdict", side_effect=tracking_save_final_verdict) as mock_save_fv, \

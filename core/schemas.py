@@ -230,6 +230,8 @@ class RunRecord(BaseModel):
     routing: Optional[Any] = None
     evidence_packs: list[EvidencePack] = Field(default_factory=list)
     positions: list[AdviserPosition] = Field(default_factory=list)
+    adviser_status: dict[str, Any] = Field(default_factory=dict)
+    positions_live: dict[str, Any] = Field(default_factory=dict)
     claim_verdicts: list[ClaimVerdict] = Field(default_factory=list)
     scorecard: Optional[Scorecard] = None
     memo: Optional[Memo] = None

@@ -114,6 +114,8 @@ def test_get_run_details_guaranteed_shape_and_fallback_mapping():
         "brief",
         "routing",
         "positions",
+        "adviser_status",
+        "positions_live",
         "claim_verdicts",
         "scorecard",
         "memo",
@@ -140,6 +142,8 @@ def test_get_run_details_guaranteed_shape_and_fallback_mapping():
         assert data["brief"] is None
         assert data["routing"] is None
         assert data["positions"] == []
+        assert data["adviser_status"] == {}
+        assert data["positions_live"] == {}
         assert data["claim_verdicts"] == []
         assert data["scorecard"] is None
         assert data["memo"] is None

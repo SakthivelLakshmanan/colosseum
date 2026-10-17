@@ -221,14 +221,42 @@ def get_run_details(run_id: str) -> dict[str, Any]:
         else:
             human_decisions = []
 
-    # 5. Resolve lists
+    # 5. Resolve lists and live maps
     positions = run_doc.get("positions") if isinstance(run_doc.get("positions"), list) else []
     claim_verdicts = run_doc.get("claim_verdicts") if isinstance(run_doc.get("claim_verdicts"), list) else []
+    adviser_status = run_doc.get("adviser_status") if isinstance(run_doc.get("adviser_status"), dict) else {}
+    positions_live = run_doc.get("positions_live") if isinstance(run_doc.get("positions_live"), dict) else {}
 
     # 6. Resolve dicts or nulls
     brief = run_doc.get("brief") if isinstance(run_doc.get("brief"), dict) else None
     routing = run_doc.get("routing") if isinstance(run_doc.get("routing"), dict) else None
     scorecard = run_doc.get("scorecard") if isinstance(run_doc.get("scorecard"), dict) else None
+
+    # If positions is empty but positions_live has entries, return positions ordered by routing score
+    if not positions and positions_live:
+        score_map: dict[str, float] = {}
+        if routing and isinstance(routing, dict):
+            scores_list = routing.get("scores") or []
+            if isinstance(scores_list, list):
+                for s in scores_list:
+                    if isinstance(s, dict) and "adviser_id" in s:
+                        aid = str(s["adviser_id"])
+                        sim = s.get("similarity")
+                        if sim is None:
+                            sim = s.get("score", 0.0)
+                        try:
+                            score_map[aid] = float(sim)
+                        except (ValueError, TypeError):
+                            score_map[aid] = 0.0
+        live_list = list(positions_live.values())
+        live_list.sort(
+            key=lambda p: score_map.get(
+                p.get("adviser_id") if isinstance(p, dict) else getattr(p, "adviser_id", ""),
+                0.0,
+            ),
+            reverse=True,
+        )
+        positions = live_list
 
     # 7. Resolve error
     error = str(run_doc["error"]) if run_doc.get("error") is not None else None
@@ -240,6 +268,8 @@ def get_run_details(run_id: str) -> dict[str, Any]:
         "brief": brief,
         "routing": routing,
         "positions": positions,
+        "adviser_status": adviser_status,
+        "positions_live": positions_live,
         "claim_verdicts": claim_verdicts,
         "scorecard": scorecard,
         "memo": memo,
