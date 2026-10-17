@@ -1,0 +1,15 @@
+.git
+.venv
+.env*
+evals/
+tests/
+web/_old/
+web/_old_v2/
+web/reference/
+docs/
+__pycache__/
+*.pyc
+.pytest_cache/
+*key*.json
+*credentials*.json
+service-account*.json

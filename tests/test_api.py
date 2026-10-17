@@ -11,10 +11,22 @@ from core.schemas import DecisionBrief, Fact, Reliability
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def reset_api_state(monkeypatch):
+    from api.main import reset_active_runs
+    reset_active_runs()
+    monkeypatch.delenv("ACCESS_CODE", raising=False)
+    monkeypatch.delenv("MAX_ACTIVE_RUNS", raising=False)
+    yield
+    reset_active_runs()
+
+
 def test_health_endpoint():
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["access_code_required"] is False
 
 
 def test_advisers_endpoint():
@@ -340,3 +352,176 @@ def test_get_fact_dataset_colosseum_only():
         response = client.get("/facts/FIN-01")
         assert response.status_code == 403
         assert "never colosseum_eval" in response.json()["detail"].lower()
+
+
+def test_access_code_health_endpoint_flag(monkeypatch):
+    monkeypatch.setenv("ACCESS_CODE", "super-secret-gate-key")
+    response = client.get("/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["access_code_required"] is True
+    # Never reveal the secret code
+    assert "super-secret-gate-key" not in response.text
+
+
+def test_access_code_required_for_decisions_endpoints(monkeypatch):
+    monkeypatch.setenv("ACCESS_CODE", "vault-key-123")
+    brief_data = {
+        "decision_id": "DEC-TEST-AUTH",
+        "question": "Migrate core banking?",
+        "options": {"A": "Keep", "B": "Migrate"},
+        "constraints": [],
+        "criteria": [],
+    }
+
+    # 1. POST /decisions without code -> 401
+    res1 = client.post("/decisions", json=brief_data)
+    assert res1.status_code == 401
+    assert res1.json() == {"detail": "access code required"}
+
+    # 2. POST /decisions with wrong code -> 401
+    res2 = client.post("/decisions", json=brief_data, headers={"X-Access-Code": "wrong-code"})
+    assert res2.status_code == 401
+    assert res2.json() == {"detail": "access code required"}
+
+    # 3. POST /decisions with matching code -> 200
+    with patch("api.main.create_run"), patch("api.main.start_background_run"):
+        res3 = client.post("/decisions", json=brief_data, headers={"X-Access-Code": "vault-key-123"})
+        assert res3.status_code == 200
+        assert "run_id" in res3.json()
+
+
+def test_access_code_required_for_human_decision_endpoint(monkeypatch):
+    monkeypatch.setenv("ACCESS_CODE", "vault-key-123")
+    payload = {"action": "approve", "decided_by": "Chief Risk Officer"}
+
+    # 1. Without header -> 401
+    res1 = client.post("/runs/run_test_auth/decision", json=payload)
+    assert res1.status_code == 401
+    assert res1.json() == {"detail": "access code required"}
+
+    # 2. With wrong header -> 401
+    res2 = client.post("/runs/run_test_auth/decision", json=payload, headers={"X-Access-Code": "wrong"})
+    assert res2.status_code == 401
+    assert res2.json() == {"detail": "access code required"}
+
+    # 3. With matching header -> 200
+    with patch("core.ledger.get_run", return_value={"run_id": "run_test_auth"}), \
+         patch("core.ledger.save_decision"), \
+         patch("core.ledger.save_section"), \
+         patch("core.ledger.save_human_decision_to_run"):
+        res3 = client.post("/runs/run_test_auth/decision", json=payload, headers={"X-Access-Code": "vault-key-123"})
+        assert res3.status_code == 200
+        assert res3.json()["status"] == "ok"
+
+
+def test_get_endpoints_remain_public_when_access_code_set(monkeypatch):
+    monkeypatch.setenv("ACCESS_CODE", "vault-key-123")
+
+    # GET /health remains public
+    res_health = client.get("/health")
+    assert res_health.status_code == 200
+
+    # GET /advisers remains public
+    res_adv = client.get("/advisers")
+    assert res_adv.status_code == 200
+
+    # GET /briefs/sample remains public
+    res_brief = client.get("/briefs/sample")
+    assert res_brief.status_code == 200
+
+
+def test_one_debate_at_a_time_returns_429():
+    import threading
+    import time
+    import api.main
+
+    brief_data = {
+        "decision_id": "DEC-TEST-CONC",
+        "question": "Migrate core banking?",
+        "options": {"A": "Keep", "B": "Migrate"},
+        "constraints": [],
+        "criteria": [],
+    }
+
+    started_event = threading.Event()
+    stop_event = threading.Event()
+
+    def blocking_pipeline(brief, run_id):
+        started_event.set()
+        stop_event.wait(timeout=5.0)
+
+    with patch("api.main.create_run"), \
+         patch("api.main.run_decision", side_effect=blocking_pipeline):
+
+        # 1. First run acquires slot and starts in background
+        res1 = client.post("/decisions", json=brief_data)
+        assert res1.status_code == 200
+        assert started_event.wait(timeout=2.0), "Background pipeline did not start"
+
+        # 2. Second run while first is in progress receives 429
+        res2 = client.post("/decisions", json=brief_data)
+        assert res2.status_code == 429
+        assert res2.json() == {"detail": "a debate is already running, try again in a few minutes"}
+
+        # 3. Finish the first run
+        stop_event.set()
+
+        # Wait for the thread to exit and slot to be released
+        t0 = time.time()
+        while time.time() - t0 < 2.0:
+            if not api.main.get_active_runs():
+                break
+            time.sleep(0.02)
+        assert not api.main.get_active_runs()
+
+        # 4. Third run now succeeds
+        res3 = client.post("/decisions", json=brief_data)
+        assert res3.status_code == 200
+
+
+def test_active_run_slot_freed_after_failure():
+    import threading
+    import time
+    import api.main
+
+    brief_data = {
+        "decision_id": "DEC-TEST-FAIL",
+        "question": "Migrate core banking?",
+        "options": {"A": "Keep", "B": "Migrate"},
+        "constraints": [],
+        "criteria": [],
+    }
+
+    failed_event = threading.Event()
+
+    def crashing_pipeline(brief, run_id):
+        try:
+            raise RuntimeError("Deliberate background pipeline failure")
+        finally:
+            failed_event.set()
+
+    with patch("api.main.create_run"), \
+         patch("api.main.run_decision", side_effect=crashing_pipeline), \
+         patch("core.ledger.update_status"), \
+         patch("core.ledger.save_section"):
+
+        # 1. Run starts and crashes in background
+        res1 = client.post("/decisions", json=brief_data)
+        assert res1.status_code == 200
+        assert failed_event.wait(timeout=2.0), "Crashing pipeline did not execute"
+
+        # Wait for slot to be released in finally block
+        t0 = time.time()
+        while time.time() - t0 < 2.0:
+            if not api.main.get_active_runs():
+                break
+            time.sleep(0.02)
+        assert not api.main.get_active_runs()
+
+        # 2. Subsequent run acquires slot successfully
+        with patch("api.main.run_decision"):
+            res2 = client.post("/decisions", json=brief_data)
+            assert res2.status_code == 200
+

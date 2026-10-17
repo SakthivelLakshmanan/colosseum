@@ -612,6 +612,7 @@ function sheetMemo(vm) {
 function sheetSign(vm) {
   const items = vm.decisions.map(d => `<li><div><span class="act">${String(d.action || "").toLowerCase() === "override" ? "Overrode" : "Approved"}</span> by <b style="font-weight:500">${esc(d.decided_by || "Unnamed")}</b><div class="muted mono" style="font-size:12px">${esc(fmtTime(d.decided_at))}</div>${(d.reason || d.note) ? `<div class="muted">${esc(d.reason || d.note)}</div>` : ""}</div></li>`).join("");
   return `<div class="grid2"><form class="box" id="signForm" novalidate><h3>Your decision</h3>
+      ${state.mode === "live" ? codeField("signCode") : ""}
       <div class="field"><label for="signName">Name and role</label><input id="signName" autocomplete="name" placeholder="For example, Priya Raman, Head of Payments"></div>
       <div class="field"><label for="signReason">Reason (needed to override)</label><textarea id="signReason" placeholder="What you decided and why"></textarea><span class="err" id="signErr" role="alert"></span></div>
       <div class="row-actions"><button class="btn primary" type="submit">Approve recommendation</button><button class="btn danger" type="button" id="overrideBtn">Override</button></div></form>
@@ -628,7 +629,8 @@ async function signOff(action) {
   if (action === "override" && !reason) { err.textContent = "An override needs a reason. Say what you decided instead and why."; $("#signReason").focus(); return; }
   err.textContent = "";
   if (state.mode === "live") {
-    try { const r = await fetch(`/runs/${encodeURIComponent(vm.id)}/decision`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, reason, decided_by: name }) });
+    try { const r = await fetch(`/runs/${encodeURIComponent(vm.id)}/decision`, { method: "POST", headers: writeHeaders("signCode"), body: JSON.stringify({ action, reason, decided_by: name }) });
+          if (r.status === 401 || r.status === 403) { err.textContent = "This demo needs a valid access code to record a decision."; if (!state.needCode) { state.needCode = true; openSheet("sign", true); wireSign(); $("#signErr").textContent = "This demo needs a valid access code to record a decision."; } return; }
           if (!r.ok) throw new Error(`the API answered ${r.status}`); }
     catch (e) { err.textContent = "Couldn't save the decision: " + e.message + ". Try again."; return; }
   }
@@ -646,6 +648,7 @@ function sheetNew() {
       <div class="field"><label for="nx">Context</label><textarea id="nx">${esc(brief.context || "")}</textarea></div></div>
     <div class="box"><div class="field"><label for="nc">Constraints, one per line</label><textarea id="nc" style="min-height:120px">${esc((brief.constraints || []).join("\n"))}</textarea></div>
       <div class="field"><span>Criteria and weights (%)</span>${(brief.criteria || []).map((c, i) => `<div class="crit-row"><input id="cn${i}" value="${esc(c.name)}" aria-label="Criterion"><input class="cw tabnum" id="cw${i}" type="number" min="0" max="100" value="${Math.round(c.weight * 100)}" aria-label="Weight"></div>`).join("")}<span class="wsum" id="wsum"></span></div>
+      ${state.mode === "live" ? codeField("ncode") : ""}
       <button class="btn primary" id="startBtn" type="button">Start the debate</button></div></div>`;
 }
 async function wireNew() {
@@ -661,7 +664,9 @@ async function wireNew() {
     if (state.mode !== "live") { closeSheet(); if (state.runId !== "sample") await openRun("sample", true); replay(); return; }
     $("#startBtn").disabled = true; $("#startBtn").textContent = "Starting…";
     try {
-      const r = await fetch("/decisions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(nb) });
+      const r = await fetch("/decisions", { method: "POST", headers: writeHeaders("ncode"), body: JSON.stringify(nb) });
+      if (r.status === 401 || r.status === 403) { if (!state.needCode) { state.needCode = true; openSheet("new", true); wireNew(); } $("#startBtn").disabled = false; $("#startBtn").textContent = "Start the debate"; toast("This demo needs a valid access code to start a debate."); $("#ncode") && $("#ncode").focus(); return; }
+      if (r.status === 429) throw new Error("a debate is already running. Try again in a few minutes");
       if (!r.ok) throw new Error(`the API answered ${r.status}. ${await r.text()}`);
       const { run_id } = await r.json();
       closeSheet(); toast("Debate started. The advisers are taking their seats.");
@@ -740,6 +745,10 @@ async function entrance() {
 }
 
 /* ---------------- data ---------------- */
+function getCode() { if (state.code == null) { try { state.code = sessionStorage.getItem("colosseum-code") || ""; } catch (e) { state.code = ""; } } return state.code; }
+function setCode(v) { state.code = v; try { sessionStorage.setItem("colosseum-code", v); } catch (e) {} }
+function codeField(id) { return state.needCode ? `<div class="field"><label for="${id}">Access code</label><input id="${id}" type="password" autocomplete="off" value="${esc(getCode())}" placeholder="Shared with the people invited to try this demo"></div>` : ""; }
+function writeHeaders(id) { const el = id && $("#" + id); if (el) setCode(el.value.trim()); const h = { "Content-Type": "application/json" }; if (getCode()) h["X-Access-Code"] = getCode(); return h; }
 async function fetchJSON(url, ms = 4000) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
   try { const r = await fetch(url, { signal: ctl.signal, headers: { Accept: "application/json" } }); if (!r.ok) throw new Error(String(r.status));
@@ -748,7 +757,9 @@ async function fetchJSON(url, ms = 4000) {
 }
 async function detectApi() {
   if (/(^|[?#&])demo\b/.test(location.search + location.hash)) return false;
-  try { const r = await fetchJSON("/runs?limit=25", 2500); return Array.isArray(r) ? r : Array.isArray(r.runs) ? r.runs : false; } catch (e) { return false; }
+  try { const r = await fetchJSON("/runs?limit=25", 15000);
+        try { const h = await fetchJSON("/health", 5000); state.needCode = !!(h && h.access_code_required); } catch (e) {}
+        return Array.isArray(r) ? r : Array.isArray(r.runs) ? r.runs : false; } catch (e) { return false; }
 }
 async function loadRunList() { try { const r = await fetchJSON("/runs?limit=25"); state.runs = Array.isArray(r) ? r : (r.runs || []); } catch (e) {} fillPicker(); }
 /* ---------------- past decisions: search box (centre) + decision records (tile) ---------------- */

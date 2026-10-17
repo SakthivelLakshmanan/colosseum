@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hmac
 import json
 import logging
+import os
 from pathlib import Path
 import threading
 from typing import Any, Optional
 import uuid
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -47,10 +49,64 @@ class DecisionRequest(BaseModel):
     decided_by: Optional[str] = Field(default="", description="Name or role of decider")
 
 
+_active_runs_lock = threading.Lock()
+_active_runs: set[str] = set()
+
+
+def _get_max_active_runs() -> int:
+    val = os.getenv("MAX_ACTIVE_RUNS", "1").strip()
+    try:
+        return max(1, int(val))
+    except (ValueError, TypeError):
+        return 1
+
+
+def _try_acquire_run_slot(run_id: str) -> bool:
+    max_active = _get_max_active_runs()
+    with _active_runs_lock:
+        if len(_active_runs) >= max_active:
+            return False
+        _active_runs.add(run_id)
+        return True
+
+
+def _release_run_slot(run_id: str) -> None:
+    with _active_runs_lock:
+        _active_runs.discard(run_id)
+
+
+def get_active_runs() -> set[str]:
+    with _active_runs_lock:
+        return set(_active_runs)
+
+
+def reset_active_runs() -> None:
+    """Reset active runs tracking (useful in tests)."""
+    with _active_runs_lock:
+        _active_runs.clear()
+
+
+def _is_access_code_required() -> bool:
+    code = os.getenv("ACCESS_CODE", "").strip()
+    return bool(code)
+
+
+def verify_access_code(request: Request) -> None:
+    code = os.getenv("ACCESS_CODE", "").strip()
+    if not code:
+        return
+    provided = (request.headers.get("x-access-code") or "").strip()
+    if not provided or not hmac.compare_digest(provided, code):
+        raise HTTPException(status_code=401, detail="access code required")
+
+
 @app.get("/health")
-def health_check() -> dict[str, str]:
+def health_check() -> dict[str, Any]:
     """Health check endpoint."""
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "access_code_required": _is_access_code_required(),
+    }
 
 
 @app.get("/advisers")
@@ -100,6 +156,8 @@ def _execute_pipeline_background(brief: DecisionBrief, run_id: str) -> None:
             ledger.save_section(run_id, "error", str(exc))
         except Exception as log_err:
             logger.error("Failed to update status to failed in ledger for run %s: %s", run_id, log_err)
+    finally:
+        _release_run_slot(run_id)
 
 
 def start_background_run(run_id: str, brief: DecisionBrief) -> None:
@@ -113,8 +171,8 @@ def start_background_run(run_id: str, brief: DecisionBrief) -> None:
     bg_thread.start()
 
 
-@app.post("/decisions", status_code=200)
-@app.post("/runs", status_code=200)
+@app.post("/decisions", status_code=200, dependencies=[Depends(verify_access_code)])
+@app.post("/runs", status_code=200, dependencies=[Depends(verify_access_code)])
 def create_decision_run(brief: DecisionBrief) -> dict[str, str]:
     """Create a new run in Firestore with status 'queued', start pipeline in background thread, and return run_id."""
     now_utc = datetime.now(timezone.utc)
@@ -122,15 +180,27 @@ def create_decision_run(brief: DecisionBrief) -> dict[str, str]:
     suffix = uuid.uuid4().hex[:6]
     run_id = f"run_{brief.decision_id}_{now_str}_{suffix}"
 
+    if not _try_acquire_run_slot(run_id):
+        raise HTTPException(
+            status_code=429,
+            detail="a debate is already running, try again in a few minutes",
+        )
+
     # Create run with status 'queued' in Firestore
     try:
         create_run(run_id=run_id, brief=brief, initial_status="queued")
     except Exception as exc:
+        _release_run_slot(run_id)
         logger.error("Failed to create queued run %s in ledger: %s", run_id, exc)
         raise HTTPException(status_code=500, detail=f"Failed to create run in ledger: {exc}")
 
     # Launch pipeline in background thread
-    start_background_run(run_id, brief)
+    try:
+        start_background_run(run_id, brief)
+    except Exception as exc:
+        _release_run_slot(run_id)
+        logger.error("Failed to start background thread for run %s: %s", run_id, exc)
+        raise HTTPException(status_code=500, detail=f"Failed to start run: {exc}")
 
     return {"run_id": run_id}
 
@@ -316,7 +386,7 @@ def list_recent_runs(limit: int = Query(default=10, ge=1, le=100)) -> list[dict[
     return results
 
 
-@app.post("/runs/{run_id}/decision")
+@app.post("/runs/{run_id}/decision", dependencies=[Depends(verify_access_code)])
 def record_human_decision(run_id: str, payload: DecisionRequest) -> dict[str, Any]:
     """Save approve/override decision to human_decisions collection. A reason is required for override."""
     action = payload.action.strip().lower()
