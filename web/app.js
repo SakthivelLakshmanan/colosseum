@@ -27,10 +27,7 @@ const STAGES = [
 const ROUTING = { floor: 0.55, margin: 0.06 };
 const GEO = { W: 1200, H: 640, cx: 600, cy: 470, rx: 470, ry: 330, coreR: 112 };
 
-let FACTS = {};
-let SAMPLE = {};
-
-const state = { mode: "sample", runs: [], runId: "sample", vm: null, poll: null, replaying: false, stageIdx: 6, panel: null, panelStack: [], feed: [], seen: {}, cseen: {} };
+const state = { mode: "sample", runs: [], meta: {}, histAct: 0, runId: "sample", vm: null, poll: null, replaying: false, stageIdx: 6, panel: null, panelStack: [], feed: [], seen: {}, cseen: {} };
 
 /* ---------------- helpers ---------------- */
 const advName = (id, short) => { const a = ADVISERS[id]; return a ? (short && a.short) || a.name : (id || "Adviser"); };
@@ -90,91 +87,38 @@ function toViewModel(run) {
   const routing = run.routing || {};
   let positions = run.positions || [];
   if (!Array.isArray(positions)) positions = Object.entries(positions).map(([k, v]) => ({ adviser_id: k, ...v }));
-  if (run.positions_live && typeof run.positions_live === "object") {
-    const liveEntries = Object.entries(run.positions_live).map(([k, v]) => ({ adviser_id: k, ...v }));
-    if (!positions.length) {
-      positions = liveEntries;
-    } else {
-      const existingIds = new Set(positions.map(p => p.adviser_id));
-      liveEntries.forEach(p => { if (!existingIds.has(p.adviser_id)) positions.push(p); });
-    }
-  }
+  if (!positions.length && run.positions_live && typeof run.positions_live === "object")
+    positions = Object.entries(run.positions_live).map(([k, v]) => ({ adviser_id: k, ...v }));
   const advStatus = {};
-  Object.entries(run.adviser_status || {}).forEach(([k, v]) => {
-    advStatus[k] = typeof v === "string" ? { state: v.toLowerCase() } : { ...v, state: String((v && v.state) || "").toLowerCase() };
-  });
+  Object.entries(run.adviser_status || {}).forEach(([k, v]) => { advStatus[k] = typeof v === "string" ? { state: v.toLowerCase() } : { ...v, state: String((v && v.state) || "").toLowerCase() }; });
   const verdicts = {};
-  const vl = run.claim_verdicts || run.verdicts || [];
-  (Array.isArray(vl) ? vl : Object.values(vl)).forEach(v => { if (v && v.claim_id) verdicts[v.claim_id] = v; });
+  const mod = run.moderation || run.moderator || run.moderator_result || run.moderation_result || {};
+  const vl = run.claim_verdicts || run.verdicts || mod.claim_verdicts || mod.verdicts || [];
+  const normStatus = x => { let t = upper(x).replace(/^CLAIMSTATUS\./, ""); return ({ STRUCK: "STRIKE", FLAGGED: "FLAG", KEPT: "KEEP", OK: "KEEP", PASS: "KEEP" })[t] || t; };
+  (Array.isArray(vl) ? vl.map(v => [null, v]) : Object.entries(vl)).forEach(([key, v]) => {
+    if (v == null) return; if (typeof v === "string") v = { status: v };
+    const id = v.claim_id || v.id || key; if (!id) return;
+    verdicts[id] = { ...v, claim_id: id, status: normStatus(v.status ?? v.verdict ?? v.decision ?? v.result), reason: v.reason || v.detail || v.explanation || "" };
+  });
   const memoRevs = (run.memo_revisions || run.memo_versions || []).map(m => (m && m.memo) ? m.memo : m).filter(Boolean);
   const memo = run.memo || last(memoRevs);
   let finals = run.final_verdicts || run.verdict_history || [];
   if (!finals.length && Array.isArray(run.memo_revisions)) finals = run.memo_revisions.map(m => m && m.verdict).filter(Boolean);
-  finals = finals.map(f => typeof f === "string" ? { verdict: f } : f);
-  let final = run.final_verdict || last(finals);
-  if (typeof final === "string") final = { verdict: final };
+  const final = run.final_verdict || last(finals);
   if (final && !finals.length) finals = [final];
   const scorecard = run.scorecard || (memo && memo.scorecard) || null;
   let decisions = run.human_decisions || (run.human_decision ? [run.human_decision] : []);
   if (!Array.isArray(decisions)) decisions = Object.values(decisions);
-  const scores = (routing.scores || []).map(s => ({
-    id: s.adviser_id,
-    sim: Number(s.similarity ?? s.score ?? 0),
-    selected: !!s.selected,
-    reason: s.reason || "",
-    cap: s.best_matching_capability || ""
-  }));
+  const scores = (routing.scores || []).map(s => ({ id: s.adviser_id, sim: Number(s.similarity ?? s.score ?? 0), selected: !!s.selected, reason: s.reason || "", cap: s.best_matching_capability || "" }));
   const selected = routing.selected || scores.filter(s => s.selected).map(s => s.id);
   let status = String(run.status || "").toLowerCase();
   if (!status) status = final ? "done" : (memo ? "checking" : positions.length ? "moderating" : "routing");
-  const stageIdx = status === "idle" ? -1 : (status === "done" || status === "incomplete") ? 6 : status === "failed" ? -2 : Math.max(0, STAGES.findIndex(s => s.key === status));
+  const stageIdx = status === "idle" ? -1 : status === "done" ? 6 : status === "failed" ? -2 : Math.max(0, STAGES.findIndex(s => s.key === status));
+  positions = positions.map(p => ({ ...p, claims: (p.claims || []).map(c => (c.claim_id || !c.id) ? c : { ...c, claim_id: c.id }) }));
   const posById = {}; positions.forEach(p => posById[p.adviser_id] = p);
   const blocking = positions.filter(p => (p.blocking_findings || []).length).map(p => p.adviser_id);
-
-  // Normalize pipeline metrics (e.g. routing_time_s -> routing_s, total_time_s -> latency_s)
-  const rawMetrics = run.metrics || {};
-  const metrics = {
-    ...rawMetrics,
-    routing_s: rawMetrics.routing_s ?? rawMetrics.routing_time_s,
-    advisers_s: rawMetrics.advisers_s ?? rawMetrics.advisers_time_s,
-    moderating_s: rawMetrics.moderating_s ?? rawMetrics.moderating_time_s,
-    scoring_s: rawMetrics.scoring_s ?? rawMetrics.scoring_time_s,
-    writing_s: rawMetrics.writing_s ?? rawMetrics.writing_time_s,
-    checking_s: rawMetrics.checking_s ?? rawMetrics.checking_time_s,
-    latency_s: rawMetrics.latency_s ?? rawMetrics.total_time_s,
-  };
-
-  // Clean stringified dictionaries in blocking findings and blocked options if present
-  positions.forEach(p => {
-    if (Array.isArray(p.blocking_findings)) {
-      p.blocking_findings.forEach(bf => {
-        if (bf && typeof bf.text === "string" && (bf.text.startsWith("{'") || bf.text.startsWith('{"'))) {
-          const m = bf.text.match(/['"]description['"]\s*:\s*['"](.*?)['"](?:\s*,\s*['"]fix['"]|\s*})/s) ||
-                    bf.text.match(/['"]text['"]\s*:\s*['"](.*?)['"](?:\s*,\s*['"]fix['"]|\s*})/s);
-          if (m && m[1]) bf.text = m[1].replace(/\\'/g, "'").replace(/\\"/g, '"');
-        }
-      });
-    }
-  });
-
-  if (scorecard && scorecard.blocked_options) {
-    Object.keys(scorecard.blocked_options).forEach(opt => {
-      const arr = scorecard.blocked_options[opt];
-      if (Array.isArray(arr)) {
-        scorecard.blocked_options[opt] = arr.map(item => {
-          if (typeof item === "string" && (item.startsWith("{'") || item.startsWith('{"'))) {
-            const m = item.match(/['"]description['"]\s*:\s*['"](.*?)['"](?:\s*,\s*['"]fix['"]|\s*})/s) ||
-                      item.match(/['"]text['"]\s*:\s*['"](.*?)['"](?:\s*,\s*['"]fix['"]|\s*})/s);
-            if (m && m[1]) return m[1].replace(/\\'/g, "'").replace(/\\"/g, '"');
-          }
-          return item;
-        });
-      }
-    });
-  }
-
   return { run, id: run.run_id, brief, opts: brief.options || {}, routing, scores, selected, positions, posById, verdicts, memo, memoRevs,
-           finals, final, scorecard, decisions, status, stageIdx, blocking, advStatus, metrics, created: run.created_at, error: run.error };
+           finals, final, scorecard, decisions, status, stageIdx, blocking, advStatus, metrics: run.metrics || {}, created: run.created_at, error: run.error };
 }
 const IDLE_RUN = { status: "idle", brief: { decision_id: "", question: "", options: {}, constraints: [] } };
 function claimStats(vm, id) {
@@ -335,8 +279,8 @@ function setSession(kind, stageIdx) {
     s1 = k === "c" ? "Conditional move" : k === "b" ? "Recommends B" : k === "a" ? "Recommends A" : "Recommendation ready";
     s2 = k === "c" ? "to option B, in phases" : "Click to read the verdict";
   }
-  const coreEl = $("#core"); if (coreEl) coreEl.setAttribute("aria-label", kind === "idle" ? "Start a new decision or open a saved run" : kind === "done" ? "Open the verdict" : "Open the session log");
   $("#sessState").textContent = st; $("#sessDetail").textContent = dt;
+  const coreEl = $("#core"); if (coreEl) coreEl.setAttribute("aria-label", kind === "idle" ? "Start a new decision or open a saved run" : kind === "done" ? "Open the verdict" : "Open the session log");
   const w = $("#coreWord"); if (w) { $("#coreId").textContent = (vm && vm.brief.decision_id) || ""; w.textContent = word; w.style.fontSize = word.length > 8 ? "24px" : ""; $("#coreSub1").textContent = s1; $("#coreSub2").textContent = s2; }
 }
 function setSegments(idx, failed) {
@@ -427,7 +371,7 @@ function renderTitle(vm) {
   $("#opts").innerHTML = idle ? `<span class="muted">Six advisers argue it out. A moderator checks every claim. A named person decides.</span>` :
     Object.entries(vm.opts).map(([k, v]) => `<span class="${k.toLowerCase()}"><i>${esc(k)}</i>${esc(v)}</span>`).join("");
   $("#crumbId").textContent = idle ? "" : (b.decision_id || "");
-  $("#crumbT").textContent = idle ? "AI debate room for enterprise decisions" : (vm.id ? vm.id.replace(/^run_/, "Run ") : "Sample run");
+  $("#crumbT").textContent = idle ? "AI debate room for enterprise decisions" : (state.runId === "sample" || !vm.created) ? "Sample run" : (vm.status === "done" || vm.status === "failed" ? "Decided " : "Started ") + fmtTime(vm.created);
 }
 
 function renderAll(vm) {
@@ -523,17 +467,19 @@ function panelVerdict() {
 function panelStart() {
   $("#sideTitle").textContent = "Start here";
   const runs = state.mode === "live" ? (state.runs || []).slice(0, 8) : [];
-  const row = (id, label, v, sub) => `<li><button class="go" type="button" data-open-run="${esc(id)}"><div><b>${esc(label)}</b><span>${esc(sub)}</span></div>${v ? `<span class="vt ${esc(v)}">${esc(v)}</span>` : "<span></span>"}<span class="arr">→</span></button></li>`;
+  const row = (id, label, v, sub) => `<li><button class="sg" type="button" data-open-run="${esc(id)}"><div><b>${esc(label)}</b><span>${esc(sub)}</span></div>${v ? `<span class="vt ${esc(v)}">${esc(v)}</span>` : "<span></span>"}<span class="arr">→</span></button></li>`;
   const list = runs.map(r => {
     const fv = r.final_verdict; const v = upper(typeof fv === "string" ? fv : fv && fv.verdict) || upper(r.status);
     const dec = r.decision_id || (r.brief && r.brief.decision_id) || "";
-    return row(r.run_id, fmtTime(r.created_at), v, dec ? dec + " · " + r.run_id : r.run_id);
-  }).join("") + row("sample", "DEC-001 sample run", "PASS", "Built-in example. Works offline.");
+    const m = state.meta[r.run_id] || {}; const q = r.question || (r.brief && r.brief.question) || m.question || dec || "Untitled decision";
+    return row(r.run_id, q, runVerdict(r), [dec || m.decision_id, fmtTime(r.created_at)].filter(Boolean).join(" · "));
+  }).join("") + row("sample", "DEC-001 sample decision", "PASS", "Built-in example. Works offline.");
   $("#sideBody").innerHTML = `<p class="lede">The arena is empty. Put a new decision in front of the advisers, or reopen a debate that already ran.</p>
-    <button class="go big" type="button" data-sheet="new"><span class="gi">+</span><div><b>Start a new decision</b><span>Write the question and options. The right advisers join automatically.</span></div><span class="arr">→</span></button>
+    <button class="sg big" type="button" data-sheet="new"><span class="gi">+</span><div><b>Start a new decision</b><span>Write the question and options. The right advisers join automatically.</span></div><span class="arr">→</span></button>
     <div class="h4">Or open a saved run</div>
     <ul class="runs">${list}</ul>
     ${state.mode === "live" && !runs.length ? `<p class="muted">No saved runs yet. Your first decision will appear here.</p>` : ""}`;
+  if (state.mode === "live") enrichRuns();
 }
 function panelFeed() {
   $("#sideTitle").textContent = "Session log";
@@ -616,7 +562,10 @@ function sheetDebate(vm) {
   return `<div class="cards">${cards || '<p class="muted">No positions yet.</p>'}</div>`;
 }
 function sheetChecks(vm) {
-  let k = 0, f = 0, x = 0; vm.positions.forEach(p => { const t = claimStats(vm, p.adviser_id); k += t.k; f += t.f; s += t.s; });
+  const nClaims = vm.positions.reduce((a, p) => a + (p.claims || []).length, 0);
+  if (!vm.positions.length) return `<p class="lede">No adviser positions in this run yet, so there is nothing to check.</p>`;
+  if (!Object.keys(vm.verdicts).length) return `<p class="lede">The advisers made ${nClaims} claim${nClaims === 1 ? "" : "s"}, but this run record has no fact-check results${["done", "failed"].includes(vm.status) ? "" : " yet. They appear once the moderator finishes"}.</p>`;
+  let k = 0, f = 0, x = 0; vm.positions.forEach(p => { const t = claimStats(vm, p.adviser_id); k += t.k; f += t.f; x += t.s; });
   const items = [];
   vm.positions.forEach(p => (p.claims || []).forEach(c => { const v = vm.verdicts[c.claim_id]; const st = upper(v && v.status); if (st === "STRIKE" || st === "FLAG") items.push({ p, c, v, st }); }));
   items.sort((a, b) => (a.st === "STRIKE" ? 0 : 1) - (b.st === "STRIKE" ? 0 : 1));
@@ -802,13 +751,109 @@ async function detectApi() {
   try { const r = await fetchJSON("/runs?limit=25", 2500); return Array.isArray(r) ? r : Array.isArray(r.runs) ? r.runs : false; } catch (e) { return false; }
 }
 async function loadRunList() { try { const r = await fetchJSON("/runs?limit=25"); state.runs = Array.isArray(r) ? r : (r.runs || []); } catch (e) {} fillPicker(); }
-function fillPicker() {
-  const p = $("#picker"); const idle = `<option value="">No run open (idle arena)</option>`;
-  if (state.mode !== "live") p.innerHTML = idle + `<option value="sample">DEC-001 sample run</option>`;
-  else p.innerHTML = idle + state.runs.map(r => { const fv = r.final_verdict; const v = upper(typeof fv === "string" ? fv : fv && fv.verdict) || upper(r.status);
-      return `<option value="${esc(r.run_id)}">${esc(fmtTime(r.created_at))}  ${esc(v)}</option>`; }).join("") + `<option value="sample">Sample run (offline)</option>`;
-  p.value = state.runId || "";
+/* ---------------- past decisions: search box (centre) + decision records (tile) ---------------- */
+function runVerdict(r) {
+  const st = String(r.status || "").toLowerCase();
+  const fv = r.final_verdict; const v = upper(typeof fv === "string" ? fv : fv && fv.verdict) || upper((state.meta[r.run_id] || {}).verdict);
+  if (st === "failed") return "FAILED";
+  if (st && st !== "done") return "RUNNING";
+  return v || "DONE";
 }
+const VWORD = { PASS: "Passed the quality check", INCOMPLETE: "Incomplete", WRONG: "Failed the quality check", FAILED: "Run stopped", RUNNING: "In session", DONE: "Finished" };
+const recLabel = st => { const k = stanceKey(st); return k === "c" ? "Conditional move" : k === "b" ? "Recommends B" : k === "a" ? "Recommends A" : ""; };
+function sampleItem() {
+  const m = SAMPLE.memo || last(SAMPLE.memo_versions || []) || {};
+  return { id: "sample", q: (SAMPLE.brief && SAMPLE.brief.question) || "DEC-001 sample decision", dec: "DEC-001", v: "PASS", when: "Built-in example",
+    rec: recLabel(m.stance), text: m.recommendation || "", conds: m.conditions || [], sample: true, loaded: true };
+}
+function histItems() {
+  return (state.mode === "live" ? state.runs : []).map(r => {
+    const m = state.meta[r.run_id] || {};
+    return { id: r.run_id, q: r.question || (r.brief && r.brief.question) || m.question || "", dec: r.decision_id || (r.brief && r.brief.decision_id) || m.decision_id || "",
+      v: runVerdict(r), when: fmtTime(r.created_at), rec: recLabel(r.stance || m.stance), text: m.rec || "", conds: m.conds || [], loaded: !!m.loaded };
+  });
+}
+function hlText(text, terms) {
+  text = String(text || ""); if (!terms.length) return esc(text);
+  const low = text.toLowerCase(), on = new Array(text.length).fill(false);
+  terms.forEach(t => { let i = low.indexOf(t); while (t && i >= 0) { for (let j = i; j < i + t.length; j++) on[j] = true; i = low.indexOf(t, i + t.length); } });
+  let out = "", open = false;
+  for (let i = 0; i < text.length; i++) { if (on[i] !== open) { out += on[i] ? "<mark>" : "</mark>"; open = on[i]; } out += esc(text[i]); }
+  return out + (open ? "</mark>" : "");
+}
+const ICON_SEARCH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+const ICON_CLOCK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+/* the centre search box, Google style: query – verdict suggestions */
+function renderOmni() {
+  if (!$("#omni").classList.contains("open")) return;
+  const raw = $("#histQ").value.trim(), terms = raw.toLowerCase().split(/\s+/).filter(Boolean);
+  const all = histItems(), smp = sampleItem();
+  const match = i => { const hay = [i.q, i.dec, i.v, VWORD[i.v], i.rec, i.when, i.text].join(" ").toLowerCase(); return terms.every(t => hay.includes(t)); };
+  let list = all.filter(match); if (match(smp)) list.push(smp);
+  if (!terms.length) list = list.slice(0, 6);
+  const row = i => `<button type="button" role="option" class="hrow" data-open-run="${esc(i.id)}">
+      <span class="hi">${terms.length ? ICON_SEARCH : ICON_CLOCK}</span>
+      <span class="hq">${hlText(i.q || i.dec || "Untitled decision", terms)}<span class="hd"> – <span class="v-${esc(i.v)}">${esc(VWORD[i.v] || i.v)}</span>${i.rec && !["FAILED", "RUNNING"].includes(i.v) ? " · " + esc(i.rec) : ""} · ${esc(i.when)}</span>${state.runId === i.id ? '<span class="now">open now</span>' : ""}</span>
+      <span class="vt ${esc(i.v)}">${esc(i.v)}</span></button>`;
+  $("#histList").innerHTML = (terms.length ? "" : `<div class="hl-h">Recent decisions</div>`) +
+    (list.map(row).join("") || `<div class="hl-empty">No past decision matches “${esc(raw)}”. Try a word from the question, a verdict like “incomplete”, or a month.</div>`);
+  const n = $$("#histList .hrow").length; state.histAct = Math.max(0, Math.min(state.histAct || 0, n - 1));
+  $$("#histList .hrow").forEach((b, k) => b.classList.toggle("act", k === state.histAct));
+}
+function openOmni() { const o = $("#omni"); if (o.classList.contains("open")) return; closeRec(); o.classList.add("open"); $("#histQ").setAttribute("aria-expanded", "true"); state.histAct = 0; renderOmni(); enrichRuns(); }
+function closeOmni() { const o = $("#omni"); if (!o.classList.contains("open")) return; o.classList.remove("open"); $("#histQ").setAttribute("aria-expanded", "false"); }
+function moveHist(d) { const rows = $$("#histList .hrow"); if (!rows.length) return; state.histAct = (state.histAct + d + rows.length) % rows.length; rows.forEach((b, k) => b.classList.toggle("act", k === state.histAct)); rows[state.histAct].scrollIntoView({ block: "nearest" }); }
+/* the Decision records tile: query | verdict | more details */
+function renderRecTile() {
+  const items = histItems(), live = state.mode === "live", n = items.length;
+  $("#histCount").textContent = live ? (n ? `${n} decision${n === 1 ? "" : "s"}` : "No decisions yet") : "Sample only";
+  $("#histDots").innerHTML = (live && n ? items.slice(0, 5) : [{ v: "PASS" }]).map(i => `<i class="${i.v}" title="${esc(VWORD[i.v] || i.v)}"></i>`).join("");
+}
+function renderRecords() {
+  if (!$("#rec").classList.contains("open")) return;
+  const items = histItems(); items.push(sampleItem());
+  const chev = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg>';
+  const more = i => {
+    if (!i.loaded) return `<p class="muted">Loading the recommendation…</p>`;
+    if (i.v === "FAILED") return `<p class="rtxt">This run stopped before a recommendation was written.</p>`;
+    if (!i.text) return `<p class="rtxt">No recommendation recorded${i.v === "RUNNING" ? " yet. The debate is still in session" : ""}.</p>`;
+    return `<p class="rtxt">${esc(i.text)}</p>${i.conds.length ? `<h5>Conditions before any volume moves</h5><ul>${i.conds.map(c => `<li>${esc(c)}</li>`).join("")}</ul>` : ""}
+      <div class="row-actions"><button class="btn primary" type="button" data-open-run="${esc(i.id)}">Open in the arena</button><button class="btn" type="button" data-rec-memo="${esc(i.id)}">Read the full memo</button></div>`;
+  };
+  $("#recPop").innerHTML = `<div class="rec-top"><b>Decision records</b><span>${items.length - 1 || "No"} past decision${items.length - 1 === 1 ? "" : "s"}, newest first</span><span class="sp">Click a question to open it in the arena</span></div>
+    <div class="rec-cols"><span>Decision query</span><span>Verdict</span><span>More details</span></div>
+    <div class="rec-body">${items.map(i => `<div class="rec-item ${state.recOpen === i.id ? "open" : ""} ${state.runId === i.id ? "cur" : ""}">
+      <div class="rec-row">
+        <button class="rec-q" type="button" data-open-run="${esc(i.id)}"><span>${esc(i.q || i.dec || "Untitled decision")}</span><span class="m">${esc([i.dec, i.when].filter(Boolean).join(" · "))}</span></button>
+        <div class="rec-v"><span class="vt ${esc(i.v)}">${esc(i.v)}</span><span>${esc((["FAILED", "RUNNING"].includes(i.v) ? "" : i.rec) || VWORD[i.v] || "")}</span></div>
+        <button class="rec-more-btn" type="button" data-rec-more="${esc(i.id)}" aria-expanded="${state.recOpen === i.id}">${state.recOpen === i.id ? "Show less" : "Read more"} ${chev}</button>
+      </div>
+      <div class="rec-more">${more(i)}</div></div>`).join("")}</div>`;
+}
+function openRec() { closeOmni(); const r = $("#rec"); r.classList.add("open"); $("#recBtn").setAttribute("aria-expanded", "true"); renderRecords(); enrichRuns(); }
+function closeRec() { const r = $("#rec"); if (!r.classList.contains("open")) return; r.classList.remove("open"); $("#recBtn").setAttribute("aria-expanded", "false"); }
+async function loadMeta(id) {
+  if (!id || id === "sample" || (state.meta[id] && state.meta[id].loaded) || state.mode !== "live") return;
+  try { rememberRun(await fetchJSON(`/runs/${encodeURIComponent(id)}`, 8000)); } catch (e) { state.meta[id] = { ...(state.meta[id] || {}), loaded: true }; }
+  renderRecords();
+}
+// Fetch each run's question and recommendation (the list endpoint may only send ids and verdicts).
+async function enrichRuns() {
+  if (state.mode !== "live" || state.enriching) return;
+  const todo = state.runs.filter(r => !state.meta[r.run_id]).slice(0, 25);
+  if (!todo.length) return; state.enriching = true;
+  let k = 0;
+  const worker = async () => { while (k < todo.length) { const r = todo[k++]; try { rememberRun(await fetchJSON(`/runs/${encodeURIComponent(r.run_id)}`, 8000)); } catch (e) { state.meta[r.run_id] = { loaded: true }; } } };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  state.enriching = false; renderOmni(); renderRecords(); renderRecTile(); if (state.panel && state.panel.kind === "start") refreshPanel(true);
+}
+function rememberRun(run) {
+  if (!run || !run.run_id) return; const vm = toViewModel(run);
+  state.meta[run.run_id] = { question: vm.brief.question || "", decision_id: vm.brief.decision_id || "", stance: vm.memo && vm.memo.stance, verdict: vm.final && vm.final.verdict,
+    rec: (vm.memo && vm.memo.recommendation) || "", conds: (vm.memo && vm.memo.conditions) || [], loaded: true };
+}
+async function openRunThen(id, sheet) { closeRec(); closeOmni(); await openRun(id); if (sheet) setTimeout(() => openSheet(sheet), 400); }
+function fillPicker() { renderRecTile(); renderOmni(); renderRecords(); }
 async function openRun(id, quiet) {
   clearInterval(state.poll); state.poll = null; clearInterval(clockTimer); clockTimer = null;
   state.runId = id; state.tok = (state.tok || 0) + 1;
@@ -817,7 +862,7 @@ async function openRun(id, quiet) {
   if (id === "sample" || state.mode !== "live") { state.vm = toViewModel(SAMPLE); state.runId = "sample"; renderAll(state.vm); fillPicker(); if (!quiet) entrance(); return; }
   try {
     const run = await fetchJSON(`/runs/${encodeURIComponent(id)}`, 8000);
-    state.vm = toViewModel(run); renderAll(state.vm); fillPicker(); entrance();
+    rememberRun(run); state.vm = toViewModel(run); renderAll(state.vm); fillPicker(); entrance();
     if (!["done", "failed"].includes(state.vm.status)) {
       clockTimer = setInterval(updateClock, 1000);
       let prev = state.vm.status;
@@ -848,7 +893,9 @@ function wire() {
   document.addEventListener("click", e => {
     const ev = e.target.closest("[data-ev]"); if (ev) { e.preventDefault(); openPanel("evidence", ev.dataset.ev, !!state.panel); return; }
     const sh = e.target.closest("[data-sheet]"); if (sh && !sh.disabled) { e.preventDefault(); if (state.sheet === sh.dataset.sheet) closeSheet(); else openSheet(sh.dataset.sheet); return; }
-    const orun = e.target.closest("[data-open-run]"); if (orun) { e.preventDefault(); openRun(orun.dataset.openRun); return; }
+    const orun = e.target.closest("[data-open-run]"); if (orun) { e.preventDefault(); closeOmni(); closeRec(); $("#histQ").value = ""; openRun(orun.dataset.openRun); return; }
+    const rmore = e.target.closest("[data-rec-more]"); if (rmore) { e.preventDefault(); e.stopPropagation(); const id = rmore.dataset.recMore; state.recOpen = state.recOpen === id ? null : id; renderRecords(); loadMeta(id); return; }
+    const rmemo = e.target.closest("[data-rec-memo]"); if (rmemo) { e.preventDefault(); openRunThen(rmemo.dataset.recMemo, "memo"); return; }
     const oa = e.target.closest("[data-open-adv]"); if (oa) { closeSheet(); openAdviser(oa.dataset.openAdv); }
   });
   $("#sideClose").addEventListener("click", closePanel); $("#sideBack").addEventListener("click", backPanel);
@@ -856,25 +903,25 @@ function wire() {
   document.addEventListener("keydown", e => { if (e.key === "Escape") { if (state.sheet) closeSheet(); else closePanel(); } });
   $("#replayBtn").addEventListener("click", replay);
   $("#newBtn").addEventListener("click", () => openSheet("new"));
-  $("#picker").addEventListener("change", e => openRun(e.target.value));
-}
-
-async function loadInitialData() {
-  try {
-    const [factsRes, sampleRes] = await Promise.all([
-      fetch("data/facts.json"),
-      fetch("data/sample_run.json")
-    ]);
-    if (factsRes.ok) FACTS = await factsRes.json();
-    if (sampleRes.ok) SAMPLE = await sampleRes.json();
-  } catch (err) {
-    console.warn("[colosseum] Could not load static data from data/ directory:", err);
-  }
+  const q = $("#histQ");
+  q.addEventListener("focus", openOmni);
+  q.addEventListener("input", () => { state.histAct = 0; openOmni(); renderOmni(); });
+  q.addEventListener("keydown", e => {
+    if (e.key === "ArrowDown") { e.preventDefault(); openOmni(); moveHist(1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); moveHist(-1); }
+    else if (e.key === "Enter") { e.preventDefault(); const r = $$("#histList .hrow")[state.histAct]; if (r) { r.click(); q.blur(); } }
+    else if (e.key === "Escape") { e.stopPropagation(); if (q.value) { q.value = ""; renderOmni(); } else { closeOmni(); q.blur(); } }
+  });
+  $("#recBtn").addEventListener("click", e => { e.stopPropagation(); $("#rec").classList.contains("open") ? closeRec() : openRec(); });
+  document.addEventListener("click", e => { if (!e.target.isConnected) return; if (!e.target.closest("#omni")) closeOmni(); if (!e.target.closest("#rec")) closeRec(); });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && $("#rec").classList.contains("open")) { closeRec(); $("#recBtn").focus(); }
+    if (e.key === "/" && !/INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || "")) { e.preventDefault(); q.focus(); }
+  });
 }
 
 async function boot() {
   try { wire(); } catch (e) { console.error(e); }
-  await loadInitialData();
   state.vm = toViewModel(SAMPLE); renderAll(state.vm); fillPicker();
   setTimeout(entrance, 300);
   const runs = await detectApi();

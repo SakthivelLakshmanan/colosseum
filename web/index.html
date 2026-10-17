@@ -1,29 +1,44 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Colosseum Decision Room</title>
-  <meta name="claude:viewport-fit-sides" content="cover">
-  <meta name="description" content="Colosseum: six AI advisers argue a business decision, a moderator checks every claim, and a named person signs off.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B1A20'/%3E%3Cpath d='M12 44a20 20 0 0 1 40 0' fill='none' stroke='%23D9AE63' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M20 44a12 12 0 0 1 24 0' fill='none' stroke='%234FD8FF' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Colosseum Decision Room</title>
+<meta name="description" content="Colosseum: six AI advisers argue a business decision, a moderator checks every claim, and a named person signs off.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B1A20'/%3E%3Cpath d='M12 44a20 20 0 0 1 40 0' fill='none' stroke='%23D9AE63' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M20 44a12 12 0 0 1 24 0' fill='none' stroke='%234FD8FF' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
-
 <div class="app idle" id="app">
   <header class="top">
+    <div class="top-l">
     <div class="brand">
       <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="var(--panel-2)"/><path d="M12 44a20 20 0 0 1 40 0" fill="none" stroke="var(--laurel)" stroke-width="5" stroke-linecap="round"/><path d="M20 44a12 12 0 0 1 24 0" fill="none" stroke="var(--signal)" stroke-width="5" stroke-linecap="round"/></svg>
       <b>COLOSSEUM</b>
     </div>
     <div class="crumb"><span class="id" id="crumbId"></span><span class="t" id="crumbT">AI debate room for enterprise decisions</span></div>
+    </div>
+    <div class="omni" id="omni">
+      <label class="omni-box"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="histQ" type="search" role="combobox" aria-expanded="false" aria-controls="histList" aria-autocomplete="list" placeholder="Search past decisions" autocomplete="off" spellcheck="false"><kbd>/</kbd></label>
+      <div class="omni-pop" id="histPop"><div id="histList" role="listbox" aria-label="Matching decisions"></div></div>
+    </div>
+    <div class="top-r">
     <span class="mode" id="mode">Sample run</span>
-    <select class="picker" id="picker" aria-label="Open a saved run"></select>
+    <div class="rec" id="rec">
+      <button class="rec-btn" id="recBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="recPop" title="Every past decision with its verdict">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+        <span class="hb-t"><b>Decision records</b><span id="histCount">Sample only</span></span>
+        <span class="hb-dots" id="histDots" aria-hidden="true"></span>
+        <svg class="hb-c" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="rec-pop" id="recPop" role="dialog" aria-label="Decision records"></div>
+    </div>
     <button class="btn primary" id="newBtn" type="button">New decision</button>
+    </div>
   </header>
 
   <main class="stage" id="stage">
@@ -64,7 +79,7 @@
   <div class="sheet-b" id="sheetBody"></div>
 </section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-<script src="app.js"></script>
+<script src="data.js?v=5" charset="utf-8"></script>
+<script src="app.js?v=5" charset="utf-8"></script>
 </body>
 </html>
