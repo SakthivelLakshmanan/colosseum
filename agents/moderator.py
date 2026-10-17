@@ -182,6 +182,59 @@ def _number_appears_in_statement(
     return False
 
 
+def _extract_numbers_from_text(text: str) -> set[float]:
+    """Extract all numbers from text, including percentage variants and unit conversions."""
+    if not text:
+        return set()
+    nums: set[float] = set()
+    has_any_pct = False
+
+    # 1. Match numbers with optional % / percent / pct
+    pattern = r"(?:₹|\b)(\d+(?:,\d+)*(?:\.\d+)?)\s*(%|percent|pct)?"
+    for m in re.finditer(pattern, text, re.IGNORECASE):
+        num_str = m.group(1).replace(",", "")
+        try:
+            val = float(num_str)
+        except ValueError:
+            continue
+        nums.add(val)
+        is_pct = bool(m.group(2))
+        if is_pct:
+            has_any_pct = True
+            nums.add(val)
+            nums.add(val / 100.0)
+
+    # Explicit percentage check to guarantee both val and val/100 (e.g. 40 and 0.40 for 40%)
+    pct_pattern = r"(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:%|percent\b|pct\b)"
+    for m in re.finditer(pct_pattern, text, re.IGNORECASE):
+        num_str = m.group(1).replace(",", "")
+        try:
+            val = float(num_str)
+            nums.add(val)
+            nums.add(val / 100.0)
+            has_any_pct = True
+        except ValueError:
+            continue
+
+    if "%" in text or has_any_pct:
+        nums.add(100.0)
+        nums.add(1.0)
+
+    # 2. Match numbers with unit words (crore, lakh, hours, etc.)
+    unit_pattern = r"(?:₹|\b)(\d+(?:,\d+)*(?:\.\d+)?)\s*(crore|lakh|cr|lac|hours?|days?|weeks?|months?)"
+    for m in re.finditer(unit_pattern, text, re.IGNORECASE):
+        num_str = m.group(1).replace(",", "")
+        try:
+            val = float(num_str)
+            nums.add(val)
+            _, norm = _normalize_unit_and_value(val, m.group(2))
+            nums.add(norm)
+        except ValueError:
+            continue
+
+    return nums
+
+
 def _is_blocking_finding(
     claim: Claim,
     position: Optional[AdviserPosition],
@@ -885,23 +938,45 @@ def check_memo(
         )
 
     # Prepare decision brief text for brief number matching
-    brief_full_text = " ".join([
-        brief_obj.question or "",
-        " ".join(brief_obj.options.values()),
-        " ".join(brief_obj.constraints or []),
-        " ".join(c.name for c in brief_obj.criteria),
-        " ".join(c.good_looks_like for c in brief_obj.criteria),
-    ])
+    brief_parts = [
+        str(brief_obj.question or ""),
+        str(getattr(brief_obj, "context", "") or ""),
+        str(getattr(brief_obj, "background", "") or ""),
+        " ".join(str(k) for k in (brief_obj.options or {}).keys()),
+        " ".join(str(v) for v in (brief_obj.options or {}).values()),
+        " ".join(str(c) for c in (brief_obj.constraints or [])),
+        " ".join(str(c.name) for c in (brief_obj.criteria or [])),
+        " ".join(str(c.good_looks_like) for c in (brief_obj.criteria or [])),
+    ]
+    brief_full_text = " ".join(part for part in brief_parts if part)
 
-    # Check 5: every key_number matches its evidence (recompute calculations, 1% tolerance; fact values vs value_num)
+    # Check 5: every key_number matches its evidence (recompute calculations, tolerance; fact values vs value_num)
+    brief_numbers = _extract_numbers_from_text(brief_full_text)
+
+    # P = fractional percentages written in the brief text (question, options, constraints, context):
+    # each "N%" gives N/100, only when 0 < N < 100. Never use 100, 1.0 or plain non-percent brief numbers as multipliers.
+    # Also include 1 - p for each p (the remaining share).
+    brief_fractions_p: set[float] = set()
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*(?:%|percent\b|pct\b)", brief_full_text, re.IGNORECASE):
+        try:
+            n_pct = float(m.group(1))
+            if 0.0 < n_pct < 100.0:
+                p_val = n_pct / 100.0
+                brief_fractions_p.add(p_val)
+                brief_fractions_p.add(1.0 - p_val)
+        except ValueError:
+            continue
+
     for kn in memo_obj.key_numbers:
         # Check if number appears in the decision brief (the Scribe cites BRIEF as the evidence ID)
         cites_brief = any("brief" in str(eid).lower() for eid in kn.evidence_ids)
-        if kn.value is not None and _number_appears_in_statement(brief_full_text, kn.value, kn.unit, tolerance_pct=1.0):
-            if cites_brief or not kn.evidence_ids:
-                continue
 
         if not kn.evidence_ids:
+            if kn.value is not None and (
+                _number_appears_in_statement(brief_full_text, kn.value, kn.unit, tolerance_pct=1.0)
+                or any(_matches_within_1pct(float(b_num), float(kn.value), tolerance_pct=1.0) for b_num in brief_numbers)
+            ):
+                continue
             code_check_issues.append(
                 MemoIssue(
                     kind="number_mismatch",
@@ -911,18 +986,60 @@ def check_memo(
             )
             continue
 
-        if kn.kind == "calculation" and kn.formula:
+        passed = False
+
+        # (a) Cites BRIEF: value appears in brief text or matches any extracted brief number
+        if cites_brief and kn.value is not None:
+            if _number_appears_in_statement(brief_full_text, kn.value, kn.unit, tolerance_pct=1.0) or any(
+                _matches_within_1pct(float(b_num), float(kn.value), tolerance_pct=1.0) for b_num in brief_numbers
+            ):
+                passed = True
+
+        # (i) Matches a cited evidence value (as today)
+        if not passed and kn.value is not None:
+            t_fam, t_norm = _normalize_unit_and_value(kn.value, kn.unit)
+            t_val = float(kn.value)
+
+            for eid in kn.evidence_ids:
+                if "brief" in str(eid).lower():
+                    continue
+
+                fact = get_fact(eid)
+                if not fact:
+                    continue
+
+                if fact.statement and _number_appears_in_statement(fact.statement, kn.value, kn.unit, tolerance_pct=1.0):
+                    passed = True
+                    break
+
+                if fact.value_num is not None:
+                    f_fam, f_norm = _normalize_unit_and_value(fact.value_num, fact.unit)
+                    if t_fam == f_fam and _matches_within_1pct(f_norm, t_norm, tolerance_pct=1.0):
+                        passed = True
+                        break
+                    if _matches_within_1pct(float(fact.value_num), t_val, tolerance_pct=1.0):
+                        passed = True
+                        break
+
+        # (ii) kind == "calculation" with formula evaluating within 0.5%
+        if not passed and kn.kind == "calculation" and kn.formula:
             try:
                 from agents.tools import calculate
                 recomputed = calculate(kn.formula)
-                if kn.value is not None and not _matches_within_1pct(recomputed, kn.value, tolerance_pct=1.0):
-                    code_check_issues.append(
-                        MemoIssue(
-                            kind="number_mismatch",
-                            detail=f"Calculation mismatch for '{kn.text}': formula '{kn.formula}' = {recomputed}, but claimed {kn.value}",
-                            evidence_ids=kn.evidence_ids,
+                if kn.value is not None:
+                    if _matches_within_1pct(recomputed, kn.value, tolerance_pct=0.5):
+                        passed = True
+                    else:
+                        code_check_issues.append(
+                            MemoIssue(
+                                kind="number_mismatch",
+                                detail=f"Calculation mismatch for '{kn.text}': formula '{kn.formula}' = {recomputed}, but claimed {kn.value}",
+                                evidence_ids=kn.evidence_ids,
+                            )
                         )
-                    )
+                        continue
+                else:
+                    passed = True
             except Exception as exc:
                 code_check_issues.append(
                     MemoIssue(
@@ -931,45 +1048,99 @@ def check_memo(
                         evidence_ids=kn.evidence_ids,
                     )
                 )
-        elif kn.value is not None:
-            matched = False
-            comparable_eids: list[str] = []  # evidence IDs in same unit family
+                continue
+
+        # (iii) Derived-number rule: value ≈ e × p within 0.5%, for some e in E and p in P.
+        # No division, and no other multipliers.
+        if not passed and not kn.formula and kn.value is not None:
+            claim_val = float(kn.value)
+            has_claim_unit = bool(kn.unit and kn.unit.strip())
+            c_fam, c_norm = _normalize_unit_and_value(claim_val, kn.unit) if has_claim_unit else ("unitless", claim_val)
+
+            # E = numbers in the cited evidence statements.
+            # If the claim has a unit (crore, lakh, %, days and so on), keep only evidence numbers
+            # whose attached unit is in the same unit family, normalised with the existing _normalize_unit_and_value.
+            # If the claim has no unit, use all evidence numbers.
+            E_norm: set[float] = set()
+            E_raw: set[float] = set()
+
             for eid in kn.evidence_ids:
                 if "brief" in str(eid).lower():
-                    if _number_appears_in_statement(brief_full_text, kn.value, kn.unit, tolerance_pct=1.0):
-                        matched = True
-                        break
                     continue
-
                 fact = get_fact(eid)
                 if not fact:
                     continue
-                # (b) Appears in statement text
-                if fact.statement and _number_appears_in_statement(fact.statement, kn.value, kn.unit, tolerance_pct=1.0):
-                    matched = True
-                    break
-                # (a) Matches value_num within 1%
-                if fact.value_num is not None:
-                    t_fam, t_val = _normalize_unit_and_value(kn.value, kn.unit)
-                    f_fam, f_val = _normalize_unit_and_value(fact.value_num, fact.unit)
-                    if t_fam == f_fam:
-                        comparable_eids.append(eid)
-                        if _matches_within_1pct(f_val, t_val, tolerance_pct=1.0):
-                            matched = True
-                            break
 
-            # Only flag number_mismatch when a *single* evidence ID was cited and it
-            # contradicts the value. When multiple evidence IDs are cited, the key number
-            # represents multi-fact synthesis or calculation (e.g. combining volume and fee rates)
-            # which cannot be verified against a single fact without an explicit formula — skip.
-            if comparable_eids and not matched and len(kn.evidence_ids) == 1:
-                code_check_issues.append(
-                    MemoIssue(
-                        kind="number_mismatch",
-                        detail=f"Number mismatch in '{kn.text}': value {kn.value} {kn.unit or ''} does not match cited evidence {kn.evidence_ids}.",
-                        evidence_ids=kn.evidence_ids,
-                    )
+                fact_pairs: list[tuple[float, str]] = []
+                if fact.value_num is not None:
+                    fact_pairs.append((float(fact.value_num), fact.unit or ""))
+
+                if fact.statement:
+                    stmt_pattern = r"(?:(₹)\s*)?(\d+(?:,\d+)*(?:\.\d+)?)\s*(crore|lakh|cr|lac|hours?|days?|weeks?|months?|%|percent|pct|million|billion|merchants|tickets|engineers)?(?:\s*(?:/|per|a)\s*(?:month|year))?"
+                    for m in re.finditer(stmt_pattern, fact.statement, re.IGNORECASE):
+                        num_s = m.group(2).replace(",", "")
+                        try:
+                            num_val = float(num_s)
+                        except ValueError:
+                            continue
+                        has_curr = bool(m.group(1))
+                        unit_word = m.group(3) or ""
+                        full_m = m.group(0).lower()
+                        is_pm = ("month" in full_m)
+                        is_py = ("year" in full_m)
+
+                        if unit_word:
+                            u_str = unit_word
+                            if is_pm:
+                                u_str += " / month"
+                            elif is_py:
+                                u_str += " / year"
+                            elif has_curr:
+                                u_str = "INR " + u_str
+                        elif has_curr:
+                            u_str = "INR"
+                        else:
+                            u_str = ""
+                        fact_pairs.append((num_val, u_str))
+
+                for val, u_str in fact_pairs:
+                    if has_claim_unit:
+                        e_fam, e_norm = _normalize_unit_and_value(val, u_str)
+                        same_fam = (e_fam == c_fam) or (c_fam.startswith("currency_lakh") and e_fam.startswith("currency_lakh"))
+                        if same_fam:
+                            E_norm.add(e_norm)
+                            E_raw.add(val)
+                    else:
+                        E_raw.add(val)
+
+            # Rule (iii) passes only if value ≈ e × p within 0.5%, for some e in E and p in P.
+            # No division, and no other multipliers.
+            if has_claim_unit:
+                for e_norm in E_norm:
+                    for p in brief_fractions_p:
+                        if _matches_within_1pct(e_norm * p, c_norm, tolerance_pct=0.5):
+                            passed = True
+                            break
+                    if passed:
+                        break
+
+            if not passed and not has_claim_unit:
+                for e_raw in E_raw:
+                    for p in brief_fractions_p:
+                        if _matches_within_1pct(e_raw * p, claim_val, tolerance_pct=0.5):
+                            passed = True
+                            break
+                    if passed:
+                        break
+
+        if not passed and (kn.value is not None or (kn.kind == "calculation" and kn.formula)):
+            code_check_issues.append(
+                MemoIssue(
+                    kind="number_mismatch",
+                    detail=f"Number mismatch in '{kn.text}': value {kn.value} {kn.unit or ''} does not match cited evidence {kn.evidence_ids}.",
+                    evidence_ids=kn.evidence_ids,
                 )
+            )
 
     # 2. Build code checks summary for reasoning model
     if not code_check_issues:

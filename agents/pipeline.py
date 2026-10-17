@@ -16,14 +16,15 @@ from core import ledger
 from core.gemini import get_model_used
 from core.schemas import (
     AdviserPosition,
+    ClaimVerdict,
     DecisionBrief,
     EvidencePack,
     FinalVerdict,
     Memo,
+    MemoIssue,
     MemoVerdictType,
     RoutingDecision,
     RunRecord,
-    ClaimVerdict,
     Scorecard,
 )
 from core.settings import get_settings
@@ -230,6 +231,7 @@ def run_decision(
         memo_revisions = []
         revision_instructions = ""
         revision_number = 0
+        previous_code_issues: set[tuple[str, str]] = set()
 
         while True:
             current_stage = "writing"
@@ -296,6 +298,61 @@ def run_decision(
                 ledger.save_section(run_id, "model_used", model_used)
             except Exception as exc:
                 logger.warning("Failed to save final_verdict and revisions in ledger: %s", exc)
+
+            # Code-check failure safeguard: if the exact same code-check failure appears in two drafts in a row,
+            # classify it as upstream_gap, stop revising immediately, and return INCOMPLETE.
+            code_check_kinds = {
+                "missing_criterion",
+                "missing_adviser",
+                "unresolved_blocker",
+                "ignored_blocker",
+                "missing_dissent",
+                "number_mismatch",
+            }
+            current_code_issues = [
+                i for i in verdict.issues
+                if i.kind in code_check_kinds or "code_check" in i.kind.lower()
+            ]
+            repeated_code_issues = [
+                i for i in current_code_issues
+                if (i.kind, i.detail.strip()) in previous_code_issues
+            ]
+
+            if repeated_code_issues:
+                logger.info(
+                    "Pipeline: exact same code-check failure appeared in two drafts in a row (%s); classifying as upstream_gap and returning INCOMPLETE.",
+                    [i.detail for i in repeated_code_issues],
+                )
+                classified_issues = []
+                for i in verdict.issues:
+                    if (i.kind, i.detail.strip()) in previous_code_issues:
+                        classified_issues.append(
+                            MemoIssue(
+                                kind="upstream_gap",
+                                detail=i.detail,
+                                evidence_ids=i.evidence_ids,
+                            )
+                        )
+                    else:
+                        classified_issues.append(i)
+
+                verdict = FinalVerdict(
+                    verdict=MemoVerdictType.incomplete,
+                    issues=classified_issues,
+                    revision_instructions="",
+                    revision_number=revision_number,
+                )
+                final_verdicts[-1] = verdict
+                memo_revisions[-1]["verdict"] = verdict
+                try:
+                    ledger.save_final_verdict(run_id, verdict)
+                    ledger.save_section(run_id, "final_verdicts", final_verdicts)
+                    ledger.save_memo_revisions(run_id, memo_revisions)
+                except Exception as exc:
+                    logger.warning("Failed to update final_verdict in ledger: %s", exc)
+                break
+
+            previous_code_issues = {(i.kind, i.detail.strip()) for i in current_code_issues}
 
             # If the only remaining issues are upstream_gap, stop revising and set verdict to INCOMPLETE
             if verdict.issues and all(getattr(i, "kind", "") == "upstream_gap" for i in verdict.issues):

@@ -410,15 +410,15 @@ def test_memo_number_check_brief_formula_and_evidence():
                 evidence_ids=["BRIEF"],
                 kind="fact",
             ),
-            # Formula recomputation: 120 - 105.6 = 14.4
+            # Formula recomputation: 1500 * 0.40 = 600
             Claim(
                 claim_id="kn-calc",
-                text="Option B gross saving is 14.4 lakh",
+                text="Option B volume is 600 crore",
                 kind="calculation",
-                formula="120 - 105.6",
-                value=14.4,
-                unit="lakh",
-                evidence_ids=["FIN-01"],
+                formula="1500 * 0.40",
+                value=600.0,
+                unit="crore",
+                evidence_ids=["FIN-01", "BRIEF"],
             ),
         ],
         blocking_findings=[],
@@ -447,9 +447,9 @@ def test_memo_number_check_brief_formula_and_evidence():
                 claim_id="kn-bad-calc",
                 text="Incorrect calculation",
                 kind="calculation",
-                formula="100 - 50",  # 50 != 999
+                formula="1500 * 0.40",  # 600 != 999
                 value=999.0,
-                evidence_ids=["FIN-01"],
+                evidence_ids=["FIN-01", "BRIEF"],
             ),
         ],
         blocking_findings=[],
@@ -563,3 +563,311 @@ def test_pipeline_stops_revising_on_upstream_gap():
     assert len(record.final_verdicts[-1].issues) == 1
     assert record.final_verdicts[-1].issues[0].kind == "upstream_gap"
     assert "Scorecard is missing criterion scores" in record.final_verdicts[-1].issues[0].detail
+
+
+# ==============================================================================
+# Point 6: Derived number checks: multiplication/division from brief & evidence
+# ==============================================================================
+
+def test_number_check_multiplication_from_brief_and_evidence():
+    """Test number check:
+    - 600 from 40% x 1,500 passes (without formula, citing FIN-01 which has 1,500 and brief has 40%).
+    - 650 fails.
+    - a number with no evidence connection fails.
+    """
+    brief = DecisionBrief(
+        decision_id="DEC-TEST-DERIVED",
+        question="Should we migrate 40% of payment volume?",
+        options={
+            "A": "Stay with Arvanta for 100% of volume",
+            "B": "Move 40% of volume to Brevis Pay",
+        },
+        constraints=[],
+        criteria=[],
+    )
+
+    base_scorecard = Scorecard(
+        rows=[],
+        weighted_totals={"A": 3.0, "B": 3.0},
+        blocked_options={},
+    )
+
+    # 1. 600 from 40% x 1,500 passes (without formula, citing FIN-01 which has 1,500)
+    memo_pass_600 = Memo(
+        decision_id="DEC-TEST-DERIVED",
+        recommendation="Move 40% of volume to Brevis Pay (finance).",
+        stance="B",
+        confidence=0.9,
+        conditions=[],
+        phased_plan=[],
+        scorecard=base_scorecard,
+        key_numbers=[
+            Claim(
+                claim_id="kn-600",
+                text="Migrated volume is 600 crore",
+                value=600.0,
+                unit="crore",
+                evidence_ids=["FIN-01"],
+            ),
+        ],
+        blocking_findings=[],
+        dissent=[],
+        assumptions=[],
+        numbers_to_watch=[],
+        evidence_index=[],
+    )
+    with patch("agents.moderator.generate", return_value=json.dumps({"verdict": "PASS", "issues": []})):
+        v_pass = check_memo(brief, memo_pass_600, selected_advisers=["finance"], positions={})
+        assert not any(i.kind == "number_mismatch" for i in v_pass.issues)
+
+    # 2. 650 fails
+    memo_fail_650 = Memo(
+        decision_id="DEC-TEST-DERIVED",
+        recommendation="Move 40% of volume to Brevis Pay (finance).",
+        stance="B",
+        confidence=0.9,
+        conditions=[],
+        phased_plan=[],
+        scorecard=base_scorecard,
+        key_numbers=[
+            Claim(
+                claim_id="kn-650",
+                text="Migrated volume is 650 crore",
+                value=650.0,
+                unit="crore",
+                evidence_ids=["FIN-01"],
+            ),
+        ],
+        blocking_findings=[],
+        dissent=[],
+        assumptions=[],
+        numbers_to_watch=[],
+        evidence_index=[],
+    )
+    with patch("agents.moderator.generate", return_value=json.dumps({"verdict": "PASS", "issues": []})):
+        v_fail = check_memo(brief, memo_fail_650, selected_advisers=["finance"], positions={})
+        assert any(i.kind == "number_mismatch" for i in v_fail.issues)
+
+    # 3. A number with no evidence connection fails
+    # Case a: Empty evidence_ids
+    memo_no_evidence = Memo(
+        decision_id="DEC-TEST-DERIVED",
+        recommendation="Move 40% of volume to Brevis Pay (finance).",
+        stance="B",
+        confidence=0.9,
+        conditions=[],
+        phased_plan=[],
+        scorecard=base_scorecard,
+        key_numbers=[
+            Claim(
+                claim_id="kn-empty-evidence",
+                text="Arbitrary key number without evidence",
+                value=600.0,
+                evidence_ids=[],
+            ),
+        ],
+        blocking_findings=[],
+        dissent=[],
+        assumptions=[],
+        numbers_to_watch=[],
+        evidence_index=[],
+    )
+    with patch("agents.moderator.generate", return_value=json.dumps({"verdict": "PASS", "issues": []})):
+        v_no_ev = check_memo(brief, memo_no_evidence, selected_advisers=["finance"], positions={})
+        assert any(i.kind == "number_mismatch" for i in v_no_ev.issues)
+
+    # Case b: Evidence cited has no numerical connection to value
+    memo_unconnected = Memo(
+        decision_id="DEC-TEST-DERIVED",
+        recommendation="Move 40% of volume to Brevis Pay (finance).",
+        stance="B",
+        confidence=0.9,
+        conditions=[],
+        phased_plan=[],
+        scorecard=base_scorecard,
+        key_numbers=[
+            Claim(
+                claim_id="kn-unconnected",
+                text="Arbitrary key number 999",
+                value=999.0,
+                evidence_ids=["FIN-01"],
+            ),
+        ],
+        blocking_findings=[],
+        dissent=[],
+        assumptions=[],
+        numbers_to_watch=[],
+        evidence_index=[],
+    )
+    with patch("agents.moderator.generate", return_value=json.dumps({"verdict": "PASS", "issues": []})):
+        v_unconn = check_memo(brief, memo_unconnected, selected_advisers=["finance"], positions={})
+        assert any(i.kind == "number_mismatch" for i in v_unconn.issues)
+
+    # 4. Calculation whose formula evaluates to claimed value passes
+    memo_calc_pass = Memo(
+        decision_id="DEC-TEST-DERIVED",
+        recommendation="Move 40% of volume to Brevis Pay (finance).",
+        stance="B",
+        confidence=0.9,
+        conditions=[],
+        phased_plan=[],
+        scorecard=base_scorecard,
+        key_numbers=[
+            Claim(
+                claim_id="kn-calc-pass",
+                text="Calculated 600 from formula",
+                kind="calculation",
+                formula="0.40 * 1500",
+                value=600.0,
+                unit="crore",
+                evidence_ids=["FIN-01", "BRIEF"],
+            ),
+        ],
+        blocking_findings=[],
+        dissent=[],
+        assumptions=[],
+        numbers_to_watch=[],
+        evidence_index=[],
+    )
+    with patch("agents.moderator.generate", return_value=json.dumps({"verdict": "PASS", "issues": []})):
+        v_calc_pass = check_memo(brief, memo_calc_pass, selected_advisers=["finance"], positions={})
+        assert not any(i.kind == "number_mismatch" for i in v_calc_pass.issues)
+
+    # 5. Calculation whose formula does NOT evaluate to claimed value fails
+    memo_calc_fail = Memo(
+        decision_id="DEC-TEST-DERIVED",
+        recommendation="Move 40% of volume to Brevis Pay (finance).",
+        stance="B",
+        confidence=0.9,
+        conditions=[],
+        phased_plan=[],
+        scorecard=base_scorecard,
+        key_numbers=[
+            Claim(
+                claim_id="kn-calc-fail",
+                text="Calculated mismatch: formula gives 650 but claimed 700",
+                kind="calculation",
+                formula="500 + 150",
+                value=700.0,
+                evidence_ids=["FIN-01"],
+            ),
+        ],
+        blocking_findings=[],
+        dissent=[],
+        assumptions=[],
+        numbers_to_watch=[],
+        evidence_index=[],
+    )
+    with patch("agents.moderator.generate", return_value=json.dumps({"verdict": "PASS", "issues": []})):
+        v_calc_fail = check_memo(brief, memo_calc_fail, selected_advisers=["finance"], positions={})
+        assert any(i.kind == "number_mismatch" for i in v_calc_fail.issues)
+
+
+# ==============================================================================
+# Point 7: Revision Loop Safeguard: repeated code-check failure stops revisions
+# ==============================================================================
+
+def test_pipeline_repeated_code_check_failure_stops_as_upstream_gap():
+    """If the exact same code-check failure appears in two drafts in a row,
+    classify it as upstream_gap, stop revising immediately, and return INCOMPLETE.
+    """
+    brief = DecisionBrief(
+        decision_id="DEC-TEST-REPEAT",
+        question="Which system?",
+        options={"A": "Option A", "B": "Option B"},
+        constraints=[],
+        criteria=[],
+    )
+
+    fake_scorecard = Scorecard(
+        rows=[],
+        weighted_totals={"A": 3.0, "B": 3.0},
+        blocked_options={},
+    )
+
+    fake_memo = Memo(
+        decision_id="DEC-TEST-REPEAT",
+        recommendation="Adopt Option A.",
+        stance="A",
+        confidence=0.9,
+        conditions=[],
+        phased_plan=[],
+        scorecard=fake_scorecard,
+        key_numbers=[],
+        blocking_findings=[],
+        dissent=[],
+        assumptions=[],
+        numbers_to_watch=[],
+        evidence_index=[],
+    )
+
+    # Both drafts fail with the exact same code-check failure (number_mismatch)
+    repeated_issue = MemoIssue(
+        kind="number_mismatch",
+        detail="Number mismatch in 'Migrated volume': value 650 crore does not match cited evidence ['FIN-01'].",
+        evidence_ids=["FIN-01"],
+    )
+
+    verdict_draft_0 = FinalVerdict(
+        verdict=MemoVerdictType.wrong,
+        issues=[repeated_issue],
+        revision_instructions="Fix number mismatch in 'Migrated volume'",
+        revision_number=0,
+    )
+    verdict_draft_1 = FinalVerdict(
+        verdict=MemoVerdictType.wrong,
+        issues=[repeated_issue],
+        revision_instructions="Fix number mismatch in 'Migrated volume'",
+        revision_number=1,
+    )
+
+    routing = RoutingDecision(
+        decision_id="DEC-TEST-REPEAT",
+        routing_query="operations",
+        scores=[],
+        selected=["ops"],
+        created_at="2026-10-15T10:00:00Z",
+    )
+
+    fake_pack = EvidencePack(
+        adviser_id="ops",
+        facts=[],
+        summaries=[],
+        total_matching_facts=0,
+        truncated=False,
+    )
+
+    write_memo_mock = MagicMock(return_value=fake_memo)
+    check_memo_mock = MagicMock(side_effect=[verdict_draft_0, verdict_draft_1])
+
+    with patch("agents.pipeline.route_decision", return_value=routing), \
+         patch("agents.pipeline.build_pack", return_value=fake_pack), \
+         patch("agents.pipeline.run_advisers_sync", return_value={}), \
+         patch("agents.pipeline.check_claims", return_value=[]), \
+         patch("agents.pipeline.build_scorecard", return_value=fake_scorecard), \
+         patch("agents.pipeline.write_memo", write_memo_mock), \
+         patch("agents.pipeline.check_memo", check_memo_mock), \
+         patch("agents.pipeline.repair_adviser_criterion_scores_sync", side_effect=lambda aid, brief, p: p), \
+         patch("core.ledger.create_run"), \
+         patch("core.ledger.update_status"), \
+         patch("core.ledger.init_adviser_statuses"), \
+         patch("core.ledger.save_routing"), \
+         patch("core.ledger.save_memo"), \
+         patch("core.ledger.save_final_verdict"), \
+         patch("core.ledger.save_memo_revisions"), \
+         patch("core.ledger.save_section"):
+
+        record = run_decision(brief=brief, run_id="run_test_repeat")
+
+    # 1. Pipeline stopped after revision 1 (2 drafts total, not spinning to max revisions)
+    assert write_memo_mock.call_count == 2
+    assert check_memo_mock.call_count == 2
+
+    # 2. Verdict was converted to INCOMPLETE
+    last_verdict = record.final_verdicts[-1]
+    assert last_verdict.verdict == MemoVerdictType.incomplete
+
+    # 3. The repeated code check issue was classified as upstream_gap
+    assert len(last_verdict.issues) == 1
+    assert last_verdict.issues[0].kind == "upstream_gap"
+    assert "Number mismatch in 'Migrated volume'" in last_verdict.issues[0].detail

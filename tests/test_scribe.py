@@ -230,8 +230,10 @@ def test_write_memo_passes_adviser_inputs_and_prompt_rules(
     assert "include every specific condition from conditional or objecting advisers" in prompt_text
     assert "For every brief constraint that the evidence shows is at risk" in prompt_text
     assert "stays within the threshold" in prompt_text
-    assert "Every derived number needs its formula" in prompt_text
-    assert "Numbers taken from the brief cite BRIEF" in prompt_text
+    assert 'Every derived key number must be written as kind: "calculation" with its formula' in prompt_text
+    assert "describe the phases as one migration with a staged traffic ramp" in prompt_text
+    assert "state plainly which costs that phase triggers" in prompt_text
+    assert 'Never say a cost is "avoided"' in prompt_text
 
     # Populate conditions and handoffs on sample position
     sample_positions["finance"].conditions = ["Activate India hosting add-on"]

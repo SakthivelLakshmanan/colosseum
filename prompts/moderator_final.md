@@ -8,6 +8,7 @@ Code has already run these checks; their results are below. Use them, and add wh
 - Are the conditions specific enough to act on?
 - Is the dissent fair to the advisers who disagreed?
 - Is anything important from the evidence missing?
+- Constraints on migrations: a staged volume ramp on a single integration counts as one migration. Raise constraint_violation for a migration limit only if the plan truly requires more than one separate integration or migration project.
 
 Verdict:
 - **PASS**: makes sense, complete, correct.

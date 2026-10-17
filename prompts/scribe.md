@@ -14,8 +14,10 @@ Rules:
 9. Conditions: include every specific condition from conditional or objecting advisers, and every blocking-finding fix, if it is supported by an accepted claim. Merge duplicates and keep the evidence IDs.
 10. For every brief constraint that the evidence shows is at risk, add a condition that protects it, with evidence.
 11. If an accepted claim shows a one-time cost or penalty that depends on the size of the change (a threshold), put in phased_plan a first phase that stays within the threshold, with its numbers, and a later phase for the full change, with the cost of crossing the threshold.
-12. Every derived number needs its formula and the evidence it’s derived from. Numbers taken from the brief cite BRIEF.
-13. If this is a revision, fix every issue in the revision instructions and nothing else.
+12. Every derived key number must be written as kind: "calculation" with its formula, citing both the evidence ID and BRIEF where a brief number is used.
+13. If the memo proposes phases, and any constraint limits the number of migrations or projects, describe the phases as one migration with a staged traffic ramp, never as separate migrations.
+14. For each phase tied to a contract threshold, fee or notice period, state plainly which costs that phase triggers, when, and why, citing the evidence. Never say a cost is "avoided" if a later phase triggers it; say it's deferred or accepted, and state the amount.
+15. If this is a revision, fix every issue in the revision instructions and nothing else.
 
 Inputs:
 - Decision brief: {brief}
