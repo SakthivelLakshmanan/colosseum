@@ -10,6 +10,7 @@ from core.schemas import (
     Claim,
     ClaimVerdict,
     Criterion,
+    CriterionScore,
     DecisionBrief,
     EvidencePack,
     FinalVerdict,
@@ -70,7 +71,22 @@ def test_run_decision_end_to_end_orchestration(mock_brief):
         stance="conditional",
         summary="Finance summary",
         claims=[],
-        criterion_scores=[],
+        criterion_scores=[
+            CriterionScore(
+                criterion="Cost",
+                option="A",
+                score=2.0,
+                reason="Cost A",
+                evidence_ids=["FIN-01"],
+            ),
+            CriterionScore(
+                criterion="Cost",
+                option="B",
+                score=4.0,
+                reason="Cost B",
+                evidence_ids=["FIN-01"],
+            ),
+        ],
         confidence=0.9,
     )
 
@@ -124,6 +140,7 @@ def test_run_decision_end_to_end_orchestration(mock_brief):
          patch("agents.pipeline.run_advisers_sync", return_value={"finance": pos}) as mock_adv, \
          patch("agents.pipeline.check_claims", return_value=[]) as mock_claims, \
          patch("agents.pipeline.build_scorecard", return_value=scorecard) as mock_sc, \
+         patch("agents.pipeline.repair_adviser_criterion_scores_sync", side_effect=lambda aid, brief, p: p), \
          patch("agents.pipeline.write_memo", return_value=memo_draft) as mock_write, \
          patch("agents.pipeline.check_memo", side_effect=check_returns) as mock_check, \
          patch("core.ledger.create_run"), \
@@ -178,7 +195,22 @@ def test_fake_run_saves_memo_and_final_verdict(mock_brief):
         stance="conditional",
         summary="Finance summary",
         claims=[],
-        criterion_scores=[],
+        criterion_scores=[
+            CriterionScore(
+                criterion="Cost",
+                option="A",
+                score=2.0,
+                reason="Cost A",
+                evidence_ids=["FIN-01"],
+            ),
+            CriterionScore(
+                criterion="Cost",
+                option="B",
+                score=4.0,
+                reason="Cost B",
+                evidence_ids=["FIN-01"],
+            ),
+        ],
         confidence=0.9,
     )
 
@@ -239,6 +271,7 @@ def test_fake_run_saves_memo_and_final_verdict(mock_brief):
          patch("agents.pipeline.run_advisers_sync", return_value={"finance": pos}), \
          patch("agents.pipeline.check_claims", return_value=[]), \
          patch("agents.pipeline.build_scorecard", return_value=scorecard), \
+         patch("agents.pipeline.repair_adviser_criterion_scores_sync", side_effect=lambda aid, brief, p: p), \
          patch("agents.pipeline.write_memo", return_value=fake_memo), \
          patch("agents.pipeline.check_memo", side_effect=tracking_check_memo), \
          patch("core.ledger.create_run"), \

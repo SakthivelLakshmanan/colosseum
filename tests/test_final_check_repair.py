@@ -17,10 +17,12 @@ from core.schemas import (
     Criterion,
     CriterionScore,
     DecisionBrief,
+    EvidencePack,
     FinalVerdict,
     Memo,
     MemoIssue,
     MemoVerdictType,
+    RoutingDecision,
     Scorecard,
     ScorecardRow,
 )
@@ -338,7 +340,8 @@ def test_adviser_represented_check_variations():
         numbers_to_watch=[],
         evidence_index=[],
     )
-    with patch("agents.moderator.generate", return_value=json.dumps({"verdict": "PASS", "issues": []})):
+    with patch("agents.moderator.generate", return_value=json.dumps({"verdict": "PASS", "issues": []})), \
+         patch("agents.moderator.get_fact", return_value=None):
         v = check_memo(brief, memo_kn_eid, selected_advisers=["ops"], positions={"ops": pos_ops})
         assert not any(i.kind == "missing_adviser" for i in v.issues)
 
@@ -513,17 +516,35 @@ def test_pipeline_stops_revising_on_upstream_gap():
         revision_number=0,
     )
 
+    routing = RoutingDecision(
+        decision_id="DEC-TEST-GAP",
+        routing_query="operations",
+        scores=[],
+        selected=["ops"],
+        created_at="2026-10-15T10:00:00Z",
+    )
+
+    fake_pack = EvidencePack(
+        adviser_id="ops",
+        facts=[],
+        summaries=[],
+        total_matching_facts=0,
+        truncated=False,
+    )
+
     write_memo_mock = MagicMock(return_value=fake_memo)
 
-    with patch("agents.pipeline.route_decision"), \
-         patch("agents.pipeline.build_pack"), \
+    with patch("agents.pipeline.route_decision", return_value=routing), \
+         patch("agents.pipeline.build_pack", return_value=fake_pack), \
          patch("agents.pipeline.run_advisers_sync", return_value={}), \
          patch("agents.pipeline.check_claims", return_value=[]), \
          patch("agents.pipeline.build_scorecard", return_value=fake_scorecard), \
          patch("agents.pipeline.write_memo", write_memo_mock), \
          patch("agents.pipeline.check_memo", return_value=upstream_verdict), \
+         patch("agents.pipeline.repair_adviser_criterion_scores_sync", side_effect=lambda aid, brief, p: p), \
          patch("core.ledger.create_run"), \
          patch("core.ledger.update_status"), \
+         patch("core.ledger.init_adviser_statuses"), \
          patch("core.ledger.save_routing"), \
          patch("core.ledger.save_memo"), \
          patch("core.ledger.save_final_verdict"), \

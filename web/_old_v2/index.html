@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en" data-theme="dark" id="top">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Colosseum · Decision command room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="#top" aria-label="Colosseum home">
+      <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="var(--panel-2)"/><path d="M12 44a20 20 0 0 1 40 0" fill="none" stroke="var(--laurel)" stroke-width="5" stroke-linecap="round"/><path d="M20 44a12 12 0 0 1 24 0" fill="none" stroke="var(--signal)" stroke-width="5" stroke-linecap="round"/></svg>
+      <div><b>Colosseum</b><span>Six advisers argue it out. A moderator checks every claim. You decide.</span></div>
+    </a>
+    <span class="mode" id="mode">Sample run</span>
+    <select class="picker" id="picker" aria-label="Open a saved run"></select>
+    <button class="btn primary" id="newBtn" type="button">New decision</button>
+    <button class="btn icon-btn ghost" id="themeBtn" type="button" aria-label="Switch light or dark theme">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="page" id="top">
+  <section class="hero">
+    <div>
+      <span class="qid" id="qid">DEC-001</span>
+      <h1 class="question" id="question">Loading the decision…</h1>
+      <div class="options" id="options"></div>
+      <ul class="constraints" id="constraints" aria-label="Constraints"></ul>
+    </div>
+    <aside class="panel rail" aria-label="Pipeline progress">
+      <div class="rail-top"><b>Run progress</b><span class="clock tabnum" id="clock">0:00</span></div>
+      <ol class="steps" id="steps"></ol>
+      <div class="error-panel" id="runError" hidden></div>
+      <button class="btn" id="replayBtn" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+        Replay the debate</button>
+    </aside>
+  </section>
+
+  <section class="stage">
+    <div class="panel arena a-idle" id="arenaPanel" aria-label="The arena">
+      <div class="arena-head" role="status" aria-live="polite"><span class="a-dot"></span><b id="aState">Arena idle</b><span class="a-detail" id="aDetail">No debate in session</span><span class="a-timer tabnum" id="aTimer"></span></div>
+      <svg id="arena" viewBox="0 0 1000 480" role="img" aria-label="Advisers seated around the decision"></svg>
+      <div class="legend">
+        <span><i style="border-color:var(--signal)"></i>Selected by routing</span>
+        <span><i style="border-color:var(--opt-b)"></i>Backs option B</span>
+        <span><i style="border-color:var(--opt-a)"></i>Backs option A</span>
+        <span><i style="border-color:var(--cond)"></i>Conditional</span>
+        <span><i style="border-color:var(--strike)"></i>Raised a blocking finding</span>
+      </div>
+    </div>
+    <aside class="panel routing" aria-label="Why these advisers">
+      <h3>Why these advisers</h3>
+      <p class="why">Each adviser's capabilities are compared with the brief by meaning. Dashed lines mark the selection floor and margin; some rules always add an adviser.</p>
+      <div id="routeRows"></div>
+      <details class="rq"><summary>Show the routing query</summary><p class="quote" id="routeQuery"></p></details>
+    </aside>
+  </section>
+
+  <section class="panel verdict" id="verdict" data-from="5">
+    <div class="wait"><span class="shimmer"></span>The moderator is checking the memo.</div>
+    <div class="body">
+      <div class="seal" aria-hidden="true">
+        <svg viewBox="0 0 140 140">
+          <defs><path id="sealArc" d="M70 70 m-54 0 a54 54 0 1 1 108 0 a54 54 0 1 1 -108 0"/></defs>
+          <circle class="outer" cx="70" cy="70" r="66"/>
+          <circle class="inner" cx="70" cy="70" r="44"/>
+          <text class="ring-t"><textPath href="#sealArc" startOffset="0">MODERATOR VERDICT · COLOSSEUM · CHECKED ·</textPath></text>
+          <text class="word" x="70" y="78" id="sealWord">PASS</text>
+        </svg>
+      </div>
+      <div>
+        <p class="rec" id="rec"></p>
+        <div class="v-meta" id="vmeta"></div>
+      </div>
+      <div class="v-side" id="vside"></div>
+    </div>
+  </section>
+
+  <section id="debate" data-from="2">
+    <div class="sec-h"><h2>The debate</h2><p id="debateTally"></p></div>
+    <div class="wait panel"><span class="shimmer"></span>Advisers are building their positions.</div>
+    <div class="body cards" id="cards"></div>
+  </section>
+
+  <section id="scorecard" data-from="3">
+    <div class="sec-h"><h2>Weighted scorecard</h2><p>Computed in code from each owner adviser's scores. The moderator and the Scribe can't change it.</p></div>
+    <div class="wait panel"><span class="shimmer"></span>Waiting for the scorecard.</div>
+    <div class="body panel sc" id="sc"></div>
+  </section>
+
+  <section id="memo" data-from="4">
+    <div class="sec-h"><h2>Decision memo</h2><p>Written by the Scribe from accepted claims only.</p></div>
+    <div class="wait panel"><span class="shimmer"></span>The Scribe is writing the memo.</div>
+    <div class="body memo" id="memoBody"></div>
+  </section>
+
+  <section id="signoff" data-from="6">
+    <div class="sec-h"><h2>Sign-off</h2><p>Recommendations are advisory. A named person approves or overrides every decision.</p></div>
+    <div class="wait panel"><span class="shimmer"></span>Sign-off opens when the run is finished.</div>
+    <div class="body panel sign">
+      <form id="signForm" novalidate>
+        <div style="display:grid; gap:14px">
+          <div class="field"><label for="signName">Your name and role</label><input id="signName" autocomplete="name" placeholder="For example, Priya Raman, Head of Payments"></div>
+          <div class="field"><label for="signReason">Reason (needed to override)</label><textarea id="signReason" placeholder="What you decided and why"></textarea><span class="err" id="signErr" role="alert"></span></div>
+          <div class="actions">
+            <button class="btn primary" type="submit" id="approveBtn" data-action="approve">Approve recommendation</button>
+            <button class="btn danger" type="button" id="overrideBtn">Override</button>
+          </div>
+        </div>
+      </form>
+      <div>
+        <h3 style="font:500 15px var(--f-display); margin-bottom:12px">Decision record</h3>
+        <ul class="log" id="log"></ul>
+      </div>
+    </div>
+  </section>
+
+  <p class="footnote">Legion Capital, Arvanta Payments, Brevis Pay and every figure here are fictional, built for the Colosseum demo. Powered by Gemini on Vertex AI, Google ADK, Agent Search, BigQuery and Firestore.</p>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="dTitle">
+  <div class="d-head"><b id="dTitle">Evidence</b><button class="btn icon-btn ghost" id="dClose" type="button" aria-label="Close panel">✕</button></div>
+  <div class="d-body" id="dBody"></div>
+</aside>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

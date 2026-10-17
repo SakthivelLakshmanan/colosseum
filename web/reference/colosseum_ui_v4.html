@@ -171,6 +171,15 @@ h1,h2,h3,h4,p{margin:0}
 .seat:hover .ring, .seat.hl .ring, .seat:focus-visible .ring{stroke-width:5}
 .seat:focus, .core:focus{outline:none}
 .core:focus-visible .core-disc{stroke:var(--signal); stroke-width:3}
+/* idle: the core is the start button */
+.core-halo{fill:none; stroke:var(--signal); stroke-width:2; opacity:0; pointer-events:none}
+.app.idle .core-halo{animation:halo 2.8s var(--ease) infinite}
+.app.idle .core-word{fill:var(--ink-2)}
+.app.idle .core:hover .core-word{fill:var(--signal)}
+.app.idle .core:hover .core-disc{stroke-width:2.5}
+.core-cta{font:600 12px var(--f-display); letter-spacing:.12em; fill:var(--signal); text-anchor:middle; opacity:0; transition:opacity .4s}
+.app.idle .core-cta{opacity:1}
+@keyframes halo{0%{opacity:.55; r:var(--r0)}100%{opacity:0; r:var(--r1)}}
 .seat.focus .ring{stroke-width:6}
 .tally-pill{opacity:0; transition:opacity .4s}
 .s3 .tally-pill{opacity:1}
@@ -251,6 +260,17 @@ h1,h2,h3,h4,p{margin:0}
 .feed li{display:grid; grid-template-columns:54px minmax(0,1fr); gap:10px; font-size:14px; animation:bubin .4s var(--ease) both}
 .feed time{font:400 12px var(--f-code); color:var(--ink-3); padding-top:2px}
 .feed .e-strike{color:var(--strike)} .feed .e-flag{color:var(--flag)} .feed .e-ok{color:var(--keep)} .feed .e-sig{color:var(--signal)}
+/* start panel (idle core click) */
+.go{display:grid; grid-template-columns:44px minmax(0,1fr) auto; gap:12px; align-items:center; width:100%; text-align:left; cursor:pointer;
+  padding:14px; border-radius:14px; border:1px solid var(--line-2); background:var(--panel-2); color:var(--ink); font:inherit; transition:border-color .25s, transform .25s var(--ease)}
+.go:hover, .go:focus-visible{border-color:var(--signal); transform:translateY(-1px); outline:none}
+.go .gi{width:44px; height:44px; border-radius:12px; display:grid; place-items:center; background:color-mix(in srgb, var(--signal) 14%, transparent); color:var(--signal); font:600 20px var(--f-display)}
+.go b{display:block; font:500 15px var(--f-display)} .go span{font-size:13px; color:var(--ink-3)}
+.go .arr{color:var(--signal); font-size:18px}
+.go.big{border-color:color-mix(in srgb, var(--signal) 55%, transparent); box-shadow:0 10px 40px -20px rgba(79,216,255,.7)}
+.runs{list-style:none; margin:0; padding:0; display:grid; gap:8px}
+.runs .go{grid-template-columns:minmax(0,1fr) auto auto; padding:11px 14px}
+.runs .go b{font:500 13.5px var(--f-code)}
 .fid{font:600 26px/1 var(--f-display); color:var(--laurel)}
 .fval{font:600 28px/1.1 var(--f-code)} .fval small{font:400 13px var(--f-body); color:var(--ink-3); margin-left:6px}
 .rel{font-size:12px; padding:3px 9px; border-radius:99px; border:1px solid var(--line-2)}
@@ -404,6 +424,7 @@ td .f{font:400 12px var(--f-code); color:var(--ink-3)}
   .bub{max-width:180px; font-size:12px}
 }
 @media (prefers-reduced-motion: reduce){
+  .app.idle .core-halo{animation:none}
   *,*::before,*::after{animation:none!important; transition:none!important}
 }
 </style>
@@ -2311,6 +2332,7 @@ function renderArena(vm) {
   });
   // the core: pipeline ring + disc
   const R = coreR + 16, n = STAGES.length, gap = 4, span = 360 / n;
+  h += `<circle class="core-halo" cx="${cx}" cy="${cy}" r="${coreR}" style="--r0:${coreR}px;--r1:${coreR + 46}px"/><circle class="core-halo" cx="${cx}" cy="${cy}" r="${coreR}" style="--r0:${coreR}px;--r1:${coreR + 46}px;animation-delay:1.4s"/>`;
   h += `<g class="core" id="core" tabindex="0" role="button" aria-label="Open the verdict">`;
   h += `<circle class="burst" cx="${cx}" cy="${cy}" r="${R}"/><circle class="burst b2" cx="${cx}" cy="${cy}" r="${R}"/>`;
   h += `<path class="wreath-line" d="${arcPath(R + 22, 100, 250)}"/><path class="wreath" d="${arcPath(R + 22, 100, 250)}"/>`;
@@ -2319,7 +2341,7 @@ function renderArena(vm) {
   h += `<line class="beam" x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - 420}" style="transform-origin:${cx}px ${cy}px"/>`;
   h += `<circle class="core-disc" cx="${cx}" cy="${cy}" r="${coreR}"/>`;
   h += `<text class="core-id" id="coreId" x="${cx}" y="${cy - 38}"></text><text class="core-word" id="coreWord" x="${cx}" y="${cy + 8}"></text>`;
-  h += `<text class="core-sub" id="coreSub1" x="${cx}" y="${cy + 36}"></text><text class="core-sub" id="coreSub2" x="${cx}" y="${cy + 54}"></text></g>`;
+  h += `<text class="core-sub" id="coreSub1" x="${cx}" y="${cy + 36}"></text><text class="core-sub" id="coreSub2" x="${cx}" y="${cy + 54}"></text><text class="core-cta" x="${cx}" y="${cy + 84}">CLICK TO BEGIN</text></g>`;
   // seats
   const C = 2 * Math.PI * 58;
   seats.forEach(s => {
@@ -2410,6 +2432,7 @@ function setSession(kind, stageIdx) {
   if (kind === "done") app.classList.add("v-" + verdict.toLowerCase());
   let st = "", dt = "", word = "", s1 = "", s2 = "";
   if (kind === "idle") { st = "Arena idle"; dt = "No debate in session"; word = "IDLE"; s1 = "Start a new decision"; s2 = "or open a saved run"; }
+  const coreEl = $("#core"); if (coreEl) coreEl.setAttribute("aria-label", kind === "idle" ? "Start a new decision or open a saved run" : kind === "done" ? "Open the verdict" : "Open the session log");
   else if (kind === "live") {
     let t = STAGES[Math.max(0, Math.min(5, stageIdx))].live;
     if (stageIdx === 1 && vm) t = `${arrivedCount(vm)} of ${vm.selected.length || 6} advisers have made their case`;
@@ -2554,9 +2577,10 @@ function refreshPanel(keepScroll) {
   else if (p.kind === "verdict") panelVerdict();
   else if (p.kind === "feed") panelFeed();
   else if (p.kind === "evidence") panelEvidence(p.arg);
+  else if (p.kind === "start") panelStart();
 }
 function openAdviser(id) { if (!state.vm || !state.vm.posById[id] && !state.vm.scores.find(s => s.id === id)) return; openPanel("adviser", id); }
-function openVerdict() { if (!state.vm || state.vm.status === "idle") return; if (state.vm.status !== "done") { openPanel("feed"); return; } openPanel("verdict"); }
+function openVerdict() { if (!state.vm || state.vm.status === "idle") { openPanel("start"); return; } if (state.vm.status !== "done") { openPanel("feed"); return; } openPanel("verdict"); }
 
 function panelAdviser(id) {
   const vm = state.vm, p = vm.posById[id], sc = vm.scores.find(s => s.id === id);
@@ -2603,6 +2627,21 @@ function panelVerdict() {
     ${nums.length ? `<div class="stats">${nums.map(n => `<div class="stat"><b class="tabnum">${esc(fmtNum(n.value, n.unit).replace(/\s*\/\s*month$/, "").replace(/ of volume$/, ""))}</b><span>${esc(n.text)}</span></div>`).join("")}</div>` : ""}
     ${conds.length ? `<div class="h4">Conditions before any volume moves</div><ul class="conds">${conds.map(w => `<li><span>${esc(w.text)}</span></li>`).join("")}</ul>` : ""}
     <div class="row-actions"><button class="btn" type="button" data-sheet="memo">Read the full recommendation</button><button class="btn primary" type="button" data-sheet="sign">Approve or override</button></div>`;
+}
+function panelStart() {
+  $("#sideTitle").textContent = "Start here";
+  const runs = state.mode === "live" ? (state.runs || []).slice(0, 8) : [];
+  const row = (id, label, v, sub) => `<li><button class="go" type="button" data-open-run="${esc(id)}"><div><b>${esc(label)}</b><span>${esc(sub)}</span></div>${v ? `<span class="vt ${esc(v)}">${esc(v)}</span>` : "<span></span>"}<span class="arr">→</span></button></li>`;
+  const list = runs.map(r => {
+    const fv = r.final_verdict; const v = upper(typeof fv === "string" ? fv : fv && fv.verdict) || upper(r.status);
+    const dec = r.decision_id || (r.brief && r.brief.decision_id) || "";
+    return row(r.run_id, fmtTime(r.created_at), v, dec ? dec + " · " + r.run_id : r.run_id);
+  }).join("") + row("sample", "DEC-001 sample run", "PASS", "Built-in example. Works offline.");
+  $("#sideBody").innerHTML = `<p class="lede">The arena is empty. Put a new decision in front of the advisers, or reopen a debate that already ran.</p>
+    <button class="go big" type="button" data-sheet="new"><span class="gi">+</span><div><b>Start a new decision</b><span>Write the question and options. The right advisers join automatically.</span></div><span class="arr">→</span></button>
+    <div class="h4">Or open a saved run</div>
+    <ul class="runs">${list}</ul>
+    ${state.mode === "live" && !runs.length ? `<p class="muted">No saved runs yet. Your first decision will appear here.</p>` : ""}`;
 }
 function panelFeed() {
   $("#sideTitle").textContent = "Session log";
@@ -2917,6 +2956,7 @@ function wire() {
   document.addEventListener("click", e => {
     const ev = e.target.closest("[data-ev]"); if (ev) { e.preventDefault(); openPanel("evidence", ev.dataset.ev, !!state.panel); return; }
     const sh = e.target.closest("[data-sheet]"); if (sh && !sh.disabled) { e.preventDefault(); if (state.sheet === sh.dataset.sheet) closeSheet(); else openSheet(sh.dataset.sheet); return; }
+    const orun = e.target.closest("[data-open-run]"); if (orun) { e.preventDefault(); openRun(orun.dataset.openRun); return; }
     const oa = e.target.closest("[data-open-adv]"); if (oa) { closeSheet(); openAdviser(oa.dataset.openAdv); }
   });
   $("#sideClose").addEventListener("click", closePanel); $("#sideBack").addEventListener("click", backPanel);

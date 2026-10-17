@@ -18,6 +18,7 @@ from core.schemas import (
     AdviserPosition,
     AdviserScore,
     Criterion,
+    CriterionScore,
     DecisionBrief,
     EvidencePack,
     RoutingDecision,
@@ -151,7 +152,22 @@ def test_pipeline_failing_scribe_returns_failed_without_raising(sample_brief):
         stance="conditional",
         summary="Finance position",
         claims=[],
-        criterion_scores=[],
+        criterion_scores=[
+            CriterionScore(
+                criterion="Cost",
+                option="A",
+                score=3.0,
+                reason="Cost A",
+                evidence_ids=["FIN-01"],
+            ),
+            CriterionScore(
+                criterion="Cost",
+                option="B",
+                score=4.0,
+                reason="Cost B",
+                evidence_ids=["FIN-01"],
+            ),
+        ],
         confidence=0.9,
     )
 
@@ -182,8 +198,10 @@ def test_pipeline_failing_scribe_returns_failed_without_raising(sample_brief):
          patch("agents.pipeline.run_advisers_sync", return_value={"finance": pos}), \
          patch("agents.pipeline.check_claims", return_value=[]), \
          patch("agents.pipeline.build_scorecard", return_value=scorecard), \
+         patch("agents.pipeline.repair_adviser_criterion_scores_sync", side_effect=lambda aid, brief, p: p), \
          patch("agents.pipeline.write_memo", side_effect=RuntimeError("504 DEADLINE_EXCEEDED after retries")), \
          patch("core.ledger.create_run"), \
+         patch("core.ledger.init_adviser_statuses"), \
          patch("core.ledger.save_routing"), \
          patch("core.ledger.update_status", side_effect=mock_update_status), \
          patch("core.ledger.save_section", side_effect=mock_save_section):

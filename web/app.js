@@ -3,8 +3,8 @@
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const NS = "http://www.w3.org/2000/svg";
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const ADVISERS = {
   finance:  { name: "Finance",  glyph: "rupee" },
@@ -16,63 +16,49 @@ const ADVISERS = {
 };
 const SEAT_ORDER = ["finance", "business", "customer", "legal", "infosec", "ops"];
 const STAGES = [
-  { key: "routing",    label: "Routing" },
-  { key: "advisers",   label: "Advisers debate" },
-  { key: "moderating", label: "Claim checks" },
-  { key: "scoring",    label: "Scorecard" },
-  { key: "writing",    label: "Memo" },
-  { key: "checking",   label: "Final check" },
-  { key: "done",       label: "Ready for sign-off" },
+  { key: "routing", label: "Who joined", sheet: "routing", live: "Choosing the advisers" },
+  { key: "advisers", label: "Their arguments", sheet: "debate", live: "Advisers are arguing their case" },
+  { key: "moderating", label: "Fact checks", sheet: "checks", live: "The moderator is checking every claim" },
+  { key: "scoring", label: "Scores", sheet: "scorecard", live: "Scoring the options" },
+  { key: "writing", label: "Recommendation", sheet: "memo", live: "The Scribe is drafting the memo" },
+  { key: "checking", label: "Quality check", sheet: "final", live: "Final check on the memo" },
+  { key: "done", label: "Your decision", sheet: "sign", live: "" },
 ];
 const ROUTING = { floor: 0.55, margin: 0.06 };
+const GEO = { W: 1200, H: 640, cx: 600, cy: 470, rx: 470, ry: 330, coreR: 112 };
 
 let FACTS = {};
 let SAMPLE = {};
 
-const state = { mode: "sample", runs: [], runId: null, vm: null, poll: null, replaying: false, stageIdx: 6 };
+const state = { mode: "sample", runs: [], runId: "sample", vm: null, poll: null, replaying: false, stageIdx: 6, panel: null, panelStack: [], feed: [], seen: {}, cseen: {} };
 
 /* ---------------- helpers ---------------- */
-function advName(id, short) { const a = ADVISERS[id]; return a ? (short && a.short) || a.name : (id || "Adviser"); }
-function last(a) { return Array.isArray(a) && a.length ? a[a.length - 1] : null; }
-function stanceKey(s) {
-  s = String(s || "").toLowerCase();
-  if (s.includes("_b") || s === "b") return "b";
-  if (s.includes("_a") || s === "a") return "a";
-  if (s.includes("cond")) return "c";
-  return "n";
-}
-function stanceLabel(k, opts) {
-  if (k === "a") return "Backs option A";
-  if (k === "b") return "Backs option B";
-  if (k === "c") return "Conditional";
-  return "Not enough evidence";
-}
-function shortOpt(t, fb) { if (!t) return fb; t = String(t); return t.length > 28 ? t.slice(0, 26).trim() + "…" : t; }
-function fmtDur(s) { if (s == null || isNaN(s)) return ""; s = Math.round(s); if (s < 60) return s + " s"; return Math.floor(s / 60) + " min " + String(s % 60).padStart(2, "0") + " s"; }
+const advName = (id, short) => { const a = ADVISERS[id]; return a ? (short && a.short) || a.name : (id || "Adviser"); };
+const last = a => Array.isArray(a) && a.length ? a[a.length - 1] : null;
+const upper = s => String(s || "").toUpperCase();
+function stanceKey(s) { s = String(s || "").toLowerCase(); if (s.includes("_b") || s === "b") return "b"; if (s.includes("_a") || s === "a") return "a"; if (s.includes("cond")) return "c"; return "n"; }
+const stanceLabel = k => k === "a" ? "Backs option A" : k === "b" ? "Backs option B" : k === "c" ? "Conditional" : "Not enough evidence";
+const stanceShort = k => k === "a" ? "backs A" : k === "b" ? "backs B" : k === "c" ? "conditional" : "unsure";
+const stanceVar = k => k === "a" ? "var(--opt-a)" : k === "b" ? "var(--opt-b)" : k === "c" ? "var(--cond)" : "var(--ink-3)";
+function fmtDur(s) { if (s == null || isNaN(s)) return ""; s = Math.round(s); if (s < 60) return s + "s"; return Math.floor(s / 60) + "m " + String(s % 60).padStart(2, "0") + "s"; }
 function fmtClock(s) { s = Math.max(0, Math.round(s || 0)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
 function fmtNum(v, unit) {
   if (v == null || v === "") return "";
   const n = Number(v); const t = isNaN(n) ? v : n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
   unit = unit || "";
   if (unit.startsWith("₹ ")) return "₹" + t + " " + unit.slice(2);
-  if (unit === "%" ) return t + "%";
+  if (unit === "%") return t + "%";
   return (t + " " + unit).trim();
 }
-function fmtTime(iso) { if (!iso) return ""; const d = new Date(iso); if (isNaN(d)) return String(iso); return d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }
-function upper(s) { return String(s || "").toUpperCase(); }
-
+function fmtTime(iso) { if (!iso) return ""; const d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }
 function chip(id) {
-  const f = FACTS[id] || {};
-  const cls = ["chip"]; if (f.superseded_by) cls.push("old"); else if (f.reliability === "low") cls.push("low");
-  return `<button type="button" class="${cls.join(" ")}" data-ev="${esc(id)}" title="Open evidence ${esc(id)}">${esc(id)}</button>`;
+  const f = FACTS[id] || {}; const c = ["chip"]; if (f.superseded_by) c.push("old"); else if (f.reliability === "low") c.push("low");
+  return `<button type="button" class="${c.join(" ")}" data-ev="${esc(id)}">${esc(id)}</button>`;
 }
-// turn "(SEC-01, LEG-08; InfoSec)" style references in text into chips
 const EVID_G = /\b(?:FIN|BUS|CUS|LEG|SEC|OPS)-\d{2,3}\b|\bBRIEF\b/g;
 const EVID_T = /\b(?:FIN|BUS|CUS|LEG|SEC|OPS)-\d{2,3}\b|\bBRIEF\b/;
 function withChips(text) {
-  const raw = String(text || "");
-  const ids = [...new Set(raw.match(EVID_G) || [])];
-  let by = "";
+  const raw = String(text || ""); const ids = [...new Set(raw.match(EVID_G) || [])]; let by = "";
   const clean = raw.replace(/\s*\(([^)]*)\)\s*\.?\s*$/, (m, inner) => {
     if (!EVID_T.test(inner)) return m;
     by = inner.replace(EVID_G, "").replace(/^[\s,;]+|[\s,;]+$/g, "").replace(/\s*[;,]\s*[;,]\s*/g, ", ");
@@ -80,22 +66,51 @@ function withChips(text) {
   });
   return { text: clean, ids, by };
 }
-function byLine(w) { return w.by ? `<span class="by">Raised by ${esc(w.by)}</span>` : ""; }
+function glyph(kind, cls = "g") {
+  switch (kind) {
+    case "rupee": return `<text class="gt" y="9">₹</text>`;
+    case "bars": return `<path class="${cls}" d="M-11 10V3M-4 10V-3M3 10V-9M10 10V-1"/>`;
+    case "person": return `<g class="${cls}"><circle cx="0" cy="-6" r="6"/><path d="M-12 12c2-7 6-10 12-10s10 3 12 10"/></g>`;
+    case "scales": return `<g class="${cls}"><path d="M0-12V11M-8 11h16M-12-7h24"/><path d="M-12-7l-4 9h8zM12-7l-4 9h8z"/></g>`;
+    case "shield": return `<path class="${cls}" d="M0-13l11 4.5v8c0 7.5-5.5 12-11 14-5.5-2-11-6.5-11-14v-8z"/>`;
+    case "gear": return `<g class="${cls}"><circle r="5.5"/><circle r="11" stroke-dasharray="4.4 3.5"/></g>`;
+  }
+  return "";
+}
+function avatar(id) {
+  const g = glyph((ADVISERS[id] || {}).glyph).replace('class="gt" y="9"', 'y="8" text-anchor="middle" style="fill:var(--ink);font:600 19px var(--f-display)"')
+    .replace(/class="g"/g, 'fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"');
+  return `<svg viewBox="-17 -17 34 34">${g}</svg>`;
+}
 
-/* ---------------- adapter: API run -> view model ---------------- */
+/* ---------------- adapter ---------------- */
 function toViewModel(run) {
   run = run || {};
   const brief = run.brief || {};
   const routing = run.routing || {};
   let positions = run.positions || [];
   if (!Array.isArray(positions)) positions = Object.entries(positions).map(([k, v]) => ({ adviser_id: k, ...v }));
-  const verdictList = run.claim_verdicts || run.verdicts || [];
+  if (run.positions_live && typeof run.positions_live === "object") {
+    const liveEntries = Object.entries(run.positions_live).map(([k, v]) => ({ adviser_id: k, ...v }));
+    if (!positions.length) {
+      positions = liveEntries;
+    } else {
+      const existingIds = new Set(positions.map(p => p.adviser_id));
+      liveEntries.forEach(p => { if (!existingIds.has(p.adviser_id)) positions.push(p); });
+    }
+  }
+  const advStatus = {};
+  Object.entries(run.adviser_status || {}).forEach(([k, v]) => {
+    advStatus[k] = typeof v === "string" ? { state: v.toLowerCase() } : { ...v, state: String((v && v.state) || "").toLowerCase() };
+  });
   const verdicts = {};
-  (Array.isArray(verdictList) ? verdictList : Object.values(verdictList)).forEach(v => { if (v && v.claim_id) verdicts[v.claim_id] = v; });
+  const vl = run.claim_verdicts || run.verdicts || [];
+  (Array.isArray(vl) ? vl : Object.values(vl)).forEach(v => { if (v && v.claim_id) verdicts[v.claim_id] = v; });
   const memoRevs = (run.memo_revisions || run.memo_versions || []).map(m => (m && m.memo) ? m.memo : m).filter(Boolean);
   const memo = run.memo || last(memoRevs);
   let finals = run.final_verdicts || run.verdict_history || [];
   if (!finals.length && Array.isArray(run.memo_revisions)) finals = run.memo_revisions.map(m => m && m.verdict).filter(Boolean);
+  finals = finals.map(f => typeof f === "string" ? { verdict: f } : f);
   let final = run.final_verdict || last(finals);
   if (typeof final === "string") final = { verdict: final };
   if (final && !finals.length) finals = [final];
@@ -103,8 +118,11 @@ function toViewModel(run) {
   let decisions = run.human_decisions || (run.human_decision ? [run.human_decision] : []);
   if (!Array.isArray(decisions)) decisions = Object.values(decisions);
   const scores = (routing.scores || []).map(s => ({
-    id: s.adviser_id, sim: Number(s.similarity ?? s.score ?? 0), selected: !!s.selected,
-    reason: s.reason || "", cap: s.best_matching_capability || "",
+    id: s.adviser_id,
+    sim: Number(s.similarity ?? s.score ?? 0),
+    selected: !!s.selected,
+    reason: s.reason || "",
+    cap: s.best_matching_capability || ""
   }));
   const selected = routing.selected || scores.filter(s => s.selected).map(s => s.id);
   let status = String(run.status || "").toLowerCase();
@@ -155,325 +173,273 @@ function toViewModel(run) {
     });
   }
 
-  return { run, id: run.run_id, brief, opts: brief.options || {}, routing, scores, selected, positions, posById, verdicts,
-           memo, memoRevs, finals, final, scorecard, decisions, status, stageIdx, blocking, metrics,
-           created: run.created_at, error: run.error };
+  return { run, id: run.run_id, brief, opts: brief.options || {}, routing, scores, selected, positions, posById, verdicts, memo, memoRevs,
+           finals, final, scorecard, decisions, status, stageIdx, blocking, advStatus, metrics, created: run.created_at, error: run.error };
+}
+const IDLE_RUN = { status: "idle", brief: { decision_id: "", question: "", options: {}, constraints: [] } };
+function claimStats(vm, id) {
+  const p = vm.posById[id]; let k = 0, f = 0, s = 0;
+  (p ? p.claims || [] : []).forEach(c => { const st = upper((vm.verdicts[c.claim_id] || {}).status) || "KEEP"; if (st === "STRIKE") s++; else if (st === "FLAG") f++; else k++; });
+  return { k, f, s };
+}
+function headline(p) {
+  if (!p) return "";
+  const c = (p.claims || []).find(c => c.kind === "calculation" && c.value != null) || (p.claims || [])[0];
+  let t = c ? c.text : p.summary; if (t && t.length > 110) t = t.slice(0, 106).replace(/\s+\S*$/, "") + "…"; return t || "";
 }
 
-/* ---------------- rendering ---------------- */
-function renderHero(vm) {
-  const b = vm.brief;
-  const idle = vm.status === "idle";
-  $("#qid").textContent = idle ? "No decision open" : (b.decision_id || "Decision");
-  $("#question").textContent = idle ? "Bring a decision to the arena." : (b.question || "Untitled decision");
-  $("#options").innerHTML = Object.entries(vm.opts).map(([k, v]) =>
-    `<div class="opt ${k.toLowerCase()}"><i>${esc(k)}</i><span>${esc(v)}</span></div>`).join("");
-  $("#constraints").innerHTML = (b.constraints || []).map(c => `<li>${esc(c)}</li>`).join("");
+/* ---------------- arena ---------------- */
+function seatPos(i, n) {
+  const a0 = 168, a1 = 12; const ang = (a0 - (a0 - a1) * (n === 1 ? .5 : i / (n - 1))) * Math.PI / 180;
+  return { x: GEO.cx + GEO.rx * Math.cos(ang), y: GEO.cy - GEO.ry * Math.sin(ang) };
 }
-
-function renderSteps(vm) {
-  const idx = state.stageIdx, failed = vm.status === "failed";
-  const failStage = failed ? String(vm.run.failed_stage || vm.run.stage || "").toLowerCase() : "";
-  const failIdx = failed ? Math.max(0, STAGES.findIndex(s => s.key === failStage)) : -1;
-  $("#steps").innerHTML = STAGES.map((s, i) => {
-    let cls = "";
-    if (failed) cls = i < failIdx ? "done" : i === failIdx ? "failed" : "";
-    else cls = i < idx || idx === 6 ? "done" : i === idx ? "now" : "";
-    const t = vm.metrics[s.key + "_s"];
-    return `<li class="${cls}"><span class="dot"></span><span>${s.label}</span><span class="t">${cls === "done" && t != null ? fmtDur(t) : ""}</span></li>`;
-  }).join("");
-  const err = $("#runError");
-  if (failed) { err.hidden = false; err.innerHTML = `<b>Run stopped${failStage ? " at " + esc(failStage) : ""}.</b> ${esc(vm.error || vm.run.error_message || "See the server log for details.")}`; }
-  else err.hidden = true;
+function arcPath(r, a0, a1) {
+  const p = a => [GEO.cx + r * Math.cos(a * Math.PI / 180), GEO.cy + r * Math.sin(a * Math.PI / 180)];
+  const [x0, y0] = p(a0), [x1, y1] = p(a1);
+  return `M${x0.toFixed(1)} ${y0.toFixed(1)} A${r} ${r} 0 ${(a1 - a0) > 180 ? 1 : 0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`;
 }
-
-function glyph(kind) {
-  switch (kind) {
-    case "rupee": return `<text class="glyph-t" y="8">₹</text>`;
-    case "bars": return `<path class="glyph" d="M-10 9V2M-3 9V-3M4 9V-8M11 9V-1"/>`;
-    case "person": return `<g class="glyph"><circle cx="0" cy="-5" r="5"/><path d="M-10 11c1.5-6 5-8.5 10-8.5s8.5 2.5 10 8.5"/></g>`;
-    case "scales": return `<g class="glyph"><path d="M0-11V10M-7 10h14M-11-6h22"/><path d="M-11-6l-4 8h8zM11-6l-4 8h8z"/></g>`;
-    case "shield": return `<path class="glyph" d="M0-12l10 4v7c0 7-5 11-10 13-5-2-10-6-10-13v-7z"/>`;
-    case "gear": return `<g class="glyph"><circle r="5"/><circle r="10" stroke-dasharray="4 3.2"/></g>`;
-  }
-  return "";
-}
-
 function renderArena(vm) {
-  const svg = $("#arena");
-  const cx = 500, cy = 440;
-  const tiers = [[250, 175], [340, 245], [440, 320]];
-  let html = `<defs><radialGradient id="fg"><stop offset="0" stop-color="currentColor" stop-opacity="1"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></radialGradient></defs>`;
-  tiers.forEach(([rx, ry], i) => { html += `<path class="tier ${i === 1 ? "t2" : ""}" d="M${cx - rx} ${cy} A${rx} ${ry} 0 0 1 ${cx + rx} ${cy}"/>`; });
-  const ids = SEAT_ORDER.filter(id => ADVISERS[id]);
-  vm.scores.forEach(s => { if (!ids.includes(s.id)) ids.push(s.id); });
-  const n = ids.length, a0 = 166, a1 = 14;
-  const seats = ids.map((id, i) => {
-    const ang = (a0 - (a0 - a1) * (n === 1 ? .5 : i / (n - 1))) * Math.PI / 180;
-    return { id, i, x: cx + 385 * Math.cos(ang), y: cy - 278 * Math.sin(ang) };
-  });
-  const tw = 360, th = 116, tx = cx - tw / 2, ty = cy - th - 6;
-  html += `<ellipse class="glow-floor" cx="${cx}" cy="${ty + th / 2}" rx="260" ry="95" fill="url(#fg)"/>`;
+  const { cx, cy, coreR } = GEO;
+  const ids = SEAT_ORDER.filter(id => ADVISERS[id]); vm.scores.forEach(s => { if (!ids.includes(s.id)) ids.push(s.id); });
+  const seats = ids.map((id, i) => ({ id, i, ...seatPos(i, ids.length) }));
+  state.seats = seats;
+  let h = `<defs>
+    <radialGradient id="spotG"><stop offset="0" stop-color="currentColor" stop-opacity=".9"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></radialGradient>
+    <radialGradient id="haloGrad"><stop offset=".55" stop-color="currentColor" stop-opacity=".0"/><stop offset=".7" stop-color="currentColor" stop-opacity=".5"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></radialGradient>
+    <radialGradient id="seatFill" cx=".35" cy=".3"><stop offset="0" stop-color="#21414B"/><stop offset="1" stop-color="#0D1F25"/></radialGradient>
+    <radialGradient id="coreFill" cx=".5" cy=".35"><stop offset="0" stop-color="#173740"/><stop offset="1" stop-color="#08161B"/></radialGradient>
+    <linearGradient id="beamGrad" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#4FD8FF" stop-opacity=".9"/><stop offset="1" stop-color="#4FD8FF" stop-opacity="0"/></linearGradient>
+  </defs>`;
+  h += `<ellipse class="spot" cx="${cx}" cy="${cy}" rx="420" ry="230" fill="url(#spotG)"/>`;
+  [[300, 190, ""], [395, 262, "dash"], [500, 350, ""], [600, 430, "dash"]].forEach(([rx, ry, c]) => { h += `<path class="tier ${c}" d="M${cx - rx} ${cy + 60} A${rx} ${ry} 0 0 1 ${cx + rx} ${cy + 60}"/>`; });
+  // links + packets
   seats.forEach(s => {
-    const sel = vm.selected.includes(s.id);
-    const ex = cx + (s.x - cx) * .3, ey = ty + 4;
-    html += `<path class="link ${sel ? "on" : ""}" style="--i:${s.i}" d="M${s.x.toFixed(1)} ${(s.y + 42).toFixed(1)} Q${((s.x + ex) / 2).toFixed(1)} ${(ey - 30).toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}"/>`;
+    const sel = vm.selected.includes(s.id); const pos = vm.posById[s.id];
+    const ang = Math.atan2(s.y - cy, s.x - cx); const ex = cx + (coreR + 26) * Math.cos(ang), ey = cy + (coreR + 26) * Math.sin(ang);
+    const mx = (s.x + ex) / 2 + (cx - (s.x + ex) / 2) * .12, my = (s.y + ey) / 2 - 30;
+    const d = `M${s.x.toFixed(1)} ${s.y.toFixed(1)} Q${mx.toFixed(1)} ${my.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}`;
+    const k = pos ? stanceKey(pos.stance) : "n";
+    h += `<path id="ln-${s.id}" class="link ${sel ? "on" : ""}" style="--i:${s.i};--sc:${stanceVar(k)}" d="${d}"/>`;
+    h += `<circle class="packet ${sel ? "on" : ""}" r="4"><animateMotion dur="${(1.4 + s.i * .17).toFixed(2)}s" repeatCount="indefinite" path="${d}"/></circle>`;
   });
-  html += `<g class="dtile">
-    <rect class="burst-ring" x="${tx}" y="${ty}" width="${tw}" height="${th}" rx="22"/>
-    <rect class="burst-ring r2" x="${tx}" y="${ty}" width="${tw}" height="${th}" rx="22"/>
-    <rect class="dt-orbit" x="${tx - 8}" y="${ty - 8}" width="${tw + 16}" height="${th + 16}" rx="28"/>
-    <rect class="dt-bg" x="${tx}" y="${ty}" width="${tw}" height="${th}" rx="22"/>
-    <text class="dt-id" id="dtId" x="${cx}" y="${ty + 28}"></text>
-    <text class="dt-word" id="dtWord" x="${cx}" y="${ty + 66}"></text>
-    <text class="dt-detail" id="dtDetail" x="${cx}" y="${ty + 94}"></text>
-  </g>`;
-  const C = 2 * Math.PI * 45;
+  // the core: pipeline ring + disc
+  const R = coreR + 16, n = STAGES.length, gap = 4, span = 360 / n;
+  h += `<circle class="core-halo" cx="${cx}" cy="${cy}" r="${coreR}" style="--r0:${coreR}px;--r1:${coreR + 46}px"/><circle class="core-halo" cx="${cx}" cy="${cy}" r="${coreR}" style="--r0:${coreR}px;--r1:${coreR + 46}px;animation-delay:1.4s"/>`;
+  h += `<g class="core" id="core" tabindex="0" role="button" aria-label="Open the verdict">`;
+  h += `<circle class="burst" cx="${cx}" cy="${cy}" r="${R}"/><circle class="burst b2" cx="${cx}" cy="${cy}" r="${R}"/>`;
+  h += `<path class="wreath-line" d="${arcPath(R + 22, 100, 250)}"/><path class="wreath" d="${arcPath(R + 22, 100, 250)}"/>`;
+  h += `<path class="wreath-line" d="${arcPath(R + 22, 290, 440)}"/><path class="wreath" d="${arcPath(R + 22, 290, 440)}"/>`;
+  STAGES.forEach((s, i) => { h += `<path class="seg" data-i="${i}" d="${arcPath(R, -90 + i * span + gap / 2, -90 + (i + 1) * span - gap / 2)}"/>`; });
+  h += `<line class="beam" x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - 420}" style="transform-origin:${cx}px ${cy}px"/>`;
+  h += `<circle class="core-disc" cx="${cx}" cy="${cy}" r="${coreR}"/>`;
+  h += `<text class="core-id" id="coreId" x="${cx}" y="${cy - 38}"></text><text class="core-word" id="coreWord" x="${cx}" y="${cy + 8}"></text>`;
+  h += `<text class="core-sub" id="coreSub1" x="${cx}" y="${cy + 36}"></text><text class="core-sub" id="coreSub2" x="${cx}" y="${cy + 54}"></text><text class="core-cta" x="${cx}" y="${cy + 84}">CLICK TO BEGIN</text></g>`;
+  // seats
+  const C = 2 * Math.PI * 58;
   seats.forEach(s => {
-    const sc = vm.scores.find(x => x.id === s.id);
-    const sim = sc ? sc.sim : 0;
-    const pos = vm.posById[s.id];
-    const cls = ["seat"];
-    if (vm.selected.includes(s.id)) cls.push("is-selected");
-    if (pos) cls.push("has-pos", "stance-" + stanceKey(pos.stance));
-    if (vm.blocking.includes(s.id)) cls.push("is-blocking");
-    const off = C * (1 - Math.max(0, Math.min(1, sim)));
-    const sub = !sc ? `<tspan>${vm.status === "idle" ? "waiting" : "not scored"}</tspan>` : (pos ? `<tspan class="sub-st">${stanceShort(stanceKey(pos.stance))}  </tspan>` : "") + `<tspan>${sim.toFixed(2)}</tspan>`;
-    html += `<g class="${cls.join(" ")}" style="--i:${s.i}" data-adv="${esc(s.id)}" transform="translate(${s.x.toFixed(1)} ${s.y.toFixed(1)})" tabindex="0" role="button" aria-label="${esc(advName(s.id))}${sc ? ", routing score " + sim.toFixed(2) : ""}">
-      <circle class="score" r="45" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90)"/>
-      <circle class="spin" r="45"/>
-      <circle class="ring" r="37"/>
-      <circle class="body" r="33"/>
+    const sc = vm.scores.find(x => x.id === s.id); const sim = sc ? sc.sim : 0; const pos = vm.posById[s.id];
+    const ast = (vm.advStatus[s.id] || {}).state; const failed = ["failed", "timeout", "error"].includes(ast);
+    const c = ["seat"]; if (vm.selected.includes(s.id)) c.push("sel"); if (pos) c.push("has-pos", "stance-" + stanceKey(pos.stance));
+    if (vm.blocking.includes(s.id)) c.push("blocking"); if (failed) c.push("failed");
+    if (pos && vm.status === "advisers") { c.push("arrived"); const seen = seenFor(vm.id); if (!seen.has(s.id)) { seen.add(s.id); if (seen.primed) { c.push("pop"); (state.newArrivals = state.newArrivals || []).push(s.id); } } }
+    const st = claimStats(vm, s.id);
+    const sub = failed ? (ast === "timeout" ? "timed out" : "failed") : !sc ? (vm.status === "idle" ? "waiting" : "") : (pos && vm.stageIdx >= 2 ? stanceShort(stanceKey(pos.stance)) + "  " : "") + sim.toFixed(2);
+    h += `<g class="${c.join(" ")}" style="--i:${s.i}" data-adv="${esc(s.id)}" transform="translate(${s.x.toFixed(1)} ${s.y.toFixed(1)})" tabindex="0" role="button" aria-label="${esc(advName(s.id))}">
+      <circle class="halo" r="92"/>
+      <circle class="score" r="58" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - Math.max(0, Math.min(1, sim)))).toFixed(1)}" transform="rotate(-90)"/>
+      <circle class="spin" r="58"/>
+      <circle class="ring" r="48"/><circle class="body" r="44"/><circle class="tint" r="44"/>
       ${glyph((ADVISERS[s.id] || {}).glyph)}
-      <g transform="translate(29 -29)"><g class="shield"><path d="M0-11l9 3.5v6c0 6.5-4.5 10-9 12-4.5-2-9-5.5-9-12v-6z"/><text y="4">!</text></g></g>
-      <g transform="translate(28 27)"><g class="tick"><circle r="10"/><path d="M-4.5 0.5l3 3 6-6.5"/></g></g>
-      <text class="name" y="70">${esc(advName(s.id, true))}</text>
-      <text class="sub" y="88">${sub}</text>
+      <g transform="translate(36 34)"><g class="badge ok"><circle r="12"/><path d="M-5.5 .5l3.5 3.5 7-7.5"/></g></g>
+      <g transform="translate(36 34)"><g class="badge xm"><circle r="12"/><path d="M-4.5-4.5l9 9M4.5-4.5l-9 9" stroke-width="2.6" stroke-linecap="round"/></g></g>
+      <g transform="translate(37 -36)"><g class="badge shield"><path d="M0-13l11 4.5v7.5c0 7.5-5.5 12-11 14-5.5-2-11-6.5-11-14v-7.5z"/><text y="5">!</text></g></g>
+      <text class="nm" y="80">${esc(advName(s.id, true))}</text>
+      <text class="sb" y="98">${esc(sub)}</text>
+      ${(st.s || st.f) ? `<g class="tally-pill" transform="translate(0 118)">${st.s ? `<g transform="translate(${st.f ? -34 : 0} 0)"><rect x="-32" y="-11" width="64" height="20" style="stroke:var(--strike)" stroke-width="1"/><text y="3" style="fill:var(--strike)">${st.s} struck</text></g>` : ""}${st.f ? `<g transform="translate(${st.s ? 34 : 0} 0)"><rect x="-32" y="-11" width="64" height="20" style="stroke:var(--flag)" stroke-width="1"/><text y="3" style="fill:var(--flag)">${st.f} flagged</text></g>` : ""}</g>` : ""}
     </g>`;
   });
-  svg.innerHTML = html;
+  const svg = $("#arena"); svg.innerHTML = h;
+  const seen = seenFor(vm.id); if (!seen.primed) seen.primed = true;
   $$(".seat", svg).forEach(g => {
     const id = g.dataset.adv;
-    g.addEventListener("click", () => focusCard(id));
-    g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); focusCard(id); } });
-    g.addEventListener("mouseenter", () => highlight(id, true));
-    g.addEventListener("mouseleave", () => highlight(id, false));
+    g.addEventListener("click", () => openAdviser(id));
+    g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openAdviser(id); } });
+    g.addEventListener("mouseenter", () => hoverSeat(id, true));
+    g.addEventListener("mouseleave", () => hoverSeat(id, false));
   });
+  const core = $("#core");
+  core.addEventListener("click", () => openVerdict());
+  core.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openVerdict(); } });
+  if (state.newArrivals && state.newArrivals.length) {
+    const ids2 = state.newArrivals; state.newArrivals = [];
+    ids2.forEach(id => { pulseTo(id); bubble(id, headline(vm.posById[id]), advName(id, true) + " made the case", "", 3200, "arrive"); feed(`<span class="e-sig">${esc(advName(id, true))}</span> made the case`, "ok"); });
+    toast(ids2.map(a => advName(a, true)).join(", ") + (ids2.length > 1 ? " have" : " has") + " made the case.");
+  }
 }
-function stanceShort(k) { return k === "a" ? "backs A" : k === "b" ? "backs B" : k === "c" ? "conditional" : "unsure"; }
+function seenFor(id) { return state.seen[id || "_"] = state.seen[id || "_"] || new Set(); }
 
-/* ---------------- arena state: idle / in session / closed / stopped ---------------- */
-const LIVE_TEXT = ["Choosing the advisers", "Advisers are arguing their case", "The moderator is checking every claim",
-                   "Scoring the options", "The Scribe is drafting the memo", "Final check on the memo"];
-function setArena(kind, stageIdx) {
-  const vm = state.vm, panel = $("#arenaPanel");
-  panel.classList.remove("a-idle", "a-live", "a-done", "a-failed", "v-pass", "v-incomplete", "v-wrong");
-  panel.classList.add("a-" + kind);
+function pulseTo(id) {
+  const path = $(`#ln-${CSS.escape(id)}`); if (!path || reduced) return;
+  const p = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  p.setAttribute("r", "7"); p.setAttribute("class", "packet go"); p.style.setProperty("--sc", path.style.getPropertyValue("--sc"));
+  const m = document.createElementNS("http://www.w3.org/2000/svg", "animateMotion");
+  m.setAttribute("dur", ".9s"); m.setAttribute("fill", "freeze"); m.setAttribute("path", path.getAttribute("d"));
+  p.appendChild(m); $("#arena").appendChild(p); try { m.beginElement(); } catch (e) {}
+  setTimeout(() => p.remove(), 1000);
+}
+function bubble(id, text, title, kind = "", ms = 2800, group = "") {
+  if (!text) return;
+  if (group) $$(`#bubbles .bub[data-g="${group}"]`).forEach(x => { x.classList.add("out"); setTimeout(() => x.remove(), 350); });
+  const s = (state.seats || []).find(x => x.id === id); if (!s) return;
+  const b = document.createElement("div");
+  b.className = "bub " + kind + (s.y < 330 ? " low" : "");
+  const pos = state.vm && state.vm.posById[id]; if (pos) b.style.setProperty("--sc", stanceVar(stanceKey(pos.stance)));
+  b.style.left = (s.x / GEO.W * 100) + "%"; b.style.top = (s.y / GEO.H * 100) + "%";
+  b.innerHTML = `<b>${esc(title)}</b>${esc(text)}`; if (group) b.dataset.g = group;
+  $("#bubbles").appendChild(b);
+  setTimeout(() => { b.classList.add("out"); setTimeout(() => b.remove(), 400); }, ms);
+}
+let hoverBub = null;
+function hoverSeat(id, on) {
+  $$(`[data-adv="${CSS.escape(id)}"]`).forEach(el => el.classList.toggle("hl", on));
+  if (hoverBub) { hoverBub.remove(); hoverBub = null; }
+  if (!on || !state.vm || state.replaying) return;
+  const vm = state.vm, sc = vm.scores.find(x => x.id === id), p = vm.posById[id];
+  const s = (state.seats || []).find(x => x.id === id); if (!s) return;
+  const b = document.createElement("div"); b.className = "bub";
+  if (p) b.style.setProperty("--sc", stanceVar(stanceKey(p.stance)));
+  b.style.left = (s.x / GEO.W * 100) + "%"; b.style.top = (s.y / GEO.H * 100) + "%";
+  b.innerHTML = `<b>${esc(advName(id))}${p ? ": " + esc(stanceLabel(stanceKey(p.stance)).toLowerCase()) : ""}</b>${sc ? `Routing ${sc.sim.toFixed(2)}, ${esc(sc.reason || (sc.selected ? "selected" : "not selected"))}. ` : ""}${p ? esc(headline(p)) : ""}`;
+  $("#bubbles").appendChild(b); hoverBub = b;
+}
+
+/* ---------------- session state: idle / live / done / failed ---------------- */
+function arenaKind(vm) { if (!vm || vm.status === "idle") return "idle"; if (vm.status === "done") return "done"; if (vm.status === "failed") return "failed"; return "live"; }
+function arrivedCount(vm) { if (state.replaying && state.replayArrived != null) return state.replayArrived; return vm.positions.filter(p => vm.selected.includes(p.adviser_id)).length; }
+function setSession(kind, stageIdx) {
+  const vm = state.vm, app = $("#app");
+  app.classList.remove("idle", "live", "done", "failed", "v-pass", "v-incomplete", "v-wrong");
+  app.classList.add(kind);
   const verdict = upper(vm && vm.final && vm.final.verdict) || "PASS";
-  if (kind === "done") panel.classList.add("v-" + verdict.toLowerCase());
-  const id = (vm && vm.brief && vm.brief.decision_id) || "";
-  let head = "", detail = "", word = "", sub = "";
-  if (kind === "idle") { head = "Arena idle"; detail = "No debate in session"; word = "No session"; sub = "Start a new decision or open a saved run"; }
-  else if (kind === "live") { const t = LIVE_TEXT[Math.max(0, Math.min(5, stageIdx))]; head = "In session"; detail = t; word = "Debating"; sub = t; }
-  else if (kind === "failed") { const st = String((vm && (vm.run.failed_stage || vm.run.stage)) || "").toLowerCase(); head = "Run stopped"; detail = st ? "at " + st : "See the progress panel"; word = "Stopped"; sub = detail; }
+  if (kind === "done") app.classList.add("v-" + verdict.toLowerCase());
+  let st = "", dt = "", word = "", s1 = "", s2 = "";
+  if (kind === "idle") { st = "Arena idle"; dt = "No debate in session"; word = "IDLE"; s1 = "Start a new decision"; s2 = "or open a saved run"; }
+  else if (kind === "live") {
+    let t = STAGES[Math.max(0, Math.min(5, stageIdx))].live;
+    if (stageIdx === 1 && vm) t = `${arrivedCount(vm)} of ${vm.selected.length || 6} advisers have made their case`;
+    st = "In session"; dt = t; word = "DEBATING"; s1 = STAGES[Math.max(0, Math.min(5, stageIdx))].label; s2 = stageIdx === 1 && vm ? `${arrivedCount(vm)} of ${vm.selected.length || 6} in` : "";
+  } else if (kind === "failed") { const sg = String((vm && (vm.run.failed_stage || vm.run.stage)) || "").toLowerCase(); st = "Run stopped"; dt = sg ? "Stopped at " + sg : "See the timeline"; word = "STOPPED"; s1 = sg || ""; }
   else {
     const k = stanceKey(vm && vm.memo && vm.memo.stance);
-    head = "Session closed"; detail = `Verdict ${verdict}, ready for sign-off`; word = verdict;
-    sub = k === "c" ? "Conditional: move to option B in phases".replace("option B", vm.memo && /option a/i.test(vm.memo.recommendation || "") ? "option A" : "option B")
-        : k === "b" ? "Recommends option B" : k === "a" ? "Recommends option A" : "Recommendation ready";
+    st = "Session closed"; dt = `Verdict ${verdict}. Ready for sign-off.`; word = verdict;
+    s1 = k === "c" ? "Conditional move" : k === "b" ? "Recommends B" : k === "a" ? "Recommends A" : "Recommendation ready";
+    s2 = k === "c" ? "to option B, in phases" : "Click to read the verdict";
   }
-  $("#aState").textContent = head; $("#aDetail").textContent = detail;
-  const w = $("#dtWord"); if (w) { $("#dtId").textContent = id; w.textContent = word; $("#dtDetail").textContent = sub; w.style.fontSize = word.length > 9 ? "21px" : ""; }
-  $("#aTimer").textContent = kind === "idle" ? "" : $("#clock").textContent;
+  const coreEl = $("#core"); if (coreEl) coreEl.setAttribute("aria-label", kind === "idle" ? "Start a new decision or open a saved run" : kind === "done" ? "Open the verdict" : "Open the session log");
+  $("#sessState").textContent = st; $("#sessDetail").textContent = dt;
+  const w = $("#coreWord"); if (w) { $("#coreId").textContent = (vm && vm.brief.decision_id) || ""; w.textContent = word; w.style.fontSize = word.length > 8 ? "24px" : ""; $("#coreSub1").textContent = s1; $("#coreSub2").textContent = s2; }
 }
-function burst() { const p = $("#arenaPanel"); p.classList.remove("burst"); void p.getBoundingClientRect(); p.classList.add("burst"); setTimeout(() => p.classList.remove("burst"), 1700); }
-function arenaKindFor(vm) { if (!vm || vm.status === "idle") return "idle"; if (vm.status === "done") return "done"; if (vm.status === "failed") return "failed"; return "live"; }
-
-function highlight(id, on) {
-  $$(`[data-adv="${CSS.escape(id)}"]`).forEach(el => el.classList.toggle("hl", on));
-}
-function focusCard(id) {
-  const card = $(`#card-${CSS.escape(id)}`);
-  if (!card) return;
-  card.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
-  card.classList.add("hl"); setTimeout(() => card.classList.remove("hl"), 1600);
-}
-
-function renderRouting(vm) {
-  const rows = [...vm.scores].sort((a, b) => b.sim - a.sim);
-  const top = rows.length ? rows[0].sim : 0;
-  const margin = Math.max(0, top - ROUTING.margin);
-  $("#routeRows").innerHTML = rows.map(r => {
-    const rule = /rule/i.test(r.reason);
-    return `<div class="r-row" data-adv="${esc(r.id)}">
-      <div class="r-top"><b>${esc(advName(r.id))}</b><span class="v tabnum">${r.sim.toFixed(2)}</span></div>
-      <div class="track" title="Dashed lines: selection floor ${ROUTING.floor} and margin ${margin.toFixed(2)}"><i style="--w:${(r.sim * 100).toFixed(1)}%"></i>
-        <span class="mark" style="left:${ROUTING.floor * 100}%"></span><span class="mark" style="left:${margin * 100}%"></span></div>
-      <div class="r-why ${rule ? "rule" : ""}" title="${esc(r.cap ? "Closest capability: " + r.cap : "")}">${r.selected ? "Selected" : "Not selected"}${r.reason ? ": " + esc(r.reason) : ""}</div>
-    </div>`;
-  }).join("") || `<p class="muted">Routing hasn't run yet.</p>`;
-  $$("#routeRows .r-row").forEach(r => {
-    r.addEventListener("mouseenter", () => highlight(r.dataset.adv, true));
-    r.addEventListener("mouseleave", () => highlight(r.dataset.adv, false));
-  });
-  $("#routeQuery").textContent = vm.routing.routing_query || ""; $(".rq").hidden = !vm.routing.routing_query;
-}
-
-function renderVerdict(vm) {
-  const box = $("#verdict");
-  const v = upper(vm.final && vm.final.verdict) || "PENDING";
-  box.classList.remove("v-pass", "v-incomplete", "v-wrong");
-  box.classList.add("v-" + v.toLowerCase());
-  const sw = $("#sealWord"); sw.textContent = v; sw.style.fontSize = v.length > 6 ? "13px" : v.length > 4 ? "19px" : "";
-  const m = vm.memo || {};
-  $("#rec").textContent = m.recommendation || "No recommendation yet.";
-  const k = stanceKey(m.stance);
-  const revs = Math.max(0, vm.finals.length - 1);
-  const revText = revs === 0 ? "Passed the final check first time" : revs === 1 ? "Sent back once by the moderator, then passed" : `Sent back ${revs} times by the moderator`;
-  const verdictText = v === "PASS" ? revText : v === "INCOMPLETE" ? "The moderator found gaps it could not close. Read the issues before signing." : v === "WRONG" ? "The moderator found errors. Don't act on this memo." : "";
-  $("#vmeta").innerHTML = `<span class="stance-pill sp-${k}">${esc(k === "c" ? "Conditional recommendation" : stanceLabel(k, vm.opts))}</span>
-    <span>${esc(verdictText)}</span>`;
-  const conf = m.confidence != null ? Math.round(m.confidence * 100) + "%" : "–";
-  const dur = vm.metrics.latency_s ? fmtDur(vm.metrics.latency_s) : "";
-  $("#vside").innerHTML = `<div class="big tabnum">${conf}<small>confidence</small></div>
-    ${dur ? `<div class="muted" style="font-size:13px">Debated in ${dur}${vm.metrics.facts_considered ? `, ${vm.metrics.facts_considered} facts considered` : ""}</div>` : ""}`;
-}
-
-function renderCards(vm) {
-  const order = [...vm.scores].sort((a, b) => b.sim - a.sim).map(s => s.id);
-  vm.positions.forEach(p => { if (!order.includes(p.adviser_id)) order.push(p.adviser_id); });
-  let kept = 0, flagged = 0, struck = 0;
-  const cards = order.filter(id => vm.posById[id]).map(id => {
-    const p = vm.posById[id];
-    const k = stanceKey(p.stance);
-    let ck = 0, cf = 0, cx = 0;
-    const claims = (p.claims || []).map(c => {
-      const v = vm.verdicts[c.claim_id];
-      const st = (upper(v && v.status) || "KEEP");
-      const cls = st === "STRIKE" ? "strike" : st === "FLAG" ? "flag" : "keep";
-      if (cls === "keep") ck++; else if (cls === "flag") cf++; else cx++;
-      const calc = c.formula ? `<span class="calc">${esc(c.formula)}${c.value != null ? " = " + esc(fmtNum(c.value, c.unit)) : ""}</span>` : "";
-      const label = cls === "strike" ? "Struck by the moderator: " : cls === "flag" ? "Flagged: " : "";
-      return `<li class="claim ${cls}"><span class="st" aria-hidden="true"></span><div><span class="txt">${esc(c.text)}</span>${calc}
-        ${v && cls !== "keep" ? `<span class="why">${label}${esc(v.reason)}</span>` : ""}
-        <div class="chips">${(c.evidence_ids || []).map(chip).join("")}</div></div></li>`;
-    }).join("");
-    kept += ck; flagged += cf; struck += cx;
-    const blocks = (p.blocking_findings || []).map((b, i) => {
-      const bv = vm.verdicts[`${id}-B${i + 1}`];
-      return `<div class="blocker"><h4><svg width="14" height="16" viewBox="-10 -12 20 26"><path d="M0-11l9 3.5v6c0 6.5-4.5 10-9 12-4.5-2-9-5.5-9-12v-6z" fill="currentColor"/></svg>Blocking finding</h4>
-        <div>${esc(b.text)}</div>
-        <div class="fix"><b>Fix that clears it:</b> ${esc(b.fix)}</div>
-        <div class="chips" style="display:flex;gap:6px;flex-wrap:wrap">${(b.evidence_ids || []).map(chip).join("")}</div>
-        ${bv ? `<div class="muted" style="font-size:12.5px">Moderator: ${esc(bv.reason)}</div>` : ""}</div>`;
-    }).join("");
-    const crit = {};
-    (p.criterion_scores || []).forEach(s => { (crit[s.criterion] = crit[s.criterion] || {})[s.option] = s.score; });
-    const scoresRow = Object.entries(crit).map(([c, o]) => `<span>${esc(c)}: ${Object.entries(o).map(([opt, sc]) => `${esc(opt)} <b>${esc(sc)}</b>`).join(" · ")}</span>`).join("");
-    const conf = Math.round((p.confidence || 0) * 100);
-    return `<article class="panel card" id="card-${esc(id)}" data-adv="${esc(id)}">
-      <div class="card-h">
-        <div class="avatar" style="border-color:var(--${k === "a" ? "opt-a" : k === "b" ? "opt-b" : k === "c" ? "cond" : "line-2"})"><svg viewBox="-16 -16 32 32">${glyph((ADVISERS[id] || {}).glyph).replace('class="glyph-t" y="8"', 'class="glyph-t" y="7" style="fill:var(--ink);font:600 17px var(--f-display);text-anchor:middle"').replace(/class="glyph"/g, 'fill="none" stroke="var(--ink)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"')}</svg></div>
-        <div><h3>${esc(advName(id))}</h3><div class="conf">Confidence <span class="meter"><i style="width:${conf}%"></i></span> ${conf}%</div></div>
-        <span class="stance-pill sp-${k}">${esc(stanceLabel(k, vm.opts))}</span>
-      </div>
-      <p class="summary">${esc(p.summary)}</p>
-      ${blocks}
-      <div class="tally"><span class="k"><b>${ck}</b> kept</span><span class="f"><b>${cf}</b> flagged</span><span class="x"><b>${cx}</b> struck</span></div>
-      <ul class="claims">${claims}</ul>
-      ${scoresRow ? `<div class="scores-row">${scoresRow}</div>` : ""}
-    </article>`;
-  });
-  $("#cards").innerHTML = cards.join("") || `<p class="muted">No adviser positions yet.</p>`;
-  const nAdv = cards.length;
-  $("#debateTally").textContent = nAdv ? `${nAdv} advisers, ${kept + flagged + struck} claims: ${kept} kept, ${flagged} flagged, ${struck} struck by the moderator.` : "";
-  $$("#cards .card").forEach(c => {
-    c.addEventListener("mouseenter", () => highlight(c.dataset.adv, true));
-    c.addEventListener("mouseleave", () => highlight(c.dataset.adv, false));
+function setSegments(idx, failed) {
+  $$("#arena .seg").forEach(seg => {
+    const i = Number(seg.dataset.i); seg.classList.remove("done", "now", "fail");
+    if (failed) { if (i < idx) seg.classList.add("done"); else if (i === idx) seg.classList.add("fail"); }
+    else if (idx === 6 || i < idx) seg.classList.add("done"); else if (i === idx) seg.classList.add("now");
   });
 }
-
-function renderScorecard(vm) {
-  const sc = vm.scorecard;
-  if (!sc || !(sc.rows || []).length) { $("#sc").innerHTML = `<p class="muted">No scorecard yet.</p>`; return; }
-  const opts = Object.keys(vm.opts).length ? Object.keys(vm.opts) : Object.keys(sc.weighted_totals || {});
-  const owners = {};
-  (vm.brief.criteria || []).forEach(c => owners[c.name] = c.owners || []);
-  const totals = sc.weighted_totals || {};
-  const best = opts.reduce((b, o) => (totals[o] ?? -1) > (totals[b] ?? -1) ? o : b, opts[0]);
-  const rows = sc.rows.map(r => {
-    const ow = r.owners || owners[r.criterion] || [];
-    return `<tr><td><div>${esc(r.criterion)}</div><div class="owners">${ow.map(o => esc(advName(o, true))).join(", ")}${(r.missing_owners || []).length ? ` · missing: ${r.missing_owners.map(o => esc(advName(o, true))).join(", ")}` : ""}</div></td>
-      <td class="num tabnum" style="text-align:left">${Math.round((r.weight || 0) * 100)}%</td>
-      ${opts.map(o => { const s = r.scores ? r.scores[o] : null; return `<td><div class="sbar ${o.toLowerCase()}"><div class="track"><i style="--w:${s == null ? 0 : (s / 5 * 100)}%"></i></div><span class="tabnum">${s == null ? "–" : esc(s)}</span></div></td>`; }).join("")}
-      <td>${(r.evidence_ids || []).slice(0, 3).map(chip).join(" ")}</td></tr>`;
-  }).join("");
-  const blocked = sc.blocked_options || {};
-  const notes = Object.entries(blocked).filter(([, v]) => (v || []).length).map(([o, v]) =>
-    `<div class="blocked-note"><b>Option ${esc(o)} is blocked</b><span>${v.map(esc).join(" ")} The recommendation must clear this with a condition, or a person must override it.</span></div>`).join("");
-  $("#sc").innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>Criterion and owners</th><th>Weight</th>${opts.map(o => `<th>Option ${esc(o)}</th>`).join("")}<th>Evidence</th></tr></thead>
-    <tbody>${rows}
-    <tr class="total"><td><b style="font-weight:500">Weighted total</b><div class="owners">Out of 5</div></td><td></td>
-      ${opts.map(o => `<td><span class="tot tabnum ${o === best ? "win" : ""}">${totals[o] != null ? Number(totals[o]).toFixed(2) : "–"}</span>${blocked[o] && blocked[o].length ? ` <span class="pill low">blocked</span>` : ""}</td>`).join("")}<td></td></tr>
-    </tbody></table></div>${notes}`;
+function sweepPath() {
+  if (reduced) return; state.sweep = true; renderTimeline();
+  setTimeout(() => { state.sweep = false; $$("#path .step").forEach(b => b.classList.remove("sweep-on")); }, 2600);
 }
-
-function renderMemo(vm) {
-  const m = vm.memo;
-  if (!m) { $("#memoBody").innerHTML = `<p class="muted">No memo yet.</p>`; return; }
-  const condItems = (m.conditions || []).map(c => { const w = withChips(c); return `<li><div>${esc(w.text)}<div class="chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">${w.ids.map(chip).join("")}${byLine(w)}</div></div></li>`; }).join("");
-  const planItems = (m.phased_plan || []).map(c => { const w = withChips(c); return `<li><div>${esc(w.text)} ${w.ids.map(chip).join(" ")}</div></li>`; }).join("");
-  const nums = (m.key_numbers || []).map(k => `<tr><td>${esc(k.text)}<div class="f">${k.formula ? esc(k.formula) : ""}</div></td>
-     <td class="num tabnum">${esc(fmtNum(k.value, k.unit))}</td><td>${(k.evidence_ids || []).map(chip).join(" ")}</td></tr>`).join("");
-  const dissent = (m.dissent || []).map(d => { const w = withChips(d); const mm = w.text.match(/^([A-Za-z&\s]+?)(:|\s(favours|wants|says))/);
-    return `<li>${mm ? `<b>${esc(mm[1])}</b>${esc(w.text.slice(mm[1].length))}` : esc(w.text)} ${w.ids.map(chip).join(" ")}</li>`; }).join("");
-  const watch = (m.numbers_to_watch || []).map(d => { const w = withChips(d); return `<li>${esc(w.text)} ${w.ids.map(chip).join(" ")}</li>`; }).join("");
-  const drafts = vm.finals.map((f, i) => {
-    const v = upper(f.verdict);
-    const issue = (f.issues || [])[0];
-    const txt = v === "PASS" ? "Makes sense, complete and correct." : issue ? issue.detail : (f.revision_instructions || "");
-    return `<div class="draft"><span class="muted code">Draft ${i + 1}</span><span class="vtag ${esc(v)}">${esc(v)}</span><span>${esc(txt)}</span></div>`;
-  }).join("");
-  $("#memoBody").innerHTML = `
-    <div class="panel box"><h3>Conditions before any volume moves</h3><ul class="conds">${condItems || "<li>No conditions.</li>"}</ul></div>
-    <div class="panel box"><h3>Phased plan</h3><ol class="plan">${planItems || "<li><div>Single phase.</div></li>"}</ol></div>
-    <div class="panel box"><h3>Key numbers</h3><div class="table-wrap"><table><thead><tr><th>What</th><th style="text-align:right">Value</th><th>Evidence</th></tr></thead><tbody>${nums}</tbody></table></div></div>
-    <div class="panel box"><h3>Dissent on record</h3><ul class="dissent">${dissent || "<li>No adviser disagreed.</li>"}</ul>
-      <h3 style="margin-top:8px">Numbers to watch</h3><ul class="watch">${watch}</ul>
-      ${drafts ? `<h3 style="margin-top:8px">Moderator's final check</h3><div class="drafts">${drafts}</div>` : ""}</div>`;
+function seenCoach() { try { return localStorage.getItem("colosseum-coach") === "1"; } catch (e) { return false; } }
+function showCoach() {
+  if (seenCoach() || $(".coach") || !state.vm || state.vm.status !== "done") return;
+  const target = $('#path .step[data-sheet="debate"]'); if (!target) return;
+  state.coachOn = true; renderTimeline();
+  const t = $('#path .step[data-sheet="debate"]').getBoundingClientRect();
+  const c = document.createElement("div"); c.className = "coach"; c.setAttribute("role", "dialog"); c.setAttribute("aria-label", "Tip");
+  c.innerHTML = `<b>Every step opens up</b><span>The bar below is the decision path. Click <strong style="font-weight:500">Their arguments</strong> to see each adviser's case, or click the verdict in the middle of the arena.</span><div class="row-actions"><button class="btn" type="button" id="coachOk">Got it</button><button class="btn primary" type="button" id="coachGo">Show me</button></div>`;
+  document.body.appendChild(c);
+  const w = c.getBoundingClientRect().width;
+  const left = Math.max(16, Math.min(window.innerWidth - w - 16, t.left + t.width / 2 - 40));
+  c.style.left = left + "px"; c.style.top = (t.top - c.getBoundingClientRect().height - 14) + "px";
+  c.style.setProperty("--ax", Math.max(16, t.left + t.width / 2 - left - 7) + "px");
+  const done = () => { try { localStorage.setItem("colosseum-coach", "1"); } catch (e) {} state.coachOn = false; c.remove(); renderTimeline(); };
+  $("#coachOk").addEventListener("click", done);
+  $("#coachGo").addEventListener("click", () => { done(); openSheet("debate"); });
+  document.addEventListener("click", function once(e) { if (!c.contains(e.target) && e.target.closest("[data-sheet], .seat, #core")) { done(); document.removeEventListener("click", once, true); } }, true);
 }
-
-function renderLog(vm) {
-  const items = vm.decisions.map(d => {
-    const act = String(d.action || "").toLowerCase() === "override" ? "Overrode" : "Approved";
-    return `<li><div><span class="act">${act}</span> by <span class="who">${esc(d.decided_by || "Unnamed")}</span>
-      <div class="when">${esc(fmtTime(d.decided_at))}</div>${(d.reason || d.note) ? `<div class="muted" style="margin-top:4px">${esc(d.reason || d.note)}</div>` : ""}</div></li>`;
-  });
-  $("#log").innerHTML = items.length ? items.join("") : `<li style="grid-template-columns:1fr" class="muted">No one has signed this decision yet. The record keeps every approval and override.</li>`;
-}
+function burst() { const a = $("#app"); a.classList.remove("bursting"); void a.offsetWidth; a.classList.add("bursting"); setTimeout(() => a.classList.remove("bursting"), 1800); }
 
 function applyStage(idx, working) {
   state.stageIdx = idx;
-  const root = $("#top");
-  for (let i = 0; i <= 6; i++) root.classList.toggle("s" + i, idx >= i);
-  root.classList.toggle("working", !!working);
-  $$("[data-from]").forEach(sec => sec.classList.toggle("pending", idx < Number(sec.dataset.from)));
+  const app = $("#app");
+  for (let i = 0; i <= 6; i++) app.classList.toggle("s" + i, idx >= i);
+  app.classList.toggle("working", !!working);
+  setSegments(idx, false);
+  renderTimeline();
   const idle = !state.vm || state.vm.status === "idle";
-  $$(".wait").forEach(w => { if (!w.dataset.orig) w.dataset.orig = w.innerHTML; w.innerHTML = idle && !state.replaying ? "Nothing here yet. Start a new decision or open a saved run." : w.dataset.orig; });
   $("#replayBtn").disabled = idle || state.replaying;
-  if (state.vm) renderSteps(state.vm);
+  $("#briefLink").hidden = idle;
+}
+function stepHint(i, vm) {
+  if (!vm) return "";
+  const tot = (vm.scorecard && vm.scorecard.weighted_totals) || {};
+  switch (STAGES[i].key) {
+    case "routing": return `${vm.selected.length} advisers joined`;
+    case "advisers": return `${vm.positions.length} positions argued`;
+    case "moderating": { let f = 0, x = 0; vm.positions.forEach(p => { const t = claimStats(vm, p.adviser_id); f += t.f; x += t.s; }); return x || f ? `${x} struck, ${f} flagged` : "All claims held up"; }
+    case "scoring": { const o = Object.entries(tot).sort((a, b) => b[1] - a[1]); return o.length > 1 ? `${o[0][0]} leads ${Number(o[0][1]).toFixed(2)} to ${Number(o[1][1]).toFixed(2)}` : "Scores ready"; }
+    case "writing": { const k = stanceKey(vm.memo && vm.memo.stance); return k === "c" ? "Conditional, in phases" : k === "b" ? "Go with option B" : k === "a" ? "Go with option A" : "Memo ready"; }
+    case "checking": { const v = upper(vm.final && vm.final.verdict); const r = Math.max(0, vm.finals.length - 1); return v ? `${v}${r ? ` after ${r} revision${r > 1 ? "s" : ""}` : " first time"}` : "Checked"; }
+    case "done": { const d = last(vm.decisions); return d ? `${String(d.action).toLowerCase() === "override" ? "Overridden" : "Approved"} by ${String(d.decided_by || "").split(",")[0]}` : "Waiting for you"; }
+  }
+  return "";
+}
+function renderTimeline() {
+  const vm = state.vm, idx = state.stageIdx, failed = vm && vm.status === "failed";
+  const idle = !vm || vm.status === "idle";
+  const failIdx = failed ? Math.max(0, STAGES.findIndex(s => s.key === String(vm.run.failed_stage || vm.run.stage || "").toLowerCase())) : -1;
+  const streaming = vm && vm.status === "advisers" && vm.positions.length && !state.replaying;
+  $("#path").innerHTML = `<span class="fill" id="pathFill"></span>` + STAGES.map((s, i) => {
+    let c = ""; if (failed) c = i < failIdx ? "done" : i === failIdx ? "fail" : ""; else c = (idx === 6 || i < idx) ? "done" : i === idx ? "now" : "";
+    if (s.key === "done" && c === "now") c = "done";
+    let hint = idle ? "Not started" : c === "done" ? stepHint(i, vm) : c === "now" ? (s.key === "advisers" ? `${arrivedCount(vm)} of ${vm.selected.length || 6} have argued` : "In progress") : c === "fail" ? "Stopped here" : "Not started";
+    const open = !idle && (c === "done" || (s.key === "advisers" && (streaming || (c === "now" && arrivedCount(vm) > 0 && !state.replaying))));
+    const t = vm ? vm.metrics[s.key + "_s"] : null;
+    return `<button type="button" style="--k:${i}" class="step ${c} ${s.key === "done" ? "you" : ""} ${state.sheet === s.sheet ? "on" : ""} ${state.sweep ? "sweep-on" : ""} ${state.coachOn && s.key === "advisers" ? "d-coach" : ""}" data-sheet="${s.sheet}" ${open ? "" : "disabled"}
+      title="${open ? "Open: " + esc(s.label) : esc(s.label) + ": not ready yet"}${t != null && c === "done" ? " (took " + fmtDur(t) + ")" : ""}">
+      <span class="d"></span><span class="n">${esc(s.label)}</span><span class="h">${esc(hint)}</span>
+      <svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></button>`;
+  }).join("");
+  $("#pathCap").innerHTML = idle ? "Start a new decision or open a saved run to fill in the path." :
+    `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M7 17L17 7M9 7h8v8"/></svg>` + (vm.status === "done" ? "Each step opens its detail. Click one to see who argued what, what was struck, and why." : "Steps light up as the run moves. Finished steps open their detail.");
+  const reach = failed ? failIdx : idx;
+  const fill = $("#pathFill"); const steps = $$("#path .step");
+  if (fill && steps.length && reach > 0) { const a = steps[0].getBoundingClientRect(), b = steps[Math.min(reach, 6)].getBoundingClientRect(), p = $("#path").getBoundingClientRect();
+    fill.style.width = Math.max(0, (b.left + 18) - (a.left + 18)) + "px"; fill.style.left = (a.left - p.left + 20) + "px"; }
+  else if (fill) fill.style.width = "0";
+}
+
+/* ---------------- top + title ---------------- */
+function renderTitle(vm) {
+  const idle = vm.status === "idle", b = vm.brief;
+  $("#question").textContent = idle ? "Bring a decision to the arena." : (b.question || "Untitled decision");
+  $("#opts").innerHTML = idle ? `<span class="muted">Six advisers argue it out. A moderator checks every claim. A named person decides.</span>` :
+    Object.entries(vm.opts).map(([k, v]) => `<span class="${k.toLowerCase()}"><i>${esc(k)}</i>${esc(v)}</span>`).join("");
+  $("#crumbId").textContent = idle ? "" : (b.decision_id || "");
+  $("#crumbT").textContent = idle ? "AI debate room for enterprise decisions" : (vm.id ? vm.id.replace(/^run_/, "Run ") : "Sample run");
 }
 
 function renderAll(vm) {
-  const safe = (name, fn) => { try { fn(vm); } catch (e) { console.error("[colosseum] " + name + " failed", e); } };
-  safe("hero", renderHero); safe("arena", renderArena); safe("routing", renderRouting);
-  safe("verdict", renderVerdict); safe("cards", renderCards); safe("scorecard", renderScorecard);
-  safe("memo", renderMemo); safe("log", renderLog);
-  const idx = vm.status === "failed" ? Math.max(1, ...[vm.positions.length ? 2 : 0]) : vm.stageIdx;
+  const safe = (n, fn) => { try { fn(vm); } catch (e) { console.error("[colosseum] " + n, e); } };
+  safe("title", renderTitle); safe("arena", renderArena);
+  const idx = vm.status === "failed" ? (vm.positions.length ? 2 : 1) : vm.stageIdx;
   applyStage(idx, vm.status === "advisers");
+  if (vm.status === "failed") setSegments(Math.max(0, STAGES.findIndex(s => s.key === String(vm.run.failed_stage || vm.run.stage || "").toLowerCase())), true);
   updateClock();
-  if (!state.replaying) setArena(arenaKindFor(vm), vm.stageIdx);
+  if (!state.replaying) setSession(arenaKind(vm), vm.stageIdx);
+  if (state.panel) refreshPanel(true);
+  if (state.sheet) openSheet(state.sheet, true);
 }
 
 /* ---------------- clock ---------------- */
@@ -481,219 +447,416 @@ let clockTimer = null;
 function updateClock() {
   const vm = state.vm; if (!vm) return;
   let s = vm.metrics.latency_s;
-  if (vm.status !== "done" && vm.status !== "failed" && vm.created) s = (Date.now() - new Date(vm.created).getTime()) / 1000;
-  $("#clock").textContent = fmtClock(s || 0);
-  const at = $("#aTimer"); if (at && arenaKindFor(vm) !== "idle") at.textContent = $("#clock").textContent;
+  if (!["done", "failed", "idle"].includes(vm.status) && vm.created) s = (Date.now() - new Date(vm.created).getTime()) / 1000;
+  $("#clock").textContent = vm.status === "idle" ? "0:00" : fmtClock(s || 0);
 }
 
-/* ---------------- replay: the one orchestrated moment ---------------- */
-async function replay() {
-  if (!state.vm || state.replaying) return;
-  if (reduced) { toast("Replay is off because your system asks for reduced motion."); return; }
-  state.replaying = true; $("#replayBtn").disabled = true; $$(".wait").forEach(w => { if (w.dataset.orig) w.innerHTML = w.dataset.orig; });
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
-  const t0 = performance.now(); const total = state.vm.metrics.latency_s || 0;
-  const tick = setInterval(() => { $("#clock").textContent = fmtClock(Math.min(total, (performance.now() - t0) / 9000 * total)); }, 80);
-  const step = (i, working, ms) => { applyStage(i, working); setArena("live", Math.max(0, i)); $("#aTimer").textContent = $("#clock").textContent; return sleep(ms); };
-  await step(-1, false, 500);
-  await step(0, false, 1300);
-  await step(1, true, 2100);
-  await step(2, false, 1200);
-  await step(3, false, 1500);
-  await step(4, false, 1000);
-  await step(5, false, 1000);
-  applyStage(6, false);
-  clearInterval(tick); updateClock();
-  state.replaying = false; $("#replayBtn").disabled = false;
-  setArena(arenaKindFor(state.vm), 6); burst();
+/* ---------------- side panel ---------------- */
+function openPanel(kind, arg, push) {
+  if (push && state.panel) state.panelStack.push(state.panel); else if (!push) state.panelStack = [];
+  state.panel = { kind, arg };
+  $("#side").classList.add("open"); $("#app").classList.add("panel-open");
+  refreshPanel();
 }
+function closePanel() { state.panel = null; state.panelStack = []; $("#side").classList.remove("open"); $("#app").classList.remove("panel-open"); $$(".seat.focus").forEach(s => s.classList.remove("focus")); }
+function backPanel() { const p = state.panelStack.pop(); if (p) { state.panel = p; refreshPanel(); } else closePanel(); }
+function refreshPanel(keepScroll) {
+  const p = state.panel; if (!p) return;
+  if (!keepScroll) $("#sideBody").scrollTop = 0;
+  $("#sideBack").hidden = !state.panelStack.length;
+  $$(".seat.focus").forEach(s => s.classList.remove("focus"));
+  if (p.kind === "adviser") { $(`#arena .seat[data-adv="${CSS.escape(p.arg)}"]`)?.classList.add("focus"); panelAdviser(p.arg); }
+  else if (p.kind === "verdict") panelVerdict();
+  else if (p.kind === "feed") panelFeed();
+  else if (p.kind === "evidence") panelEvidence(p.arg);
+  else if (p.kind === "start") panelStart();
+}
+function openAdviser(id) { if (!state.vm || !state.vm.posById[id] && !state.vm.scores.find(s => s.id === id)) return; openPanel("adviser", id); }
+function openVerdict() { if (!state.vm || state.vm.status === "idle") { openPanel("start"); return; } if (state.vm.status !== "done") { openPanel("feed"); return; } openPanel("verdict"); }
 
-/* a short, visible entrance whenever a finished run is opened */
-async function entrance() {
-  const vm = state.vm; if (!vm || vm.status !== "done") return;
-  if (reduced) { applyStage(6); setArena("done", 6); return; }
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
-  const token = state.entranceToken = (state.entranceToken || 0) + 1;
-  applyStage(-1); setArena("live", 0);
-  await sleep(60); if (token !== state.entranceToken) return;
-  applyStage(0); await sleep(500); if (token !== state.entranceToken) return;
-  applyStage(1, true); setArena("live", 1); await sleep(700); if (token !== state.entranceToken) return;
-  applyStage(3); setArena("live", 2); await sleep(600); if (token !== state.entranceToken) return;
-  applyStage(6); setArena("done", 6); burst();
+function panelAdviser(id) {
+  const vm = state.vm, p = vm.posById[id], sc = vm.scores.find(s => s.id === id);
+  $("#sideTitle").textContent = "Adviser";
+  const k = p ? stanceKey(p.stance) : "n";
+  const st = claimStats(vm, id);
+  const showAll = state.showAllClaims === id;
+  let body = `<div class="ph" style="--sc:${stanceVar(k)}"><div class="av">${avatar(id)}</div><div><h3>${esc(advName(id))}</h3>
+    <div style="margin-top:6px">${p ? `<span class="pill sp-${k}">${esc(stanceLabel(k))}</span>` : `<span class="pill sp-n">${vm.status === "advisers" ? "Still arguing" : "No position"}</span>`}</div></div></div>`;
+  if (sc) body += `<div class="kv"><span>Routing <b>${sc.sim.toFixed(2)}</b></span>${p ? `<span>Confidence <b>${Math.round((p.confidence || 0) * 100)}%</b></span>` : ""}<span>${esc(sc.reason || "")}</span></div>`;
+  if (!p) { $("#sideBody").innerHTML = body + `<p class="lede">${vm.status === "advisers" ? "This adviser is still building its case. Its seat ticks the moment it finishes." : "This adviser wasn't selected for this decision."}</p>`; return; }
+  body += `<p class="lede">${esc(p.summary)}</p>`;
+  (p.blocking_findings || []).forEach((b, i) => {
+    const bv = vm.verdicts[`${id}-B${i + 1}`];
+    body += `<div class="blk"><h4>Blocking finding</h4><div>${esc(b.text)}</div><div class="fix"><b style="color:var(--ink);font-weight:500">Fix:</b> ${esc(b.fix)}</div><div class="chips">${(b.evidence_ids || []).map(chip).join("")}</div>${bv ? `<div class="muted" style="font-size:12.5px">Moderator: ${esc(bv.reason)}</div>` : ""}</div>`;
+  });
+  const claims = (p.claims || []).map(c => ({ c, v: vm.verdicts[c.claim_id] }));
+  claims.sort((a, b) => rank(b.v) - rank(a.v));
+  const shown = showAll ? claims : claims.slice(0, 4);
+  body += `<div class="h4">Claims <span class="tally" style="display:inline-flex;margin-left:8px"><span class="k">${st.k} kept</span><span class="f">${st.f} flagged</span><span class="s">${st.s} struck</span></span></div>`;
+  body += `<ul class="claims">${shown.map(({ c, v }) => { const s = upper(v && v.status) || "KEEP"; const cls = s === "STRIKE" ? "strike" : s === "FLAG" ? "flag" : "keep";
+    return `<li class="cl ${cls}"><span class="st">${cls === "strike" ? "✕" : cls === "flag" ? "!" : "✓"}</span><div><span class="tx">${esc(c.text)}</span>${c.formula ? `<span class="calc">${esc(c.formula)}${c.value != null ? " = " + esc(fmtNum(c.value, c.unit)) : ""}</span>` : ""}${v && cls !== "keep" ? `<div class="why">${esc(v.reason)}</div>` : ""}<div class="chips">${(c.evidence_ids || []).map(chip).join("")}</div></div></li>`; }).join("")}</ul>`;
+  if (claims.length > 4) body += `<button class="more" type="button" id="moreClaims">${showAll ? "Show fewer claims" : `Show all ${claims.length} claims`}</button>`;
+  const crit = {}; (p.criterion_scores || []).forEach(s => { (crit[s.criterion] = crit[s.criterion] || {})[s.option] = s.score; });
+  if (Object.keys(crit).length) body += `<div class="h4">Scores (1 to 5)</div><div class="sbars">${Object.entries(crit).map(([c, o]) => Object.entries(o).map(([opt, s]) =>
+     `<div class="sbar"><span>${esc(c)}, ${esc(opt)}</span><span class="trk ${opt.toLowerCase()}"><i style="--w:${s / 5 * 100}%"></i></span><span class="mono">${s}</span></div>`).join("")).join("")}</div>`;
+  $("#sideBody").innerHTML = body;
+  const m = $("#moreClaims"); if (m) m.addEventListener("click", () => { state.showAllClaims = showAll ? null : id; panelAdviser(id); });
 }
+function rank(v) { const s = upper(v && v.status); return s === "STRIKE" ? 2 : s === "FLAG" ? 1 : 0; }
 
-/* ---------------- evidence drawer ---------------- */
-function openDrawer(title, html) {
-  $("#dTitle").textContent = title; $("#dBody").innerHTML = html;
-  $("#drawer").classList.add("on"); $("#scrim").classList.add("on"); $("#drawer").setAttribute("aria-hidden", "false");
-  setTimeout(() => $("#dClose").focus(), 50);
+function panelVerdict() {
+  const vm = state.vm, m = vm.memo || {};
+  $("#sideTitle").textContent = "Verdict";
+  const v = upper(vm.final && vm.final.verdict) || "PENDING";
+  const revs = Math.max(0, vm.finals.length - 1);
+  const k = stanceKey(m.stance);
+  const nums = (m.key_numbers || []).slice(0, 4);
+  const conds = (m.conditions || []).map(c => withChips(c));
+  $("#sideBody").innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><span class="vd-word">${esc(v)}</span><span class="pill sp-${k}">${esc(k === "c" ? "Conditional" : stanceLabel(k))}</span></div>
+    <p class="muted" style="font-size:13px">${revs === 0 ? "Passed the moderator's final check first time." : `The moderator sent the memo back ${revs === 1 ? "once" : revs + " times"} before this verdict.`}</p>
+    <p class="rec">${esc(m.recommendation || "")}</p>
+    ${nums.length ? `<div class="stats">${nums.map(n => `<div class="stat"><b class="tabnum">${esc(fmtNum(n.value, n.unit).replace(/\s*\/\s*month$/, "").replace(/ of volume$/, ""))}</b><span>${esc(n.text)}</span></div>`).join("")}</div>` : ""}
+    ${conds.length ? `<div class="h4">Conditions before any volume moves</div><ul class="conds">${conds.map(w => `<li><span>${esc(w.text)}</span></li>`).join("")}</ul>` : ""}
+    <div class="row-actions"><button class="btn" type="button" data-sheet="memo">Read the full recommendation</button><button class="btn primary" type="button" data-sheet="sign">Approve or override</button></div>`;
 }
-function closeDrawer() { $("#drawer").classList.remove("on"); $("#scrim").classList.remove("on"); $("#drawer").setAttribute("aria-hidden", "true"); }
+function panelStart() {
+  $("#sideTitle").textContent = "Start here";
+  const runs = state.mode === "live" ? (state.runs || []).slice(0, 8) : [];
+  const row = (id, label, v, sub) => `<li><button class="go" type="button" data-open-run="${esc(id)}"><div><b>${esc(label)}</b><span>${esc(sub)}</span></div>${v ? `<span class="vt ${esc(v)}">${esc(v)}</span>` : "<span></span>"}<span class="arr">→</span></button></li>`;
+  const list = runs.map(r => {
+    const fv = r.final_verdict; const v = upper(typeof fv === "string" ? fv : fv && fv.verdict) || upper(r.status);
+    const dec = r.decision_id || (r.brief && r.brief.decision_id) || "";
+    return row(r.run_id, fmtTime(r.created_at), v, dec ? dec + " · " + r.run_id : r.run_id);
+  }).join("") + row("sample", "DEC-001 sample run", "PASS", "Built-in example. Works offline.");
+  $("#sideBody").innerHTML = `<p class="lede">The arena is empty. Put a new decision in front of the advisers, or reopen a debate that already ran.</p>
+    <button class="go big" type="button" data-sheet="new"><span class="gi">+</span><div><b>Start a new decision</b><span>Write the question and options. The right advisers join automatically.</span></div><span class="arr">→</span></button>
+    <div class="h4">Or open a saved run</div>
+    <ul class="runs">${list}</ul>
+    ${state.mode === "live" && !runs.length ? `<p class="muted">No saved runs yet. Your first decision will appear here.</p>` : ""}`;
+}
+function panelFeed() {
+  $("#sideTitle").textContent = "Session log";
+  const items = state.feed.slice().reverse();
+  $("#sideBody").innerHTML = items.length ? `<ul class="feed">${items.map((e, i) => `<li${i ? ' style="animation:none"' : ""}><time>${esc(e.t)}</time><span>${e.html}</span></li>`).join("")}</ul>` : `<p class="lede">The log fills in as the session runs: who joined, who made their case, what the moderator struck.</p>`;
+}
+function feed(html, kind) { state.feed.push({ t: $("#clock").textContent, html, kind }); if (state.panel && state.panel.kind === "feed") panelFeed(); }
 
 async function getFact(id) {
-  if (state.mode === "live") {
-    try { const r = await fetch(`/facts/${encodeURIComponent(id)}`); if (r.ok) { const f = await r.json(); FACTS[id] = { ...(FACTS[id] || {}), ...f }; return FACTS[id]; } } catch (e) {}
-  }
+  if (state.mode === "live") { try { const r = await fetch(`/facts/${encodeURIComponent(id)}`); if (r.ok) { const f = await r.json(); FACTS[id] = { ...(FACTS[id] || {}), ...f }; } } catch (e) {} }
   return FACTS[id];
 }
-async function showEvidence(id) {
-  if (id === "BRIEF") {
-    const b = state.vm ? state.vm.brief : {};
-    openDrawer("Evidence", `<div class="fid">BRIEF</div><p class="fstmt">${esc(b.question || "")}</p><p class="muted">Numbers quoted from the decision brief itself.</p>`);
-    return;
-  }
+async function panelEvidence(id) {
+  $("#sideTitle").textContent = "Evidence";
+  if (id === "BRIEF") { $("#sideBody").innerHTML = `<div class="fid">BRIEF</div><p class="lede">${esc(state.vm ? state.vm.brief.question : "")}</p><p class="muted">Numbers quoted from the decision brief itself.</p>`; return; }
   const f = await getFact(id);
-  const citing = [];
-  (state.vm ? state.vm.positions : []).forEach(p => (p.claims || []).forEach(c => { if ((c.evidence_ids || []).includes(id)) citing.push({ who: advName(p.adviser_id, true), c, v: state.vm.verdicts[c.claim_id] }); }));
-  if (!f) {
-    openDrawer("Evidence", `<div class="fid">${esc(id)}</div><p class="muted">This evidence ID isn't in the fact store. Document passages and live data appear here once the API serves them.</p>`);
-    return;
-  }
+  if (!f) { $("#sideBody").innerHTML = `<div class="fid">${esc(id)}</div><p class="muted">This evidence ID isn't in the fact store.</p>`; return; }
+  const citing = []; (state.vm ? state.vm.positions : []).forEach(p => (p.claims || []).forEach(c => { if ((c.evidence_ids || []).includes(id)) citing.push({ who: advName(p.adviser_id, true), c, v: state.vm.verdicts[c.claim_id] }); }));
   const val = f.value_num != null && f.value_num !== "" ? fmtNum(f.value_num, "") : (f.value_text || "");
-  openDrawer("Evidence", `
-    <div class="fid">${esc(f.fact_id || id)}</div>
-    <div class="fstate"><span class="pill ${esc(f.reliability)}">${esc(f.reliability || "unknown")} reliability</span><span class="pill">${esc(advName(f.domain))}</span>${f.topic ? `<span class="pill">${esc(f.topic)}</span>` : ""}</div>
-    ${f.superseded_by ? `<div class="old-banner">Out of date. Replaced by ${chip(f.superseded_by)}</div>` : ""}
-    <p class="fstmt">${esc(f.statement)}</p>
+  $("#sideBody").innerHTML = `<div class="fid">${esc(f.fact_id || id)}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="rel ${esc(f.reliability)}">${esc(f.reliability || "unknown")} reliability</span><span class="rel">${esc(advName(f.domain))}</span></div>
+    ${f.superseded_by ? `<div class="old">Out of date. Replaced by ${chip(f.superseded_by)}</div>` : ""}
+    <p class="lede" style="color:var(--ink);font-size:16px">${esc(f.statement)}</p>
     ${val ? `<div class="fval tabnum">${esc(val)}<small>${esc(f.unit || "")}</small></div>` : ""}
-    <dl class="dl"><dt>Source</dt><dd>${esc(f.source_ref)}</dd><dt>Source type</dt><dd>${esc(f.source_type)}</dd><dt>As of</dt><dd>${esc(f.as_of)}</dd><dt>About</dt><dd>${esc(f.entity)}</dd></dl>
-    ${citing.length ? `<div class="cited"><b style="font-weight:500;color:var(--ink)">Cited in this debate</b>${citing.map(x => `<div><b style="font-weight:500">${esc(x.who)}</b>${x.v && upper(x.v.status) !== "KEEP" ? ` <span class="vtag ${upper(x.v.status) === "STRIKE" ? "WRONG" : "INCOMPLETE"}">${upper(x.v.status) === "STRIKE" ? "STRUCK" : "FLAGGED"}</span>` : ""}<br>${esc(x.c.text)}</div>`).join("")}</div>` : ""}`);
+    <dl class="dl"><dt>Source</dt><dd>${esc(f.source_ref)}</dd><dt>As of</dt><dd>${esc(f.as_of)}</dd><dt>About</dt><dd>${esc(f.entity)}</dd></dl>
+    ${citing.length ? `<div class="cited"><span class="h4">Cited in this debate</span>${citing.map(x => { const s = upper(x.v && x.v.status); return `<div><b style="font-weight:500">${esc(x.who)}</b> ${s === "STRIKE" ? '<span class="vt STRUCK">STRUCK</span>' : s === "FLAG" ? '<span class="vt FLAGGED">FLAGGED</span>' : ""}<br>${esc(x.c.text)}</div>`; }).join("")}</div>` : ""}`;
 }
 
-/* ---------------- new decision ---------------- */
-async function openNewDecision() {
-  let brief = state.vm ? state.vm.brief : SAMPLE.brief;
-  if (state.mode === "live") { try { const r = await fetch("/briefs/sample"); if (r.ok) brief = await r.json(); } catch (e) {} }
-  const crit = (brief.criteria || []).map((c, i) => `<div class="crit-row"><input class="cname" id="cn${i}" value="${esc(c.name)}" aria-label="Criterion name"><input class="cw tabnum" id="cw${i}" type="number" min="0" max="100" value="${Math.round(c.weight * 100)}" aria-label="Weight percent"></div>`).join("");
-  openDrawer("New decision", `
-    <p class="muted">${state.mode === "live" ? "Starts a real debate. Expect about 5 to 8 minutes." : "This preview isn't connected to the Colosseum API, so it replays the sample debate instead."}</p>
-    <div class="field"><label for="nq">Question</label><textarea id="nq">${esc(brief.question)}</textarea></div>
-    <div class="field"><label for="nA">Option A</label><input id="nA" value="${esc((brief.options || {}).A)}"></div>
-    <div class="field"><label for="nB">Option B</label><input id="nB" value="${esc((brief.options || {}).B)}"></div>
-    <div class="field"><label for="nc">Constraints, one per line</label><textarea id="nc">${esc((brief.constraints || []).join("\n"))}</textarea></div>
-    <div class="field"><label for="nx">Context</label><textarea id="nx">${esc(brief.context || "")}</textarea></div>
-    <div class="field"><span>Criteria and weights (%)</span><div class="crit-grid">${crit}</div><span class="wsum" id="wsum"></span></div>
-    <button class="btn primary" id="startBtn" type="button">Start the debate</button>`);
-  const sumCheck = () => { const t = $$(".cw").reduce((a, i) => a + (Number(i.value) || 0), 0); const el = $("#wsum"); el.textContent = `Weights add up to ${t}%` + (t === 100 ? "" : ". They must add up to 100%."); el.className = "wsum " + (t === 100 ? "ok" : "bad"); $("#startBtn").disabled = t !== 100; };
-  $$(".cw").forEach(i => i.addEventListener("input", sumCheck)); sumCheck();
+/* ---------------- sheets ---------------- */
+function openSheet(kind, refresh) {
+  state.sheet = kind;
+  const vm = state.vm; const T = $("#sheetTitle"), S = $("#sheetSub"), B = $("#sheetBody");
+  $$("#path .step, .brief-link").forEach(b => b.classList.toggle("on", b.dataset.sheet === kind));
+  try {
+    if (kind === "brief") { T.textContent = "The question"; S.textContent = "What the advisers were asked to decide, and how options are judged"; B.innerHTML = sheetBrief(vm); }
+    if (kind === "routing") { T.textContent = "Who joined, and why"; S.textContent = "Each adviser's expertise is compared with the question by meaning"; B.innerHTML = sheetRouting(vm); }
+    if (kind === "debate") { T.textContent = "Their arguments"; S.textContent = debateSummary(vm) + " Click an adviser for the detail."; B.innerHTML = sheetDebate(vm); }
+    if (kind === "checks") { T.textContent = "Fact checks"; S.textContent = "The moderator checked every claim against the evidence before anything reached the memo"; B.innerHTML = sheetChecks(vm); }
+    if (kind === "scorecard") { T.textContent = "Scores"; S.textContent = "Weighted scores computed in code from each owner's ratings. Nobody can edit them."; B.innerHTML = sheetScorecard(vm); }
+    if (kind === "memo") { T.textContent = "Recommendation"; S.textContent = "Written from checked claims only"; B.innerHTML = sheetMemo(vm); }
+    if (kind === "final") { T.textContent = "Quality check"; S.textContent = "Does the memo make sense, is it complete, is it correct?"; B.innerHTML = sheetFinal(vm); }
+    if (kind === "sign") { T.textContent = "Your decision"; S.textContent = "The recommendation is advisory. You approve or override it, and the record keeps who and why."; B.innerHTML = sheetSign(vm); wireSign(); }
+    if (kind === "new") { T.textContent = "New decision"; S.textContent = state.mode === "live" ? "Starts a real debate, about 5 to 8 minutes" : "Preview: replays the sample debate"; B.innerHTML = sheetNew(); wireNew(); }
+  } catch (e) { console.error(e); B.innerHTML = `<p class="muted">Couldn't show this view.</p>`; }
+  if (refresh) return;
+  $("#sheet").classList.add("on"); $("#scrim").classList.add("on"); $("#sheet").setAttribute("aria-hidden", "false");
+  setTimeout(() => $("#sheetClose").focus(), 60);
+}
+function closeSheet() { state.sheet = null; $("#sheet").classList.remove("on"); $("#scrim").classList.remove("on"); $("#sheet").setAttribute("aria-hidden", "true"); $$("#path .step").forEach(b => b.classList.remove("on")); }
+
+function sheetBrief(vm) {
+  const b = vm.brief;
+  return `<div class="grid2"><div class="box"><h3>Question</h3><p style="font-size:17px">${esc(b.question)}</p>
+    <div class="opts">${Object.entries(vm.opts).map(([k, v]) => `<span class="${k.toLowerCase()}"><i>${esc(k)}</i>${esc(v)}</span>`).join("")}</div>
+    ${b.context ? `<p class="muted" style="font-size:14px">${esc(b.context)}</p>` : ""}</div>
+    <div class="box"><h3>Constraints</h3><ul class="cons">${(b.constraints || []).map(c => `<li>${esc(c)}</li>`).join("")}</ul>
+    <h3>Criteria and weights</h3><div class="sbars">${(b.criteria || []).map(c => `<div class="sbar"><span>${esc(c.name)}</span><span class="trk s"><i style="--w:${Math.round(c.weight * 100)}%"></i></span><span class="mono">${Math.round(c.weight * 100)}</span></div>`).join("")}</div></div></div>`;
+}
+function debateSummary(vm) {
+  let k = 0, f = 0, s = 0; vm.positions.forEach(p => { const t = claimStats(vm, p.adviser_id); k += t.k; f += t.f; s += t.s; });
+  return vm.positions.length ? `${vm.positions.length} advisers, ${k + f + s} claims. The moderator struck ${s} and flagged ${f}.` : "";
+}
+function sheetRouting(vm) {
+  const rows = [...vm.scores].sort((a, b) => b.sim - a.sim);
+  const top = rows.length ? rows[0].sim : 0, margin = Math.max(0, top - ROUTING.margin);
+  return `<div class="grid2"><div class="box"><h3>Match with the question</h3>
+      ${rows.map(r => `<div class="rrow"><div class="t"><span>${esc(advName(r.id))}</span><span class="mono">${r.sim.toFixed(2)}</span></div><span class="trk s"><i style="--w:${r.sim * 100}%"></i></span><span class="w ${/rule/i.test(r.reason) ? "rule" : ""}">${r.selected ? "Joined" : "Not called"}${r.reason ? ": " + esc(r.reason) : ""}${r.cap ? `. Closest expertise: ${esc(r.cap)}` : ""}</span></div>`).join("")}</div>
+    <div class="box"><h3>How advisers are chosen</h3>
+      <p class="explain">Colosseum turns the question into a short routing query, then compares it with what each adviser is good at. Advisers within ${ROUTING.margin} of the best match join, as long as they score at least ${ROUTING.floor}. Some rules always add an adviser, for example a customer-facing change always brings in Customer.</p>
+      <p class="explain">For this question the best match was ${top.toFixed(2)}, so the cut-off was ${margin.toFixed(2)}.</p>
+      ${vm.routing.routing_query ? `<h3>Routing query</h3><p class="explain">${esc(vm.routing.routing_query)}</p>` : ""}</div></div>`;
+}
+function sheetDebate(vm) {
+  const order = [...vm.scores].sort((a, b) => b.sim - a.sim).map(r => r.id).filter(id => vm.posById[id]); vm.positions.forEach(p => { if (!order.includes(p.adviser_id)) order.push(p.adviser_id); });
+  const cs = state.cseen[vm.id || "_"] = state.cseen[vm.id || "_"] || new Set();
+  const cards = order.map(id => { const p = vm.posById[id], k = stanceKey(p.stance), t = claimStats(vm, id); const isNew = cs.primed && !cs.has(id); cs.add(id);
+    return `<button type="button" class="acard" data-open-adv="${esc(id)}" style="${isNew ? "animation:bubin .6s var(--ease) both" : ""}"><div class="top-r"><h3>${esc(advName(id, true))}</h3><span class="pill sp-${k}">${esc(stanceLabel(k))}</span></div><p>${esc(p.summary)}</p>
+      <div class="tally"><span class="k">${t.k} kept</span><span class="f">${t.f} flagged</span><span class="s">${t.s} struck</span>${(p.blocking_findings || []).length ? '<span class="s">blocking issue</span>' : ""}</div></button>`; }).join("");
+  setTimeout(() => cs.primed = true, 0);
+  return `<div class="cards">${cards || '<p class="muted">No positions yet.</p>'}</div>`;
+}
+function sheetChecks(vm) {
+  let k = 0, f = 0, x = 0; vm.positions.forEach(p => { const t = claimStats(vm, p.adviser_id); k += t.k; f += t.f; s += t.s; });
+  const items = [];
+  vm.positions.forEach(p => (p.claims || []).forEach(c => { const v = vm.verdicts[c.claim_id]; const st = upper(v && v.status); if (st === "STRIKE" || st === "FLAG") items.push({ p, c, v, st }); }));
+  items.sort((a, b) => (a.st === "STRIKE" ? 0 : 1) - (b.st === "STRIKE" ? 0 : 1));
+  const blocks = []; vm.positions.forEach(p => (p.blocking_findings || []).forEach((b, i) => blocks.push({ p, b, v: vm.verdicts[`${p.adviser_id}-B${i + 1}`] })));
+  return `<div class="bigs"><div class="stat"><b style="color:var(--keep)">${k}</b><span>claims held up against the evidence</span></div>
+      <div class="stat"><b style="color:var(--flag)">${f}</b><span>flagged: kept, with a warning</span></div>
+      <div class="stat"><b style="color:var(--strike)">${x}</b><span>struck: removed before the memo</span></div></div>
+    <div class="grid2" style="margin-top:18px"><div class="box"><h3>What the moderator caught</h3>
+      ${items.length ? `<ul class="mod-list">${items.map(({ p, c, v, st }) => `<li><span class="vt ${st === "STRIKE" ? "STRUCK" : "FLAGGED"}">${st === "STRIKE" ? "STRUCK" : "FLAGGED"}</span><div><b style="font-weight:500">${esc(advName(p.adviser_id, true))}:</b> ${esc(c.text)}<div class="muted" style="font-size:13px;margin-top:4px">${esc(v.reason)}</div><div class="chips">${(c.evidence_ids || []).map(chip).join("")}</div></div></li>`).join("")}</ul>` : `<p class="explain">Every claim matched its evidence.</p>`}</div>
+    <div class="box"><h3>How claims are checked</h3><p class="explain">Code checks come first: does the evidence exist, is it current, do the numbers match. Then Gemini checks whether the evidence really supports the claim. A blocking issue can't be struck; it stays until a condition clears it or a person overrides it.</p>
+      ${blocks.map(({ p, b, v }) => `<div class="blk"><h4>Blocking issue from ${esc(advName(p.adviser_id, true))}</h4><div>${esc(b.text)}</div><div class="fix"><b style="color:var(--ink);font-weight:500">Fix:</b> ${esc(b.fix)}</div>${v ? `<div class="muted" style="font-size:12.5px">${esc(v.reason)}</div>` : ""}</div>`).join("")}</div></div>`;
+}
+function sheetFinal(vm) {
+  return `<div class="grid2"><div class="box"><h3>Drafts</h3><ul class="mod-list">${vm.finals.map((f, i) => { const v = upper(f.verdict); const iss = (f.issues || []);
+      return `<li><span class="vt ${esc(v)}">${esc(v)}</span><div><b style="font-weight:500">Draft ${i + 1}</b>${v === "PASS" ? `<div class="muted" style="font-size:13px;margin-top:4px">Makes sense, complete and correct.</div>` : iss.map(x => `<div class="muted" style="font-size:13px;margin-top:4px">${esc(x.detail)}</div>`).join("")}${f.revision_instructions ? `<div style="font-size:13px;margin-top:6px;color:var(--ink-2)">Sent back with: ${esc(f.revision_instructions)}</div>` : ""}</div></li>`; }).join("") || "<li><div>No check yet.</div></li>"}</ul></div>
+    <div class="box"><h3>What the quality check does</h3><p class="explain">Before you see the memo, the moderator checks that every adviser is represented, every criterion is covered, numbers match the evidence, blocking issues are handled, and dissent is recorded. If something is missing it sends the memo back to be rewritten, up to two times.</p></div></div>`;
+}
+function sheetScorecard(vm) {
+  const sc = vm.scorecard; if (!sc || !(sc.rows || []).length) return `<p class="muted">No scorecard yet.</p>`;
+  const opts = Object.keys(vm.opts).length ? Object.keys(vm.opts) : Object.keys(sc.weighted_totals || {});
+  const owners = {}; (vm.brief.criteria || []).forEach(c => owners[c.name] = c.owners || []);
+  const tot = sc.weighted_totals || {}; const best = opts.reduce((b, o) => (tot[o] ?? -1) > (tot[b] ?? -1) ? o : b, opts[0]);
+  const blocked = sc.blocked_options || {};
+  return `<div class="tw"><table><thead><tr><th>Criterion</th><th>Weight</th>${opts.map(o => `<th>Option ${esc(o)}</th>`).join("")}<th>Evidence</th></tr></thead><tbody>
+    ${sc.rows.map(r => `<tr><td>${esc(r.criterion)}<div class="f">${(r.owners || owners[r.criterion] || []).map(o => esc(advName(o, true))).join(", ")}</div></td><td class="mono">${Math.round((r.weight || 0) * 100)}%</td>
+      ${opts.map(o => { const s = r.scores ? r.scores[o] : null; return `<td><div class="sbar" style="grid-template-columns:minmax(80px,1fr) 30px"><span class="trk ${o.toLowerCase()}"><i style="--w:${s == null ? 0 : s / 5 * 100}%"></i></span><span class="mono">${s == null ? "–" : esc(s)}</span></div></td>`; }).join("")}
+      <td>${(r.evidence_ids || []).slice(0, 3).map(chip).join(" ")}</td></tr>`).join("")}
+    <tr><td><b style="font-weight:500">Weighted total</b><div class="f">out of 5</div></td><td></td>${opts.map(o => `<td><span class="tot tabnum ${o === best ? "win" : ""}">${tot[o] != null ? Number(tot[o]).toFixed(2) : "–"}</span>${(blocked[o] || []).length ? ' <span class="vt WRONG">BLOCKED</span>' : ""}</td>`).join("")}<td></td></tr>
+    </tbody></table></div>${Object.entries(blocked).filter(([, v]) => (v || []).length).map(([o, v]) => `<div class="blocked"><b>Option ${esc(o)} is blocked.</b> ${v.map(esc).join(" ")} A condition must clear it, or a person must override it.</div>`).join("")}`;
+}
+function sheetMemo(vm) {
+  const m = vm.memo; if (!m) return `<p class="muted">No memo yet.</p>`;
+  const L = arr => (arr || []).map(withChips);
+  return `<div class="grid2">
+    <div class="box"><h3>Recommendation</h3><p class="rec">${esc(m.recommendation)}</p>
+      <h3>Conditions</h3><ul class="conds">${L(m.conditions).map(w => `<li><div>${esc(w.text)}<div class="chips">${w.ids.map(chip).join("")}${w.by ? `<span class="muted" style="font-size:12px">Raised by ${esc(w.by)}</span>` : ""}</div></div></li>`).join("")}</ul></div>
+    <div class="box"><h3>Phased plan</h3><ol class="plan">${L(m.phased_plan).map(w => `<li><div>${esc(w.text)} ${w.ids.map(chip).join(" ")}</div></li>`).join("") || "<li><div>Single phase.</div></li>"}</ol>
+      <h3>Dissent on record</h3><ul class="dis">${L(m.dissent).map(w => `<li>${esc(w.text)} ${w.ids.map(chip).join(" ")}</li>`).join("") || "<li>No adviser disagreed.</li>"}</ul></div>
+    <div class="box"><h3>Key numbers</h3><div class="tw"><table><tbody>${(m.key_numbers || []).map(k => `<tr><td>${esc(k.text)}<div class="f">${esc(k.formula || "")}</div></td><td class="num">${esc(fmtNum(k.value, k.unit))}</td><td>${(k.evidence_ids || []).map(chip).join(" ")}</td></tr>`).join("")}</tbody></table></div></div>
+    <div class="box"><h3>Numbers to watch</h3><ul class="dis">${L(m.numbers_to_watch).map(w => `<li>${esc(w.text)} ${w.ids.map(chip).join(" ")}</li>`).join("")}</ul>
+      <h3>Moderator's final check</h3><div class="drafts">${vm.finals.map((f, i) => { const v = upper(f.verdict); const iss = (f.issues || [])[0]; return `<div>Draft ${i + 1} <span class="vt ${esc(v)}">${esc(v)}</span> ${esc(v === "PASS" ? "Makes sense, complete and correct." : iss ? iss.detail : "")}</div>`; }).join("")}</div></div>
+  </div>`;
+}
+function sheetSign(vm) {
+  const items = vm.decisions.map(d => `<li><div><span class="act">${String(d.action || "").toLowerCase() === "override" ? "Overrode" : "Approved"}</span> by <b style="font-weight:500">${esc(d.decided_by || "Unnamed")}</b><div class="muted mono" style="font-size:12px">${esc(fmtTime(d.decided_at))}</div>${(d.reason || d.note) ? `<div class="muted">${esc(d.reason || d.note)}</div>` : ""}</div></li>`).join("");
+  return `<div class="grid2"><form class="box" id="signForm" novalidate><h3>Your decision</h3>
+      <div class="field"><label for="signName">Name and role</label><input id="signName" autocomplete="name" placeholder="For example, Priya Raman, Head of Payments"></div>
+      <div class="field"><label for="signReason">Reason (needed to override)</label><textarea id="signReason" placeholder="What you decided and why"></textarea><span class="err" id="signErr" role="alert"></span></div>
+      <div class="row-actions"><button class="btn primary" type="submit">Approve recommendation</button><button class="btn danger" type="button" id="overrideBtn">Override</button></div></form>
+    <div class="box"><h3>Decision record</h3><ul class="log">${items || '<li style="grid-template-columns:1fr" class="muted">No one has signed this decision yet. Every approval and override is kept.</li>'}</ul></div></div>`;
+}
+function wireSign() {
+  $("#signForm").addEventListener("submit", e => { e.preventDefault(); signOff("approve"); });
+  $("#overrideBtn").addEventListener("click", () => signOff("override"));
+}
+async function signOff(action) {
+  const vm = state.vm; if (!vm) return;
+  const name = $("#signName").value.trim(), reason = $("#signReason").value.trim(), err = $("#signErr");
+  if (!name) { err.textContent = "Add your name and role so the record shows who decided."; $("#signName").focus(); return; }
+  if (action === "override" && !reason) { err.textContent = "An override needs a reason. Say what you decided instead and why."; $("#signReason").focus(); return; }
+  err.textContent = "";
+  if (state.mode === "live") {
+    try { const r = await fetch(`/runs/${encodeURIComponent(vm.id)}/decision`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, reason, decided_by: name }) });
+          if (!r.ok) throw new Error(`the API answered ${r.status}`); }
+    catch (e) { err.textContent = "Couldn't save the decision: " + e.message + ". Try again."; return; }
+  }
+  vm.decisions.push({ action, reason, decided_by: name, decided_at: new Date().toISOString() });
+  openSheet("sign", true);
+  toast((action === "override" ? "Override recorded" : "Approval recorded") + (state.mode === "live" ? "." : " in this preview only."));
+}
+function sheetNew() {
+  const brief = state.newBrief || (state.vm && state.vm.brief && state.vm.brief.question ? state.vm.brief : SAMPLE.brief);
+  state.newBrief = brief;
+  return `<div class="grid2"><div class="box">
+      <div class="field"><label for="nq">Question</label><textarea id="nq">${esc(brief.question)}</textarea></div>
+      <div class="field"><label for="nA">Option A</label><input id="nA" value="${esc((brief.options || {}).A)}"></div>
+      <div class="field"><label for="nB">Option B</label><input id="nB" value="${esc((brief.options || {}).B)}"></div>
+      <div class="field"><label for="nx">Context</label><textarea id="nx">${esc(brief.context || "")}</textarea></div></div>
+    <div class="box"><div class="field"><label for="nc">Constraints, one per line</label><textarea id="nc" style="min-height:120px">${esc((brief.constraints || []).join("\n"))}</textarea></div>
+      <div class="field"><span>Criteria and weights (%)</span>${(brief.criteria || []).map((c, i) => `<div class="crit-row"><input id="cn${i}" value="${esc(c.name)}" aria-label="Criterion"><input class="cw tabnum" id="cw${i}" type="number" min="0" max="100" value="${Math.round(c.weight * 100)}" aria-label="Weight"></div>`).join("")}<span class="wsum" id="wsum"></span></div>
+      <button class="btn primary" id="startBtn" type="button">Start the debate</button></div></div>`;
+}
+async function wireNew() {
+  if (state.mode === "live" && !state.briefFetched) { state.briefFetched = true; try { const r = await fetch("/briefs/sample"); if (r.ok) { state.newBrief = await r.json(); openSheet("new", true); return; } } catch (e) {} }
+  const brief = state.newBrief;
+  const sum = () => { const t = $$(".cw").reduce((a, i) => a + (Number(i.value) || 0), 0); const el = $("#wsum"); el.textContent = `Weights add up to ${t}%` + (t === 100 ? "" : ". They must add up to 100%."); el.className = "wsum " + (t === 100 ? "ok" : "bad"); $("#startBtn").disabled = t !== 100; };
+  $$(".cw").forEach(i => i.addEventListener("input", sum)); sum();
   $("#startBtn").addEventListener("click", async () => {
     const nb = JSON.parse(JSON.stringify(brief));
     nb.question = $("#nq").value.trim(); nb.options = { A: $("#nA").value.trim(), B: $("#nB").value.trim() };
     nb.constraints = $("#nc").value.split("\n").map(s => s.trim()).filter(Boolean); nb.context = $("#nx").value.trim();
     nb.criteria = (nb.criteria || []).map((c, i) => ({ ...c, name: $("#cn" + i).value.trim() || c.name, weight: (Number($("#cw" + i).value) || 0) / 100 }));
-    if (state.mode !== "live") { closeDrawer(); toast("Replaying the sample debate."); window.scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" }); replay(); return; }
+    if (state.mode !== "live") { closeSheet(); if (state.runId !== "sample") await openRun("sample", true); replay(); return; }
     $("#startBtn").disabled = true; $("#startBtn").textContent = "Starting…";
     try {
       const r = await fetch("/decisions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(nb) });
-      if (!r.ok) throw new Error(`The API answered ${r.status}. ${await r.text()}`);
+      if (!r.ok) throw new Error(`the API answered ${r.status}. ${await r.text()}`);
       const { run_id } = await r.json();
-      closeDrawer(); toast("Debate started. Advisers are joining.");
-      await loadRunList(); await openRun(run_id);
-    } catch (e) {
-      $("#startBtn").disabled = false; $("#startBtn").textContent = "Start the debate";
-      toast("Couldn't start the debate: " + e.message);
-    }
+      closeSheet(); toast("Debate started. The advisers are taking their seats.");
+      state.feed = []; feed('<span class="e-sig">Session opened</span>', "sig");
+      await loadRunList(); await openRun(run_id); openPanel("feed");
+    } catch (e) { $("#startBtn").disabled = false; $("#startBtn").textContent = "Start the debate"; toast("Couldn't start the debate: " + e.message); }
   });
 }
 
-/* ---------------- sign-off ---------------- */
-async function signOff(action) {
-  const vm = state.vm; if (!vm) return;
-  const name = $("#signName").value.trim(), reason = $("#signReason").value.trim();
-  const err = $("#signErr");
-  if (!name) { err.textContent = "Add your name and role so the record shows who decided."; $("#signName").focus(); return; }
-  if (action === "override" && !reason) { err.textContent = "An override needs a reason. Say what you decided instead and why."; $("#signReason").focus(); return; }
-  err.textContent = "";
-  const entry = { action, reason, note: reason, decided_by: name, decided_at: new Date().toISOString() };
-  if (state.mode === "live") {
-    try {
-      const r = await fetch(`/runs/${encodeURIComponent(vm.id)}/decision`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, reason, decided_by: name }) });
-      if (!r.ok) throw new Error(`The API answered ${r.status}`);
-    } catch (e) { err.textContent = "Couldn't save the decision: " + e.message + ". Try again."; return; }
+/* ---------------- replay: the orchestrated moment ---------------- */
+async function replay() {
+  const vm = state.vm; if (!vm || state.replaying || vm.status === "idle") return;
+  if (reduced) { toast("Replay is off because your system asks for reduced motion."); return; }
+  state.replaying = true; state.feed = []; closeSheet(); openPanel("feed");
+  const t0 = performance.now(), total = vm.metrics.latency_s || 400, DUR = 13000;
+  const tick = setInterval(() => { $("#clock").textContent = fmtClock(Math.min(total, (performance.now() - t0) / DUR * total)); }, 80);
+  const step = async (i, working, ms) => { applyStage(i, working); setSession("live", Math.max(0, i)); if (ms) await sleep(ms); };
+  $$("#arena .seat").forEach(g => g.classList.remove("arrived", "pop"));
+  await step(-1, false, 500);
+  feed('<span class="e-sig">Session opened</span>');
+  await step(0, false, 600);
+  vm.selected.forEach((id, n) => setTimeout(() => feed(`<span class="e-sig">${esc(advName(id, true))}</span> takes a seat`), n * 90));
+  await sleep(900);
+  state.replayArrived = 0; await step(1, true, 700);
+  const order = ["business", "infosec", "customer", "legal", "ops", "finance"].filter(id => vm.posById[id] && vm.selected.includes(id));
+  vm.positions.forEach(p => { if (!order.includes(p.adviser_id) && vm.selected.includes(p.adviser_id)) order.push(p.adviser_id); });
+  for (const id of order) {
+    const g = $(`#arena .seat[data-adv="${CSS.escape(id)}"]`); if (g) { g.classList.add("arrived", "pop"); }
+    $(`#ln-${CSS.escape(id)}`)?.classList.add("arrived");
+    state.replayArrived++; setSession("live", 1); renderTimeline(); pulseTo(id);
+    bubble(id, headline(vm.posById[id]), advName(id, true) + " made the case", "", 1700, "arrive");
+    feed(`<span class="e-ok">${esc(advName(id, true))}</span> made the case: ${esc(stanceShort(stanceKey(vm.posById[id].stance)))}`);
+    await sleep(520);
   }
-  vm.decisions.push(entry); renderLog(vm);
-  $("#signReason").value = "";
-  toast((action === "override" ? "Override recorded" : "Approval recorded") + (state.mode === "live" ? "." : " in this preview only."));
+  await sleep(300);
+  await step(2, false, 0);
+  const app = $("#app"); app.classList.add("scanning");
+  await sleep(700);
+  applyStage(3, false); setSession("live", 2);
+  Object.values(vm.verdicts).filter(v => ["STRIKE", "FLAG"].includes(upper(v.status))).forEach((v, n) => {
+    const owner = (v.claim_id || "").split("-")[0]; const isB = /-B\d+$/.test(v.claim_id);
+    if (isB) return;
+    const claim = (vm.posById[owner]?.claims || []).find(c => c.claim_id === v.claim_id);
+    const kind = upper(v.status) === "STRIKE" ? "strike" : "flag";
+    setTimeout(() => { bubble(owner, v.reason, (kind === "strike" ? "Struck by the moderator" : "Flagged by the moderator"), kind, 2400, "mod");
+      feed(`<span class="e-${kind}">Moderator ${kind === "strike" ? "struck" : "flagged"}</span> a ${esc(advName(owner, true))} claim`); }, n * 450);
+  });
+  vm.blocking.forEach(id => setTimeout(() => feed(`<span class="e-strike">${esc(advName(id, true))} blocking finding</span> kept, with a fix`), 900));
+  await sleep(2600); app.classList.remove("scanning");
+  await step(3, false, 900); setSession("live", 3); feed('<span class="e-sig">Scorecard</span> computed');
+  await step(4, false, 1000); feed('<span class="e-sig">The Scribe</span> drafted the memo');
+  await step(5, false, 600);
+  if (vm.finals.length > 1) { feed(`<span class="e-flag">Moderator sent the memo back</span>: ${esc(((vm.finals[0].issues || [])[0] || {}).detail || "")}`); await sleep(900); }
+  applyStage(6, false);
+  $$("#arena .seat").forEach(g => g.classList.remove("arrived", "pop"));
+  clearInterval(tick); state.replaying = false; state.replayArrived = null;
+  updateClock(); setSession(arenaKind(vm), 6); burst(); renderTimeline();
+  feed(`<span class="e-ok">Verdict ${esc(upper(vm.final && vm.final.verdict))}</span>. Ready for sign-off.`);
+  $("#replayBtn").disabled = false;
+  sweepPath();
+  await sleep(1200); openPanel("verdict");
 }
 
-/* ---------------- toast ---------------- */
-let toastT;
-function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 3600); }
+/* short entrance whenever a finished run is opened */
+async function entrance() {
+  const vm = state.vm; if (!vm || vm.status !== "done") return;
+  if (reduced) { applyStage(6); setSession("done", 6); return; }
+  const token = state.tok = (state.tok || 0) + 1;
+  applyStage(-1); setSession("live", 0);
+  await sleep(60); if (token !== state.tok) return;
+  applyStage(0); await sleep(450); if (token !== state.tok) return;
+  applyStage(1, true); setSession("live", 1); await sleep(650); if (token !== state.tok) return;
+  applyStage(3); setSession("live", 2); await sleep(550); if (token !== state.tok) return;
+  applyStage(6); setSession("done", 6); burst();
+  setTimeout(() => { sweepPath(); setTimeout(showCoach, 1400); }, 700);
+}
 
-/* ---------------- data loading ---------------- */
+/* ---------------- data ---------------- */
 async function fetchJSON(url, ms = 4000) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
-  try { const r = await fetch(url, { signal: ctl.signal, headers: { Accept: "application/json" } });
-        if (!r.ok) throw new Error(String(r.status));
-        const ct = r.headers.get("content-type") || ""; if (!ct.includes("json")) throw new Error("not json");
-        return await r.json(); }
+  try { const r = await fetch(url, { signal: ctl.signal, headers: { Accept: "application/json" } }); if (!r.ok) throw new Error(String(r.status));
+        if (!(r.headers.get("content-type") || "").includes("json")) throw new Error("not json"); return await r.json(); }
   finally { clearTimeout(t); }
 }
 async function detectApi() {
   if (/(^|[?#&])demo\b/.test(location.search + location.hash)) return false;
-  try { const runs = await fetchJSON("/runs?limit=25", 2500); return Array.isArray(runs) ? runs : Array.isArray(runs.runs) ? runs.runs : false; }
-  catch (e) { return false; }
+  try { const r = await fetchJSON("/runs?limit=25", 2500); return Array.isArray(r) ? r : Array.isArray(r.runs) ? r.runs : false; } catch (e) { return false; }
 }
-async function loadRunList() {
-  try { const r = await fetchJSON("/runs?limit=25"); state.runs = Array.isArray(r) ? r : (r.runs || []); } catch (e) { console.warn("[colosseum] run list failed", e); }
-  fillPicker();
-}
+async function loadRunList() { try { const r = await fetchJSON("/runs?limit=25"); state.runs = Array.isArray(r) ? r : (r.runs || []); } catch (e) {} fillPicker(); }
 function fillPicker() {
-  const p = $("#picker");
-  const idleOpt = `<option value="">No run open (idle arena)</option>`;
-  if (state.mode !== "live") { p.innerHTML = idleOpt + `<option value="sample">DEC-001 sample run (Legion Capital)</option>`; p.value = state.runId === "" ? "" : "sample"; return; }
-  p.innerHTML = idleOpt + state.runs.map(r => {
-    const fv = r.final_verdict; const v = upper(typeof fv === "string" ? fv : fv && fv.verdict) || upper(r.status);
-    return `<option value="${esc(r.run_id)}">${esc(fmtTime(r.created_at))}  ${esc(r.run_id.replace(/^run_/, ""))}  ${esc(v)}</option>`;
-  }).join("") + `<option value="sample">Sample run (offline)</option>`;
+  const p = $("#picker"); const idle = `<option value="">No run open (idle arena)</option>`;
+  if (state.mode !== "live") p.innerHTML = idle + `<option value="sample">DEC-001 sample run</option>`;
+  else p.innerHTML = idle + state.runs.map(r => { const fv = r.final_verdict; const v = upper(typeof fv === "string" ? fv : fv && fv.verdict) || upper(r.status);
+      return `<option value="${esc(r.run_id)}">${esc(fmtTime(r.created_at))}  ${esc(v)}</option>`; }).join("") + `<option value="sample">Sample run (offline)</option>`;
   p.value = state.runId || "";
 }
-const IDLE_RUN = { status: "idle", brief: { decision_id: "", question: "", options: {}, constraints: [] } };
-async function openRun(id) {
+async function openRun(id, quiet) {
   clearInterval(state.poll); state.poll = null; clearInterval(clockTimer); clockTimer = null;
-  state.runId = id;
-  if (!id) { state.vm = toViewModel(IDLE_RUN); renderAll(state.vm); fillPicker(); $("#picker").value = ""; return; }
-  if (id === "sample" || state.mode !== "live") { state.vm = toViewModel(SAMPLE); renderAll(state.vm); fillPicker(); $("#picker").value = "sample"; entrance(); return; }
+  state.runId = id; state.tok = (state.tok || 0) + 1;
+  if (!quiet) { closePanel(); state.feed = []; }
+  if (!id) { state.vm = toViewModel(IDLE_RUN); renderAll(state.vm); fillPicker(); return; }
+  if (id === "sample" || state.mode !== "live") { state.vm = toViewModel(SAMPLE); state.runId = "sample"; renderAll(state.vm); fillPicker(); if (!quiet) entrance(); return; }
   try {
     const run = await fetchJSON(`/runs/${encodeURIComponent(id)}`, 8000);
     state.vm = toViewModel(run); renderAll(state.vm); fillPicker(); entrance();
     if (!["done", "failed"].includes(state.vm.status)) {
       clockTimer = setInterval(updateClock, 1000);
+      let prev = state.vm.status;
       state.poll = setInterval(async () => {
         try {
-          const nr = await fetchJSON(`/runs/${encodeURIComponent(id)}`, 8000);
-          const nvm = toViewModel(nr); state.vm = nvm; renderAll(nvm);
-          if (["done", "failed"].includes(nvm.status)) { if (nvm.status === "done") burst(); clearInterval(state.poll); clearInterval(clockTimer); loadRunList(); toast(nvm.status === "done" ? "Debate finished. The memo is ready for sign-off." : "The run stopped. See the progress panel."); }
+          const nvm = toViewModel(await fetchJSON(`/runs/${encodeURIComponent(id)}`, 8000)); state.vm = nvm; renderAll(nvm);
+          if (nvm.status !== prev) {
+            const i = STAGES.findIndex(s => s.key === nvm.status);
+            if (nvm.status === "moderating" || (i > 2 && prev === "advisers")) { $("#app").classList.add("scanning"); setTimeout(() => $("#app").classList.remove("scanning"), 1600); }
+            if (i >= 0 && nvm.status !== "done") feed(`<span class="e-sig">${esc(STAGES[i].label)}</span> started`);
+            prev = nvm.status;
+          }
+          if (["done", "failed"].includes(nvm.status)) {
+            clearInterval(state.poll); clearInterval(clockTimer); loadRunList();
+            if (nvm.status === "done") { burst(); feed(`<span class="e-ok">Verdict ${esc(upper(nvm.final && nvm.final.verdict))}</span>`); toast("Debate finished. The verdict is ready."); setTimeout(() => openPanel("verdict"), 900); }
+            else toast("The run stopped. See the timeline.");
+          }
         } catch (e) { console.warn("[colosseum] poll failed", e); }
       }, 3000);
     }
-  } catch (e) {
-    toast("Couldn't open that run (" + e.message + "). Showing the sample instead.");
-    state.vm = toViewModel(SAMPLE); renderAll(state.vm);
-  }
+  } catch (e) { toast("Couldn't open that run (" + e.message + "). Showing the sample instead."); state.vm = toViewModel(SAMPLE); state.runId = "sample"; renderAll(state.vm); fillPicker(); }
 }
 
-/* ---------------- wiring ---------------- */
-function initTheme() {
-  const btn = $("#themeBtn");
-  let saved = null; try { saved = localStorage.getItem("colosseum-theme"); } catch (e) {}
-  if (saved) document.documentElement.setAttribute("data-theme", saved);
-  btn.addEventListener("click", () => {
-    const cur = document.documentElement.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-    const next = cur === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", next);
-    try { localStorage.setItem("colosseum-theme", next); } catch (e) {}
+let toastT;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 3400); }
+
+function wire() {
+  document.addEventListener("click", e => {
+    const ev = e.target.closest("[data-ev]"); if (ev) { e.preventDefault(); openPanel("evidence", ev.dataset.ev, !!state.panel); return; }
+    const sh = e.target.closest("[data-sheet]"); if (sh && !sh.disabled) { e.preventDefault(); if (state.sheet === sh.dataset.sheet) closeSheet(); else openSheet(sh.dataset.sheet); return; }
+    const orun = e.target.closest("[data-open-run]"); if (orun) { e.preventDefault(); openRun(orun.dataset.openRun); return; }
+    const oa = e.target.closest("[data-open-adv]"); if (oa) { closeSheet(); openAdviser(oa.dataset.openAdv); }
   });
-}
-function initEvents() {
-  document.addEventListener("click", e => { const c = e.target.closest("[data-ev]"); if (c) { e.preventDefault(); showEvidence(c.dataset.ev); } });
-  $("#dClose").addEventListener("click", closeDrawer); $("#scrim").addEventListener("click", closeDrawer);
-  document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
-  $("#replayBtn").addEventListener("click", () => { window.scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" }); replay(); });
-  $("#newBtn").addEventListener("click", openNewDecision);
+  $("#sideClose").addEventListener("click", closePanel); $("#sideBack").addEventListener("click", backPanel);
+  $("#sheetClose").addEventListener("click", closeSheet); $("#scrim").addEventListener("click", closeSheet);
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { if (state.sheet) closeSheet(); else closePanel(); } });
+  $("#replayBtn").addEventListener("click", replay);
+  $("#newBtn").addEventListener("click", () => openSheet("new"));
   $("#picker").addEventListener("change", e => openRun(e.target.value));
-  $("#signForm").addEventListener("submit", e => { e.preventDefault(); signOff("approve"); });
-  $("#overrideBtn").addEventListener("click", () => signOff("override"));
 }
 
 async function loadInitialData() {
@@ -710,18 +873,15 @@ async function loadInitialData() {
 }
 
 async function boot() {
-  try { initTheme(); } catch (e) { console.error(e); }
-  try { initEvents(); } catch (e) { console.error(e); }
+  try { wire(); } catch (e) { console.error(e); }
   await loadInitialData();
-  // render the sample at once so the page is never empty, then switch to live data if the API answers
-  state.vm = toViewModel(SAMPLE); state.runId = "sample"; renderAll(state.vm); fillPicker();
-  setTimeout(entrance, 250);
+  state.vm = toViewModel(SAMPLE); renderAll(state.vm); fillPicker();
+  setTimeout(entrance, 300);
   const runs = await detectApi();
   if (runs) {
-    state.mode = "live"; state.runs = runs;
-    const m = $("#mode"); m.textContent = "Live"; m.classList.add("live");
+    state.mode = "live"; state.runs = runs; const m = $("#mode"); m.textContent = "Live"; m.classList.add("live");
     const pick = runs.find(r => String(r.status).toLowerCase() === "done") || runs[0];
-    if (pick) await openRun(pick.run_id); else fillPicker();
+    if (pick) await openRun(pick.run_id); else { state.runId = ""; await openRun(""); }
   }
 }
 boot();
