@@ -4,6 +4,8 @@
 
 Built for the Google AI competition, theme *Future of Work & Enterprise Productivity*. Runs entirely on Google Cloud and Gemini.
 
+**Live demo:** https://colosseum-cutfjcshcq-el.a.run.app. Anyone can browse past decisions; starting a new run needs the access code shared with judges.
+
 ---
 
 ## The problem
