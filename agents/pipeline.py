@@ -34,6 +34,77 @@ from harness.router import route_decision
 logger = logging.getLogger(__name__)
 
 
+def format_cumulative_revision_instructions(
+    current_issues: list[MemoIssue | dict[str, Any]],
+    past_issues_history: list[list[MemoIssue | dict[str, Any]]],
+    fallback_instruction: str = "",
+) -> str:
+    """Format revision instructions for Scribe across multiple drafts.
+
+    Contains the cumulative, de-duplicated list of issues from all previous drafts:
+    first 'Fix now:' with the latest issues, then 'Still required (fixed earlier, don’t undo):'
+    with every earlier issue, kind plus detail, de-duplicated by kind and detail text.
+    Kept under ~2,500 characters by truncating each detail to 200 characters.
+    """
+    if not current_issues and not any(past_issues_history):
+        return fallback_instruction.strip()[:2500] if fallback_instruction else ""
+
+    seen_keys: set[tuple[str, str]] = set()
+    fix_now_items: list[tuple[str, str]] = []
+
+    for issue in current_issues:
+        if isinstance(issue, dict):
+            kind = str(issue.get("kind") or "").strip()
+            detail = str(issue.get("detail") or "").strip()
+        else:
+            kind = str(getattr(issue, "kind", "") or "").strip()
+            detail = str(getattr(issue, "detail", "") or "").strip()
+        if not kind and not detail:
+            continue
+        key = (kind, detail)
+        if key not in seen_keys:
+            seen_keys.add(key)
+            trunc_detail = detail[:200]
+            fix_now_items.append((kind or "issue", trunc_detail))
+
+    earlier_items: list[tuple[str, str]] = []
+    for past_list in past_issues_history:
+        for issue in past_list:
+            if isinstance(issue, dict):
+                kind = str(issue.get("kind") or "").strip()
+                detail = str(issue.get("detail") or "").strip()
+            else:
+                kind = str(getattr(issue, "kind", "") or "").strip()
+                detail = str(getattr(issue, "detail", "") or "").strip()
+            if not kind and not detail:
+                continue
+            key = (kind, detail)
+            if key not in seen_keys:
+                seen_keys.add(key)
+                trunc_detail = detail[:200]
+                earlier_items.append((kind or "issue", trunc_detail))
+
+    sections: list[str] = []
+    if fix_now_items:
+        lines = ["Fix now:"]
+        for kind, detail in fix_now_items:
+            lines.append(f"- [{kind}] {detail}")
+        sections.append("\n".join(lines))
+    elif fallback_instruction:
+        sections.append(f"Fix now:\n- {fallback_instruction.strip()[:200]}")
+
+    if earlier_items:
+        lines = ["Still required (fixed earlier, don’t undo):"]
+        for kind, detail in earlier_items:
+            lines.append(f"- [{kind}] {detail}")
+        sections.append("\n".join(lines))
+
+    result = "\n\n".join(sections).strip()
+    if len(result) > 2500:
+        result = result[:2500]
+    return result
+
+
 def run_decision(
     brief: DecisionBrief | dict[str, Any] | str | Path,
     run_id: Optional[str] = None,
@@ -232,6 +303,7 @@ def run_decision(
         revision_instructions = ""
         revision_number = 0
         previous_code_issues: set[tuple[str, str]] = set()
+        past_issues_history: list[list[MemoIssue]] = []
 
         while True:
             current_stage = "writing"
@@ -380,7 +452,12 @@ def run_decision(
             if revision_number >= max_revisions:
                 break
 
-            revision_instructions = verdict.revision_instructions
+            revision_instructions = format_cumulative_revision_instructions(
+                current_issues=verdict.issues,
+                past_issues_history=past_issues_history,
+                fallback_instruction=verdict.revision_instructions,
+            )
+            past_issues_history.append(list(verdict.issues))
             revision_number += 1
 
         # Step 7: Done
