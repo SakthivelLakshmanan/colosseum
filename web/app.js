@@ -647,14 +647,15 @@ function sheetNew() {
   const brief = state.newBrief || (state.vm && state.vm.brief && state.vm.brief.question ? state.vm.brief : SAMPLE.brief);
   state.newBrief = brief;
   return `<div class="grid2"><div class="box">
+      <div class="field"><label for="nid">Decision ID (give each new question its own, e.g. DEC-002)</label><input id="nid" value="${esc(brief.decision_id || "")}" placeholder="DEC-002" autocomplete="off"></div>
       <div class="field"><label for="nq">Question</label><textarea id="nq">${esc(brief.question)}</textarea></div>
       <div class="field"><label for="nA">Option A</label><input id="nA" value="${esc((brief.options || {}).A)}"></div>
       <div class="field"><label for="nB">Option B</label><input id="nB" value="${esc((brief.options || {}).B)}"></div>
       <div class="field"><label for="nx">Context</label><textarea id="nx">${esc(brief.context || "")}</textarea></div></div>
     <div class="box"><div class="field"><label for="nc">Constraints, one per line</label><textarea id="nc" style="min-height:120px">${esc((brief.constraints || []).join("\n"))}</textarea></div>
-      <div class="field"><span>Criteria and weights (%)</span>${(brief.criteria || []).map((c, i) => `<div class="crit-row"><input id="cn${i}" value="${esc(c.name)}" aria-label="Criterion"><input class="cw tabnum" id="cw${i}" type="number" min="0" max="100" value="${Math.round(c.weight * 100)}" aria-label="Weight"></div>`).join("")}<span class="wsum" id="wsum"></span></div>
+      <div class="field"><span>Criteria, weights (%) and owners</span><div class="crit-head"><span>Criterion</span><span>Weight</span><span>Owners (advisers who score it)</span></div>${(brief.criteria || []).map((c, i) => `<div class="crit-row"><input id="cn${i}" value="${esc(c.name)}" aria-label="Criterion"><input class="cw tabnum" id="cw${i}" type="number" min="0" max="100" value="${Math.round(c.weight * 100)}" aria-label="Weight"><input id="co${i}" value="${esc((c.owners || []).join(", "))}" aria-label="Owners" placeholder="e.g. ops, business"></div>`).join("")}<span class="wsum" id="wsum"></span></div>
       ${state.mode === "live" ? codeField("ncode") : ""}
-      <button class="btn primary" id="startBtn" type="button">Start the debate</button></div></div>`;
+      <span class="nerr" id="nerr" role="alert"></span><button class="btn primary" id="startBtn" type="button">Start the debate</button></div></div>`;
 }
 async function wireNew() {
   if (state.mode === "live" && !state.briefFetched) { state.briefFetched = true; try { const r = await fetch("/briefs/sample"); if (r.ok) { state.newBrief = await r.json(); openSheet("new", true); return; } } catch (e) {} }
@@ -665,7 +666,21 @@ async function wireNew() {
     const nb = JSON.parse(JSON.stringify(brief));
     nb.question = $("#nq").value.trim(); nb.options = { A: $("#nA").value.trim(), B: $("#nB").value.trim() };
     nb.constraints = $("#nc").value.split("\n").map(s => s.trim()).filter(Boolean); nb.context = $("#nx").value.trim();
-    nb.criteria = (nb.criteria || []).map((c, i) => ({ ...c, name: $("#cn" + i).value.trim() || c.name, weight: (Number($("#cw" + i).value) || 0) / 100 }));
+    const err = msg => { $("#nerr").textContent = msg; return null; };
+    const ADV = { finance: "finance", business: "business", customer: "customer", legal: "legal", infosec: "infosec", ops: "ops", operations: "ops", security: "infosec", "info sec": "infosec" };
+    const did = ($("#nid").value || "").trim().toUpperCase();
+    if (!/^[A-Z0-9][A-Z0-9-]{1,23}$/.test(did)) return err("Give the decision an ID using letters, numbers and dashes, for example DEC-002.");
+    if (nb.question !== brief.question && did === String(brief.decision_id || "").toUpperCase()) return err(`This is a new question, so give it its own Decision ID (not ${did}), for example DEC-002.`);
+    nb.decision_id = did;
+    let bad = "";
+    nb.criteria = (nb.criteria || []).map((c, i) => {
+      const name = $("#cn" + i).value.trim() || c.name;
+      const owners = $("#co" + i).value.split(/[,;/]+/).map(x => x.trim().toLowerCase()).filter(Boolean).map(x => ADV[x] || (bad = bad || x, x));
+      if (!owners.length) bad = bad || `(none for ${name})`;
+      return { ...c, name, weight: (Number($("#cw" + i).value) || 0) / 100, owners: [...new Set(owners)], good_looks_like: name === c.name ? c.good_looks_like : `Strongest result on ${name.toLowerCase()}` };
+    });
+    if (bad) return err(`Owners must come from: finance, business, customer, legal, infosec, ops. Check “${bad}”.`);
+    $("#nerr").textContent = "";
     if (state.mode !== "live") { closeSheet(); if (state.runId !== "sample") await openRun("sample", true); replay(); return; }
     $("#startBtn").disabled = true; $("#startBtn").textContent = "Starting…";
     try {

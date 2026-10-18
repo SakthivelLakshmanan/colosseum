@@ -447,7 +447,9 @@ td .f{font:400 12px var(--f-code); color:var(--ink-3)}
 .log li{display:grid; grid-template-columns:12px minmax(0,1fr); gap:12px; font-size:14px}
 .log li::before{content:""; width:10px; height:10px; border-radius:50%; margin-top:6px; background:var(--human); box-shadow:0 0 0 4px rgba(185,161,255,.2)}
 .log .act{color:var(--human); font-weight:600}
-.crit-row{display:grid; grid-template-columns:minmax(0,1fr) 72px; gap:8px}
+.crit-row{display:grid; grid-template-columns:minmax(0,1fr) 64px minmax(0,.8fr); gap:8px}
+.crit-head{display:grid; grid-template-columns:minmax(0,1fr) 64px minmax(0,.8fr); gap:8px; font-size:11.5px; color:var(--ink-3)}
+.nerr{color:var(--flag); font-size:13px; min-height:1em}
 .wsum.bad{color:var(--flag)} .wsum.ok{color:var(--keep)}
 .cons{display:flex; flex-wrap:wrap; gap:8px; padding:0; margin:0}
 .cons li{list-style:none; font-size:13px; color:var(--ink-2); border:1px solid var(--line-2); border-radius:99px; padding:4px 11px}
