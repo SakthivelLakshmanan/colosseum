@@ -110,6 +110,16 @@ def _normalize_unit_and_value(
     # 1. Currency units (lakh/crore) - check first so rates like '/ month' are not treated as time
     has_lakh = "lakh" in u or "lac" in u
     has_crore = "crore" in u or "cr" in u.split()
+    # Plain rupees (INR / Rs / ₹ / rupees with no lakh or crore): convert to lakh so they compare with lakh/crore evidence
+    is_rupee = u.startswith("₹") or bool(re.match(r"^(inr|rs\.?|rupees?)(\b|$)", u))
+    if is_rupee and not (has_lakh or has_crore):
+        base = float(value) / 100000.0
+        if "year" in u or "annual" in u:
+            return ("currency_lakh_month", base / 12.0)
+        if "month" in u:
+            return ("currency_lakh_month", base)
+        return ("currency_lakh_total", base)
+
     if has_lakh or has_crore:
         multiplier = 100.0 if has_crore else 1.0
         if "year" in u or "annually" in u:
