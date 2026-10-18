@@ -33,6 +33,7 @@ __all__ = [
     "generate_synthetic_facts",
     "run_retrieval_iterations",
     "setup_colosseum_scale_dataset",
+    "generate_conclusion",
     "main",
 ]
 
@@ -54,6 +55,27 @@ def calc_percentiles(values: list[float]) -> tuple[float, float]:
     p50 = s[1]
     p95 = s[1] * 0.1 + s[2] * 0.9
     return round(p50, 3), round(p95, 3)
+
+
+def generate_conclusion(scale_summary: dict[str, Any], pack_cap: int = 25) -> str:
+    """Generate objective conclusion sentence from measured benchmark numbers.
+
+    States retention %, noise admitted, pack cap, and p50/p95 build time in seconds,
+    with no adjectives like 'successfully' or 'sub-second', and explains that latency
+    includes first-time summary generation.
+    """
+    retention_pct = scale_summary.get("retention_pct", 0.0)
+    noise_admitted = scale_summary.get("noise_admitted", 0)
+    p50_s = scale_summary.get("latency_p50_s", 0.0)
+    p95_s = scale_summary.get("latency_p95_s", 0.0)
+    facts_in_store = scale_summary.get("facts_in_store", 0)
+
+    store_prefix = f"At scale ({facts_in_store:,} facts), " if facts_in_store else "At scale, "
+    return (
+        f"{store_prefix}retention was {retention_pct:.1f}%, noise admitted was {noise_admitted}, "
+        f"pack cap was {pack_cap} facts per adviser, p50 build time was {p50_s:.3f}s, and p95 build time was {p95_s:.3f}s. "
+        f"Latency includes first-time summary generation."
+    )
 
 
 def load_real_facts(client: bigquery.Client, project_id: str, dataset_name: str) -> list[dict[str, Any]]:
@@ -354,6 +376,10 @@ def write_scale_test_results(results: dict[str, Any], facts_requested: int, seed
     b_sum = results["summary"]["baseline"]
     s_sum = results["summary"]["scale"]
 
+    settings = get_settings()
+    pack_cap = getattr(getattr(settings, "retrieval", None), "max_facts_per_adviser", 25)
+    conclusion = generate_conclusion(s_sum, pack_cap=pack_cap)
+
     md_lines = [
         "# Colosseum Evidence Retrieval Scale Test",
         "",
@@ -366,12 +392,12 @@ def write_scale_test_results(results: dict[str, Any], facts_requested: int, seed
         "|---|---|---|---|",
         f"| **Facts in Store** | {b_sum['facts_in_store']:,} | {s_sum['facts_in_store']:,} | +{s_sum['facts_in_store'] - b_sum['facts_in_store']:,} facts (10x+ scale) |",
         f"| **Total Matching Facts** | {b_sum['total_matching_facts']:,} | {s_sum['total_matching_facts']:,} | +{s_sum['total_matching_facts'] - b_sum['total_matching_facts']:,} matching candidates |",
-        f"| **Facts in Packs** | {b_sum['total_pack_facts']:,} | {s_sum['total_pack_facts']:,} | Strictly bounded at max_facts=25 per adviser |",
+        f"| **Facts in Packs** | {b_sum['total_pack_facts']:,} | {s_sum['total_pack_facts']:,} | Strictly bounded at max_facts={pack_cap} per adviser |",
         f"| **Truncated Packs** | {'Yes' if b_sum['truncated'] else 'No'} | {'Yes' if s_sum['truncated'] else 'No'} | Aggregator triggered automatically on overflow |",
         f"| **Topic Summaries** | {b_sum['total_summaries']} | {s_sum['total_summaries']} | Generated for overflow facts and cached in Firestore |",
-        f"| **Latency p50 (Total)** | {b_sum['latency_p50_s']:.3f}s | {s_sum['latency_p50_s']:.3f}s | Sub-second retrieval with cached summaries |",
-        f"| **Latency p95 (Total)** | {b_sum['latency_p95_s']:.3f}s | {s_sum['latency_p95_s']:.3f}s | Handles cold-to-warm cache transitions gracefully |",
-        f"| **Baseline Fact Retention** | {b_sum['retention_pct']:.1f}% | {s_sum['retention_pct']:.1f}% | Zero critical baseline decision facts dropped |",
+        f"| **Latency p50 (Total)** | {b_sum['latency_p50_s']:.3f}s | {s_sum['latency_p50_s']:.3f}s | Retrieval and pack build time (p50) |",
+        f"| **Latency p95 (Total)** | {b_sum['latency_p95_s']:.3f}s | {s_sum['latency_p95_s']:.3f}s | Retrieval and pack build time (p95) |",
+        f"| **Baseline Fact Retention** | {b_sum['retention_pct']:.1f}% | {s_sum['retention_pct']:.1f}% | Share of baseline pack facts retained |",
         f"| **Noise Admitted (SYN-)** | {b_sum['noise_admitted']} | {s_sum['noise_admitted']} | Distractors filtered via entity-boosted ranking |",
         "",
         "## Per-Adviser Breakdown",
@@ -393,7 +419,7 @@ def write_scale_test_results(results: dict[str, Any], facts_requested: int, seed
     md_lines.extend([
         "",
         "## Conclusion",
-        f"At 10x scale ({s_sum['facts_in_store']:,} facts), evidence retrieval maintains {s_sum['retention_pct']:.1f}% retention of critical baseline facts via entity-boosted keyword ranking, while the aggregator successfully compresses overflow facts into topic summaries with sub-second retrieval latency.",
+        conclusion,
         "",
     ])
 
@@ -478,12 +504,15 @@ def main() -> None:
     # 7. Print terminal summary
     b_s = analysis["summary"]["baseline"]
     s_s = analysis["summary"]["scale"]
+    pack_cap = getattr(getattr(settings, "retrieval", None), "max_facts_per_adviser", 25)
+    conclusion = generate_conclusion(s_s, pack_cap=pack_cap)
+
     print("\n" + "=" * 70)
     print("COLOSSEUM EVIDENCE RETRIEVAL SCALE TEST RESULTS")
     print("=" * 70)
     print(f"Store Facts:       Baseline: {b_s['facts_in_store']:,} -> Scale: {s_s['facts_in_store']:,}")
     print(f"Matching Facts:    Baseline: {b_s['total_matching_facts']:,} -> Scale: {s_s['total_matching_facts']:,}")
-    print(f"Pack Facts:        Baseline: {b_s['total_pack_facts']} -> Scale: {s_s['total_pack_facts']} (max_facts=25)")
+    print(f"Pack Facts:        Baseline: {b_s['total_pack_facts']} -> Scale: {s_s['total_pack_facts']} (max_facts={pack_cap})")
     print(f"Truncated Packs:   Baseline: {b_s['truncated']} -> Scale: {s_s['truncated']}")
     print(f"Topic Summaries:   Baseline: {b_s['total_summaries']} -> Scale: {s_s['total_summaries']}")
     print(f"Latency p50:       Baseline: {b_s['latency_p50_s']:.3f}s -> Scale: {s_s['latency_p50_s']:.3f}s")
@@ -491,7 +520,7 @@ def main() -> None:
     print(f"Fact Retention:    {s_s['retention_pct']:.1f}%")
     print(f"Noise Admitted:    {s_s['noise_admitted']} facts")
     print("=" * 70)
-    print(f"Conclusion: At 10x scale ({s_s['facts_in_store']:,} facts), evidence retrieval maintains {s_s['retention_pct']:.1f}% retention of critical baseline facts via entity-boosted keyword ranking, while the aggregator successfully compresses overflow facts into topic summaries with sub-second retrieval latency.")
+    print(f"Conclusion: {conclusion}")
     print("=" * 70 + "\n")
 
 
