@@ -767,6 +767,10 @@ def _memo_evidence_block(memo_obj: Any) -> str:
     for bf in (memo_obj.blocking_findings or []):
         ids.extend(str(e).strip() for e in (bf.evidence_ids or []))
     ids.extend(str(e).strip() for e in (memo_obj.evidence_index or []))
+    memo_text = " ".join([memo_obj.recommendation or ""] + list(memo_obj.conditions or []) + list(memo_obj.phased_plan or [])
+                         + list(memo_obj.dissent or []) + list(memo_obj.assumptions or []) + list(memo_obj.numbers_to_watch or [])
+                         + [bf.text for bf in (memo_obj.blocking_findings or [])] + [kn.text for kn in (memo_obj.key_numbers or [])])
+    ids.extend(re.findall(r"\b[A-Z]{2,4}-\d{1,4}\b", memo_text))
     lines, seen = [], set()
     for eid in ids:
         if not eid or eid in seen or "brief" in eid.lower():
@@ -777,12 +781,14 @@ def _memo_evidence_block(memo_obj: Any) -> str:
             continue
         sup = f" [SUPERSEDED by {fact.superseded_by}]" if fact.superseded_by else ""
         lines.append(f"- {fact.fact_id}: {fact.statement}{sup}")
-        if len(lines) >= 80:
+        if len(lines) >= 120:
             break
     if not lines:
         return ""
     return ("\n\nEvidence cited in the memo (exact statements from the knowledge base). Judge evidence IDs only "
-            "against these statements; never guess what an ID contains:\n" + "\n".join(lines))
+            "against these statements; never guess what an ID contains. Code has already verified that every cited "
+            "ID exists and that every key-number formula computes to its value, so never report an ID as missing or "
+            "non-existent and never re-litigate formula arithmetic:\n" + "\n".join(lines))
 
 
 def check_memo(

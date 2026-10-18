@@ -31,3 +31,6 @@ Inputs:
 Reply with JSON matching the Memo schema in core/schemas.py.
 
 Formula rule for key numbers: every key number you calculate (anything not copied straight from one fact) must have kind "calculation" and a `formula` field containing only numbers and + - * / ( ), for example "40 + 25" or "65 / 10.4". The formula must evaluate to the value. Never leave `formula` empty or put the arithmetic only in the text. Cite the evidence IDs of its inputs, and BRIEF for numbers taken from the brief.
+
+Timeline rule: if the evidence sets a notice period, lead time or approval step before an action (for example written notice before reducing volume), the phased plan must schedule that action only after it, and say when the notice or step happens. Don't claim a phase complies with a notice period if it starts before the period ends.
+Estimate rule: for secondary estimates built on assumptions (blended rates, projections), state the assumption in the key number's text. Leave out estimates the decision doesn't need.

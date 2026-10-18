@@ -1,100 +1,68 @@
-"""Cleanup script for Colosseum scale test artifacts.
+"""Cleanup script for Colosseum scale test resources.
 
 Deletes:
-1. BigQuery dataset `colosseum_scale` (including all tables inside it).
-2. Firestore scale test cache collections (`scale_cache_summaries`, `scale_cache_embeddings`).
-
-Usage:
-    python scripts/scale_test_cleanup.py
+1. BigQuery dataset `colosseum_scale` and all its tables.
+2. Firestore scale test cache collections (`scale_test_cache_summaries`, `scale_test_cache_embeddings`, etc.).
 """
 from __future__ import annotations
 
-import argparse
 import logging
-from pathlib import Path
 import sys
 
-# Ensure repo root is on sys.path
-REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
 from google.cloud import bigquery
-from google.cloud import firestore
 
 from core.ledger import get_db
 from core.settings import get_settings
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("scale_test_cleanup")
 
 
-def delete_firestore_collection(db: firestore.Client, col_name: str, batch_size: int = 100) -> int:
-    """Recursively delete all documents in a Firestore collection in batches."""
-    col_ref = db.collection(col_name)
-    total_deleted = 0
-
-    while True:
-        docs = list(col_ref.limit(batch_size).stream())
-        if not docs:
-            break
-        batch = db.batch()
-        for doc in docs:
-            batch.delete(doc.reference)
-        batch.commit()
-        total_deleted += len(docs)
-        logger.info("Deleted %d documents from Firestore collection '%s'...", total_deleted, col_name)
-
-    return total_deleted
-
-
-def cleanup(scale_dataset: str = "colosseum_scale", cache_prefix: str = "scale_"):
+def cleanup_scale_test() -> None:
     settings = get_settings()
-    project_id = settings.project_id
-    location = settings.bigquery.location
 
-    logger.info("=== Starting Scale Test Cleanup ===")
-    logger.info("Project: %s | Location: %s", project_id, location)
-    logger.info("Scale Dataset to delete: %s", scale_dataset)
-
-    # 1. Delete BigQuery colosseum_scale dataset
-    bq_client = bigquery.Client(project=project_id, location=location)
-    dataset_ref = bq_client.dataset(scale_dataset)
+    # 1. Delete BigQuery dataset colosseum_scale
+    dataset_name = "colosseum_scale"
+    dataset_id = f"{settings.project_id}.{dataset_name}"
+    bq_client = bigquery.Client(project=settings.project_id, location=settings.bigquery.location)
 
     try:
-        bq_client.delete_dataset(dataset_ref, delete_contents=True, not_found_ok=True)
-        logger.info("BigQuery dataset `%s.%s` successfully deleted.", project_id, scale_dataset)
-        print(f"[BigQuery] Deleted dataset {project_id}.{scale_dataset}")
-    except Exception as exc:
-        logger.error("Failed to delete BigQuery dataset `%s.%s`: %s", project_id, scale_dataset, exc)
+        bq_client.delete_dataset(dataset_id, delete_contents=True, not_found_ok=True)
+        print(f"[cleanup] Deleted BigQuery dataset '{dataset_id}' (and all contained tables).")
+    except Exception as e:
+        print(f"[cleanup] Note during BigQuery dataset deletion: {e}")
 
     # 2. Delete Firestore scale cache collections
-    try:
-        db = get_db()
-        collections_to_clean = [
-            f"{cache_prefix}cache_summaries",
-            f"{cache_prefix}cache_embeddings",
-        ]
+    db = get_db()
+    collections_to_clean = [
+        "scale_test_cache_summaries",
+        "scale_test_cache_embeddings",
+        "scale_test_base_cache_summaries",
+        "scale_test_base_cache_embeddings",
+    ]
 
-        for col_name in collections_to_clean:
-            deleted_count = delete_firestore_collection(db, col_name)
-            logger.info("Deleted %d documents from Firestore collection '%s'.", deleted_count, col_name)
-            print(f"[Firestore] Deleted {deleted_count} documents from {col_name}")
+    total_deleted_docs = 0
+    for col_name in collections_to_clean:
+        try:
+            col_ref = db.collection(col_name)
+            docs = list(col_ref.stream())
+            if not docs:
+                continue
 
-    except Exception as exc:
-        logger.error("Failed to clean up Firestore scale caches: %s", exc)
+            batch_size = 100
+            for i in range(0, len(docs), batch_size):
+                batch = db.batch()
+                for doc in docs[i : i + batch_size]:
+                    batch.delete(doc.reference)
+                batch.commit()
 
-    logger.info("=== Scale Test Cleanup Finished ===")
+            total_deleted_docs += len(docs)
+            print(f"[cleanup] Deleted {len(docs)} documents from Firestore collection '{col_name}'.")
+        except Exception as e:
+            print(f"[cleanup] Note during Firestore collection '{col_name}' deletion: {e}")
 
-
-def main():
-    parser = argparse.ArgumentParser(description="Cleanup Colosseum Scale Test Resources")
-    parser.add_argument("--scale-dataset", type=str, default="colosseum_scale", help="Scale BigQuery dataset name to delete")
-    parser.add_argument("--cache-prefix", type=str, default="scale_", help="Cache prefix for collections to delete")
-    args = parser.parse_args()
-
-    cleanup(scale_dataset=args.scale_dataset, cache_prefix=args.cache_prefix)
+    print(f"[cleanup] Scale test cleanup complete. Total Firestore documents removed: {total_deleted_docs}.")
 
 
 if __name__ == "__main__":
-    main()
+    cleanup_scale_test()

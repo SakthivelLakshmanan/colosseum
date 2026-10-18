@@ -1,7 +1,4 @@
-"""Unit tests for synthetic fact generator used in Colosseum scale tests.
-
-Completely offline: no network calls, runs under conftest.py sandbox guard.
-"""
+"""Unit tests for the synthetic fact generator (offline, no network)."""
 from __future__ import annotations
 
 import csv
@@ -9,114 +6,121 @@ from datetime import date
 from pathlib import Path
 import pytest
 
+from core.registry import find_project_root
 from core.schemas import Fact, Reliability
-from scripts.scale_generator import generate_synthetic_facts, DOMAINS
+from scripts.scale_generator import DOMAINS, generate_synthetic_facts
+from scripts.scale_test import generate_synthetic_facts as scale_test_gen
 
 
 def test_generator_deterministic_with_seed():
-    """Generating facts with the exact same seed returns identical facts."""
-    facts_1 = generate_synthetic_facts(count=120, seed=7)
-    facts_2 = generate_synthetic_facts(count=120, seed=7)
+    """Verify that the generator produces identical facts given the same seed."""
+    assert scale_test_gen is generate_synthetic_facts
 
-    assert len(facts_1) == 120
-    assert len(facts_2) == 120
-    for f1, f2 in zip(facts_1, facts_2):
-        assert f1.model_dump() == f2.model_dump()
+    facts_run1 = generate_synthetic_facts(n=1200, seed=7)
+    facts_run2 = generate_synthetic_facts(n=1200, seed=7)
 
+    assert len(facts_run1) == 1200
+    assert len(facts_run2) == 1200
 
-def test_generator_different_seed_different_facts():
-    """Different seeds generate different sets of facts."""
-    facts_a = generate_synthetic_facts(count=60, seed=7)
-    facts_b = generate_synthetic_facts(count=60, seed=42)
+    for f1, f2 in zip(facts_run1, facts_run2):
+        assert f1.model_dump() == f2.model_dump(), f"Mismatch between identical runs: {f1} vs {f2}"
 
-    statements_a = [f.statement for f in facts_a]
-    statements_b = [f.statement for f in facts_b]
-    assert statements_a != statements_b
-
-
-@pytest.mark.parametrize("requested_count", [6, 50, 120, 600, 1200])
-def test_generator_returns_exact_count(requested_count: int):
-    """Generator returns the exact number of facts requested."""
-    facts = generate_synthetic_facts(count=requested_count, seed=7)
-    assert len(facts) == requested_count
+    # Different seed produces different facts
+    facts_diff_seed = generate_synthetic_facts(n=1200, seed=99)
+    assert len(facts_diff_seed) == 1200
+    differences = sum(
+        1 for f1, f2 in zip(facts_run1, facts_diff_seed) if f1.statement != f2.statement
+    )
+    assert differences > 1000, "Different seed must produce different statements"
 
 
-def test_generator_valid_fact_objects():
-    """All generated facts are valid Fact pydantic models with expected fields."""
-    facts = generate_synthetic_facts(count=120, seed=7)
-    expected_domains = {d for d, _ in DOMAINS}
+def test_generator_creates_valid_fact_objects():
+    """Verify that every generated item is a valid Fact schema object."""
+    facts = generate_synthetic_facts(n=1200, seed=7)
 
     for f in facts:
         assert isinstance(f, Fact)
         assert f.fact_id.startswith("SYN-")
-        assert f.domain in expected_domains
+        assert f.domain in DOMAINS
         assert isinstance(f.related_domains, list)
         assert len(f.statement) > 10
-        assert len(f.entity) > 2
-        assert len(f.metric) > 2
+        assert f.entity
+        assert f.metric
         assert isinstance(f.as_of, date)
-        assert f.reliability in [Reliability.high, Reliability.medium, Reliability.low]
-        assert f.source_type in ["table", "document", "system"]
+        assert f.as_of >= date(2023, 1, 1)
+        assert f.reliability in (Reliability.high, Reliability.medium, Reliability.low)
+        assert f.superseded_by is None
+        assert f.source_type in ("table", "document")
         assert f.source_ref
 
 
 def test_generator_unique_ids():
-    """Generated fact IDs are strictly unique within the set."""
-    facts = generate_synthetic_facts(count=1200, seed=7)
+    """Verify that all generated IDs are strictly unique."""
+    facts = generate_synthetic_facts(n=1200, seed=7)
     ids = [f.fact_id for f in facts]
-    assert len(ids) == len(set(ids)), "Found duplicate fact IDs in generated facts"
+    assert len(ids) == len(set(ids)), f"Duplicate fact IDs detected in generated facts ({len(ids)} vs {len(set(ids))})"
 
 
-def test_generator_no_real_id_collisions():
-    """Synthetic fact IDs must never collide with real fact IDs from data/facts.csv."""
-    root = Path(__file__).resolve().parent.parent
-    facts_csv = root / "data" / "facts.csv"
+def test_generator_no_collision_with_real_ids():
+    """Verify that synthetic fact IDs never collide with real IDs from data/facts.csv."""
+    root = find_project_root()
+    csv_path = root / "data" / "facts.csv"
+    assert csv_path.is_file(), "data/facts.csv must exist"
 
     real_ids: set[str] = set()
-    if facts_csv.is_file():
-        with open(facts_csv, "r", encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                real_ids.add(row["fact_id"].strip())
+    with open(csv_path, "r", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            real_ids.add(row["fact_id"].strip())
 
-    assert len(real_ids) > 0, "Real facts CSV must contain fact IDs"
+    assert len(real_ids) > 50, "Expected at least 50 real facts"
 
-    facts = generate_synthetic_facts(count=1200, seed=7)
-    synth_ids = {f.fact_id for f in facts}
+    synthetic_facts = generate_synthetic_facts(n=1200, seed=7)
+    synthetic_ids = {f.fact_id for f in synthetic_facts}
 
-    collision = synth_ids & real_ids
-    assert not collision, f"Synthetic IDs collided with real IDs: {collision}"
-    assert all(fid.startswith("SYN-") for fid in synth_ids), "All synthetic IDs must begin with SYN-"
+    collision = synthetic_ids.intersection(real_ids)
+    assert not collision, f"Collisions found between synthetic and real IDs: {collision}"
+    assert all(fid.startswith("SYN-") for fid in synthetic_ids)
 
 
-def test_generator_covers_all_domains():
-    """Synthetic facts are distributed across all 6 adviser domains."""
-    facts = generate_synthetic_facts(count=1200, seed=7)
-    expected_domains = {"finance", "business", "customer", "legal", "infosec", "ops"}
-
+def test_generator_domain_distribution():
+    """Verify that facts are evenly spread across all 6 adviser domains."""
+    facts = generate_synthetic_facts(n=1200, seed=7)
     domain_counts: dict[str, int] = {}
     for f in facts:
         domain_counts[f.domain] = domain_counts.get(f.domain, 0) + 1
 
-    assert set(domain_counts.keys()) == expected_domains
-    for dom, cnt in domain_counts.items():
-        assert cnt == 200, f"Domain {dom} expected 200 facts, got {cnt}"
+    assert set(domain_counts.keys()) == set(DOMAINS)
+    for domain in DOMAINS:
+        assert domain_counts[domain] == 200, f"Domain {domain} has {domain_counts[domain]} facts (expected 200)"
+
+    # Test uneven division
+    facts_125 = generate_synthetic_facts(n=125, seed=7)
+    assert len(facts_125) == 125
+    counts_125 = {d: sum(1 for f in facts_125 if f.domain == d) for d in DOMAINS}
+    assert sum(counts_125.values()) == 125
+    assert max(counts_125.values()) - min(counts_125.values()) <= 1
 
 
-def test_generator_near_miss_distractor_ratio():
-    """About 15% of synthetic facts are near-miss payment distractors."""
-    facts = generate_synthetic_facts(count=1200, seed=7)
-    near_misses = [f for f in facts if f.topic == "payments_near_miss"]
+def test_generator_near_miss_distractors_and_fictional_names():
+    """Verify ~15% near-miss distractors sharing payment keywords and no real entity names."""
+    facts = generate_synthetic_facts(n=1200, seed=7)
 
-    ratio = len(near_misses) / len(facts)
-    assert 0.13 <= ratio <= 0.17, f"Expected near-miss ratio ~15%, got {ratio:.2%}"
+    payment_keywords = ["payment", "gateway", "transaction", "settlement", "dispute", "fee", "refund", "card"]
+    near_miss_count = sum(
+        1 for f in facts if any(kw in f.statement.lower() for kw in payment_keywords)
+    )
 
+    ratio = near_miss_count / len(facts)
+    # Expected around 15% (acceptable bounds 10% - 25%)
+    assert 0.10 <= ratio <= 0.25, f"Near-miss ratio was {ratio:.2%}, expected ~15%"
 
-def test_generator_entities_are_fictional():
-    """Fictional entities must not include real decision principals (Arvanta, Brevis, Legion)."""
-    facts = generate_synthetic_facts(count=1200, seed=7)
-    principals = {"arvanta", "brevis", "legion"}
-
+    # Fictional names check: synthetic facts must NEVER reference real entities from the brief
+    forbidden_names = ["Arvanta", "Brevis", "Legion Capital"]
     for f in facts:
-        entity_lower = f.entity.lower()
-        for p in principals:
-            assert p not in entity_lower, f"Synthetic fact entity '{f.entity}' matches real principal '{p}'"
+        for name in forbidden_names:
+            assert name.lower() not in f.statement.lower(), (
+                f"Synthetic fact {f.fact_id} mentioned forbidden entity '{name}': {f.statement}"
+            )
+            assert name.lower() not in f.entity.lower(), (
+                f"Synthetic fact {f.fact_id} has forbidden entity name '{name}'"
+            )

@@ -31,4 +31,6 @@ Memo:
 Accepted claims (after claim moderation):
 {claims}
 
+Severity guide: use WRONG only for an error that would mislead the decision owner: a material number that is wrong, a fact contradicted by its evidence, a recommendation that doesn't follow, or an ignored blocker. Use INCOMPLETE for missing items and for debatable assumptions in secondary estimates (say which assumption to state). Don't fail a memo for wording or style. Raise each problem once, clearly, so one revision can fix all of them.
+
 Reply as JSON: {{"verdict": "PASS|INCOMPLETE|WRONG", "issues": [{{"kind": "...", "detail": "...", "evidence_ids": []}}], "revision_instructions": "..."}}
