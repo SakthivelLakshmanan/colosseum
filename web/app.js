@@ -259,6 +259,11 @@ function hoverSeat(id, on) {
 
 /* ---------------- session state: idle / live / done / failed ---------------- */
 function arenaKind(vm) { if (!vm || vm.status === "idle") return "idle"; if (vm.status === "done") return "done"; if (vm.status === "failed") return "failed"; return "live"; }
+/* verdict codes stay PASS / INCOMPLETE / WRONG in the data; people see these labels */
+const VLAB = { PASS: "PASS", INCOMPLETE: "NEEDS EVIDENCE", WRONG: "HELD BACK" };
+const VSENT = { PASS: "Pass", INCOMPLETE: "Needs evidence", WRONG: "Held back" };
+const vlab = v => VLAB[v] || v;
+const vsent = v => VSENT[v] || v;
 function arrivedCount(vm) { if (state.replaying && state.replayArrived != null) return state.replayArrived; return vm.positions.filter(p => vm.selected.includes(p.adviser_id)).length; }
 function setSession(kind, stageIdx) {
   const vm = state.vm, app = $("#app");
@@ -275,13 +280,13 @@ function setSession(kind, stageIdx) {
   } else if (kind === "failed") { const sg = String((vm && (vm.run.failed_stage || vm.run.stage)) || "").toLowerCase(); st = "Run stopped"; dt = sg ? "Stopped at " + sg : "See the timeline"; word = "STOPPED"; s1 = sg || ""; }
   else {
     const k = stanceKey(vm && vm.memo && vm.memo.stance);
-    st = "Session closed"; dt = `Verdict ${verdict}. Ready for sign-off.`; word = verdict;
+    st = "Session closed"; dt = `Verdict: ${vsent(verdict)}. Ready for sign-off.`; word = vlab(verdict);
     s1 = k === "c" ? "Conditional move" : k === "b" ? "Recommends B" : k === "a" ? "Recommends A" : "Recommendation ready";
     s2 = k === "c" ? "to option B, in phases" : "Click to read the verdict";
   }
   $("#sessState").textContent = st; $("#sessDetail").textContent = dt;
   const coreEl = $("#core"); if (coreEl) coreEl.setAttribute("aria-label", kind === "idle" ? "Start a new decision or open a saved run" : kind === "done" ? "Open the verdict" : "Open the session log");
-  const w = $("#coreWord"); if (w) { $("#coreId").textContent = (vm && vm.brief.decision_id) || ""; w.textContent = word; w.style.fontSize = word.length > 8 ? "24px" : ""; $("#coreSub1").textContent = s1; $("#coreSub2").textContent = s2; }
+  const w = $("#coreWord"); if (w) { $("#coreId").textContent = (vm && vm.brief.decision_id) || ""; w.textContent = word; w.style.fontSize = word.length > 10 ? "17px" : word.length > 8 ? "23px" : ""; $("#coreSub1").textContent = s1; $("#coreSub2").textContent = s2; }
 }
 function setSegments(idx, failed) {
   $$("#arena .seg").forEach(seg => {
@@ -334,7 +339,7 @@ function stepHint(i, vm) {
     case "moderating": { let f = 0, x = 0; vm.positions.forEach(p => { const t = claimStats(vm, p.adviser_id); f += t.f; x += t.s; }); return x || f ? `${x} struck, ${f} flagged` : "All claims held up"; }
     case "scoring": { const o = Object.entries(tot).sort((a, b) => b[1] - a[1]); return o.length > 1 ? `${o[0][0]} leads ${Number(o[0][1]).toFixed(2)} to ${Number(o[1][1]).toFixed(2)}` : "Scores ready"; }
     case "writing": { const k = stanceKey(vm.memo && vm.memo.stance); return k === "c" ? "Conditional, in phases" : k === "b" ? "Go with option B" : k === "a" ? "Go with option A" : "Memo ready"; }
-    case "checking": { const v = upper(vm.final && vm.final.verdict); const r = Math.max(0, vm.finals.length - 1); return v ? `${v}${r ? ` after ${r} revision${r > 1 ? "s" : ""}` : " first time"}` : "Checked"; }
+    case "checking": { const v = upper(vm.final && vm.final.verdict); const r = Math.max(0, vm.finals.length - 1); return v ? `${vsent(v)}${r ? ` after ${r} revision${r > 1 ? "s" : ""}` : " first time"}` : "Checked"; }
     case "done": { const d = last(vm.decisions); return d ? `${String(d.action).toLowerCase() === "override" ? "Overridden" : "Approved"} by ${String(d.decided_by || "").split(",")[0]}` : "Waiting for you"; }
   }
   return "";
@@ -457,8 +462,8 @@ function panelVerdict() {
   const nums = (m.key_numbers || []).slice(0, 4);
   const conds = (m.conditions || []).map(c => withChips(c));
   $("#sideBody").innerHTML = `
-    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><span class="vd-word">${esc(v)}</span><span class="pill sp-${k}">${esc(k === "c" ? "Conditional" : stanceLabel(k))}</span></div>
-    <p class="muted" style="font-size:13px">${revs === 0 ? "Passed the moderator's final check first time." : `The moderator sent the memo back ${revs === 1 ? "once" : revs + " times"} before this verdict.`}</p>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><span class="vd-word">${esc(vlab(v))}</span><span class="pill sp-${k}">${esc(k === "c" ? "Conditional" : stanceLabel(k))}</span></div>
+    <p class="muted" style="font-size:13px">${v === "WRONG" ? `The quality check caught an error the scribe couldn't fix in ${revs} rewrite${revs === 1 ? "" : "s"}, so the memo was held back. Open Quality check to see what it caught before you decide.` : v === "INCOMPLETE" ? `What the memo says checks out, but evidence or a condition is missing${revs ? ` after ${revs} rewrite${revs === 1 ? "" : "s"}` : ""}. Open Quality check to see what.` : revs === 0 ? "Passed the moderator's final check first time." : `The moderator sent the memo back ${revs === 1 ? "once" : revs + " times"} before this verdict.`}</p>
     <p class="rec">${esc(m.recommendation || "")}</p>
     ${nums.length ? `<div class="stats">${nums.map(n => `<div class="stat"><b class="tabnum">${esc(fmtNum(n.value, n.unit).replace(/\s*\/\s*month$/, "").replace(/ of volume$/, ""))}</b><span>${esc(n.text)}</span></div>`).join("")}</div>` : ""}
     ${conds.length ? `<div class="h4">Conditions before any volume moves</div><ul class="conds">${conds.map(w => `<li><span>${esc(w.text)}</span></li>`).join("")}</ul>` : ""}
@@ -467,7 +472,7 @@ function panelVerdict() {
 function panelStart() {
   $("#sideTitle").textContent = "Start here";
   const runs = state.mode === "live" ? (state.runs || []).slice(0, 8) : [];
-  const row = (id, label, v, sub) => `<li><button class="sg" type="button" data-open-run="${esc(id)}"><div><b>${esc(label)}</b><span>${esc(sub)}</span></div>${v ? `<span class="vt ${esc(v)}">${esc(v)}</span>` : "<span></span>"}<span class="arr">→</span></button></li>`;
+  const row = (id, label, v, sub) => `<li><button class="sg" type="button" data-open-run="${esc(id)}"><div><b>${esc(label)}</b><span>${esc(sub)}</span></div>${v ? `<span class="vt ${esc(v)}">${esc(vlab(v))}</span>` : "<span></span>"}<span class="arr">→</span></button></li>`;
   const list = runs.map(r => {
     const fv = r.final_verdict; const v = upper(typeof fv === "string" ? fv : fv && fv.verdict) || upper(r.status);
     const dec = r.decision_id || (r.brief && r.brief.decision_id) || "";
@@ -580,7 +585,7 @@ function sheetChecks(vm) {
 }
 function sheetFinal(vm) {
   return `<div class="grid2"><div class="box"><h3>Drafts</h3><ul class="mod-list">${vm.finals.map((f, i) => { const v = upper(f.verdict); const iss = (f.issues || []);
-      return `<li><span class="vt ${esc(v)}">${esc(v)}</span><div><b style="font-weight:500">Draft ${i + 1}</b>${v === "PASS" ? `<div class="muted" style="font-size:13px;margin-top:4px">Makes sense, complete and correct.</div>` : iss.map(x => `<div class="muted" style="font-size:13px;margin-top:4px">${esc(x.detail)}</div>`).join("")}${f.revision_instructions ? `<div style="font-size:13px;margin-top:6px;color:var(--ink-2)">Sent back with: ${esc(f.revision_instructions)}</div>` : ""}</div></li>`; }).join("") || "<li><div>No check yet.</div></li>"}</ul></div>
+      return `<li><span class="vt ${esc(v)}">${esc(vlab(v))}</span><div><b style="font-weight:500">Draft ${i + 1}</b>${v === "PASS" ? `<div class="muted" style="font-size:13px;margin-top:4px">Makes sense, complete and correct.</div>` : iss.map(x => `<div class="muted" style="font-size:13px;margin-top:4px">${esc(x.detail)}</div>`).join("")}${f.revision_instructions ? `<div style="font-size:13px;margin-top:6px;color:var(--ink-2)">Sent back with: ${esc(f.revision_instructions)}</div>` : ""}</div></li>`; }).join("") || "<li><div>No check yet.</div></li>"}</ul></div>
     <div class="box"><h3>What the quality check does</h3><p class="explain">Before you see the memo, the moderator checks that every adviser is represented, every criterion is covered, numbers match the evidence, blocking issues are handled, and dissent is recorded. If something is missing it sends the memo back to be rewritten, up to two times.</p></div></div>`;
 }
 function sheetScorecard(vm) {
@@ -606,7 +611,7 @@ function sheetMemo(vm) {
       <h3>Dissent on record</h3><ul class="dis">${L(m.dissent).map(w => `<li>${esc(w.text)} ${w.ids.map(chip).join(" ")}</li>`).join("") || "<li>No adviser disagreed.</li>"}</ul></div>
     <div class="box"><h3>Key numbers</h3><div class="tw"><table><tbody>${(m.key_numbers || []).map(k => `<tr><td>${esc(k.text)}<div class="f">${esc(k.formula || "")}</div></td><td class="num">${esc(fmtNum(k.value, k.unit))}</td><td>${(k.evidence_ids || []).map(chip).join(" ")}</td></tr>`).join("")}</tbody></table></div></div>
     <div class="box"><h3>Numbers to watch</h3><ul class="dis">${L(m.numbers_to_watch).map(w => `<li>${esc(w.text)} ${w.ids.map(chip).join(" ")}</li>`).join("")}</ul>
-      <h3>Moderator's final check</h3><div class="drafts">${vm.finals.map((f, i) => { const v = upper(f.verdict); const iss = (f.issues || [])[0]; return `<div>Draft ${i + 1} <span class="vt ${esc(v)}">${esc(v)}</span> ${esc(v === "PASS" ? "Makes sense, complete and correct." : iss ? iss.detail : "")}</div>`; }).join("")}</div></div>
+      <h3>Moderator's final check</h3><div class="drafts">${vm.finals.map((f, i) => { const v = upper(f.verdict); const iss = (f.issues || [])[0]; return `<div>Draft ${i + 1} <span class="vt ${esc(v)}">${esc(vlab(v))}</span> ${esc(v === "PASS" ? "Makes sense, complete and correct." : iss ? iss.detail : "")}</div>`; }).join("")}</div></div>
   </div>`;
 }
 function sheetSign(vm) {
@@ -724,7 +729,7 @@ async function replay() {
   $$("#arena .seat").forEach(g => g.classList.remove("arrived", "pop"));
   clearInterval(tick); state.replaying = false; state.replayArrived = null;
   updateClock(); setSession(arenaKind(vm), 6); burst(); renderTimeline();
-  feed(`<span class="e-ok">Verdict ${esc(upper(vm.final && vm.final.verdict))}</span>. Ready for sign-off.`);
+  feed(`<span class="e-ok">Verdict: ${esc(vsent(upper(vm.final && vm.final.verdict)))}</span>. Ready for sign-off.`);
   $("#replayBtn").disabled = false;
   sweepPath();
   await sleep(1200); openPanel("verdict");
@@ -770,7 +775,7 @@ function runVerdict(r) {
   if (st && st !== "done") return "RUNNING";
   return v || "DONE";
 }
-const VWORD = { PASS: "Passed the quality check", INCOMPLETE: "Incomplete", WRONG: "Failed the quality check", FAILED: "Run stopped", RUNNING: "In session", DONE: "Finished" };
+const VWORD = { PASS: "Passed the quality check", INCOMPLETE: "Needs evidence: something is missing", WRONG: "Held back: the check caught an error", FAILED: "Run stopped", RUNNING: "In session", DONE: "Finished" };
 const recLabel = st => { const k = stanceKey(st); return k === "c" ? "Conditional move" : k === "b" ? "Recommends B" : k === "a" ? "Recommends A" : ""; };
 function sampleItem() {
   const m = SAMPLE.memo || last(SAMPLE.memo_versions || []) || {};
@@ -799,15 +804,15 @@ function renderOmni() {
   if (!$("#omni").classList.contains("open")) return;
   const raw = $("#histQ").value.trim(), terms = raw.toLowerCase().split(/\s+/).filter(Boolean);
   const all = histItems(), smp = sampleItem();
-  const match = i => { const hay = [i.q, i.dec, i.v, VWORD[i.v], i.rec, i.when, i.text].join(" ").toLowerCase(); return terms.every(t => hay.includes(t)); };
+  const match = i => { const hay = [i.q, i.dec, i.v, vlab(i.v), VWORD[i.v], i.rec, i.when, i.text].join(" ").toLowerCase(); return terms.every(t => hay.includes(t)); };
   let list = all.filter(match); if (match(smp)) list.push(smp);
   if (!terms.length) list = list.slice(0, 6);
   const row = i => `<button type="button" role="option" class="hrow" data-open-run="${esc(i.id)}">
       <span class="hi">${terms.length ? ICON_SEARCH : ICON_CLOCK}</span>
       <span class="hq">${hlText(i.q || i.dec || "Untitled decision", terms)}<span class="hd"> – <span class="v-${esc(i.v)}">${esc(VWORD[i.v] || i.v)}</span>${i.rec && !["FAILED", "RUNNING"].includes(i.v) ? " · " + esc(i.rec) : ""} · ${esc(i.when)}</span>${state.runId === i.id ? '<span class="now">open now</span>' : ""}</span>
-      <span class="vt ${esc(i.v)}">${esc(i.v)}</span></button>`;
+      <span class="vt ${esc(i.v)}">${esc(vlab(i.v))}</span></button>`;
   $("#histList").innerHTML = (terms.length ? "" : `<div class="hl-h">Recent decisions</div>`) +
-    (list.map(row).join("") || `<div class="hl-empty">No past decision matches “${esc(raw)}”. Try a word from the question, a verdict like “incomplete”, or a month.</div>`);
+    (list.map(row).join("") || `<div class="hl-empty">No past decision matches “${esc(raw)}”. Try a word from the question, a verdict like “held back”, or a month.</div>`);
   const n = $$("#histList .hrow").length; state.histAct = Math.max(0, Math.min(state.histAct || 0, n - 1));
   $$("#histList .hrow").forEach((b, k) => b.classList.toggle("act", k === state.histAct));
 }
@@ -836,7 +841,7 @@ function renderRecords() {
     <div class="rec-body">${items.map(i => `<div class="rec-item ${state.recOpen === i.id ? "open" : ""} ${state.runId === i.id ? "cur" : ""}">
       <div class="rec-row">
         <button class="rec-q" type="button" data-open-run="${esc(i.id)}"><span>${esc(i.q || i.dec || "Untitled decision")}</span><span class="m">${esc([i.dec, i.when].filter(Boolean).join(" · "))}</span></button>
-        <div class="rec-v"><span class="vt ${esc(i.v)}">${esc(i.v)}</span><span>${esc((["FAILED", "RUNNING"].includes(i.v) ? "" : i.rec) || VWORD[i.v] || "")}</span></div>
+        <div class="rec-v"><span class="vt ${esc(i.v)}">${esc(vlab(i.v))}</span><span>${esc((["FAILED", "RUNNING"].includes(i.v) ? "" : i.rec) || VWORD[i.v] || "")}</span></div>
         <button class="rec-more-btn" type="button" data-rec-more="${esc(i.id)}" aria-expanded="${state.recOpen === i.id}">${state.recOpen === i.id ? "Show less" : "Read more"} ${chev}</button>
       </div>
       <div class="rec-more">${more(i)}</div></div>`).join("")}</div>`;
@@ -888,7 +893,7 @@ async function openRun(id, quiet) {
           }
           if (["done", "failed"].includes(nvm.status)) {
             clearInterval(state.poll); clearInterval(clockTimer); loadRunList();
-            if (nvm.status === "done") { burst(); feed(`<span class="e-ok">Verdict ${esc(upper(nvm.final && nvm.final.verdict))}</span>`); toast("Debate finished. The verdict is ready."); setTimeout(() => openPanel("verdict"), 900); }
+            if (nvm.status === "done") { burst(); feed(`<span class="e-ok">Verdict: ${esc(vsent(upper(nvm.final && nvm.final.verdict)))}</span>`); toast("Debate finished. The verdict is ready."); setTimeout(() => openPanel("verdict"), 900); }
             else toast("The run stopped. See the timeline.");
           }
         } catch (e) { console.warn("[colosseum] poll failed", e); }

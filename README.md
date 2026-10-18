@@ -21,7 +21,7 @@ You write a decision brief: the question, the options, the constraints and the c
 3. **Checks claims.** A Moderator verifies every claim against the evidence the adviser actually retrieved in this run. A made-up number or a document the adviser never opened is flagged.
 4. **Scores in code, not by the model.** The weighted scorecard is computed in Python from the advisers' scores, and InfoSec can **block** an option outright.
 5. **Writes the memo.** A Scribe drafts the recommendation, conditions and phased plan.
-6. **Does a final check.** The Moderator grades the memo PASS / INCOMPLETE / WRONG: every number must trace to a fact or a shown calculation. It allows up to 2 revisions and keeps the best draft.
+6. **Does a final check.** The Moderator grades the memo **Pass**, **Needs evidence** (correct but something is missing) or **Held back** (it caught an error): every number must trace to a fact or a shown calculation. It allows up to 2 revisions and keeps the best draft. A held-back memo is the safety net working: the person deciding sees exactly what the check caught.
 7. **Leaves the decision to a human.** A person approves or overrides, with a reason, and that is recorded.
 
 The demo company is **Legion Capital**, a fictional Indian NBFC. Its first decision (DEC-001): *should it move 40% of its payment volume (about ₹600 crore a month) from Arvanta Payments to Brevis Pay?* All companies, people and figures are fictional.

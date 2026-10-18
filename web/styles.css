@@ -316,7 +316,7 @@ h1,h2,h3,h4,p{margin:0}
 .conds li{display:grid; grid-template-columns:18px minmax(0,1fr); gap:10px; font-size:14px}
 .conds li::before{content:""; width:14px; height:14px; margin-top:3px; border-radius:4px; border:1.5px solid var(--signal)}
 .drafts{font-size:13px; color:var(--ink-2); display:grid; gap:6px}
-.vt{font:600 10.5px/1 var(--f-display); padding:4px 7px; border-radius:5px; letter-spacing:.04em}
+.vt{font:600 10.5px/1 var(--f-display); padding:4px 7px; border-radius:5px; letter-spacing:.04em; white-space:nowrap}
 .vt.PASS{background:color-mix(in srgb, var(--keep) 20%, transparent); color:var(--keep)}
 .vt.INCOMPLETE{background:color-mix(in srgb, var(--flag) 20%, transparent); color:var(--flag)}
 .vt.WRONG, .vt.STRUCK{background:color-mix(in srgb, var(--strike) 20%, transparent); color:var(--strike)}
