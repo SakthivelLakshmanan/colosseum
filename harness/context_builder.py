@@ -39,6 +39,7 @@ def build_pack(
     brief: DecisionBrief | dict[str, Any] | None = None,
     routing_query: str = "",
     max_facts: int | None = None,
+    dataset: str | None = None,
 ) -> EvidencePack:
     """Build an evidence pack for an adviser.
     
@@ -63,7 +64,7 @@ def build_pack(
         brief = DecisionBrief.model_validate(brief)
 
     # 1. Load candidates (includes related domains, excludes superseded)
-    candidates = load_facts([adviser_id], include_superseded=False)
+    candidates = load_facts([adviser_id], include_superseded=False, dataset=dataset)
     total_matching = len(candidates)
 
     # 2. Build ranking query text: question + options + routing query

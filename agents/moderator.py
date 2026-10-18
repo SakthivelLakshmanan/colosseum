@@ -723,6 +723,68 @@ def check_claims(
     return all_verdicts
 
 
+
+# ---- calculated key numbers: formula extraction from text ----
+_FORMULA_IN_TEXT = re.compile(r"([0-9(][0-9\.\,\s\+\-\*/×÷\(\)]*[0-9)])\s*=\s*₹?\s*([0-9][0-9,]*(?:\.[0-9]+)?)")
+
+
+def _extract_formula_from_text(text: str, value: Optional[float]) -> Optional[str]:
+    """Find 'a op b ... = value' in a key number's text and return the expression if it evaluates to value."""
+    if not text or value is None:
+        return None
+    from agents.tools import calculate
+    claimed_but_wrong = None
+    for m in _FORMULA_IN_TEXT.finditer(text):
+        expr = m.group(1)
+        if not re.search(r"[\+\-\*/×÷]", expr):
+            continue
+        expr = expr.replace("×", "*").replace("÷", "/").replace(",", "").strip()
+        opens, closes = expr.count("("), expr.count(")")
+        if closes > opens:
+            expr = "(" * (closes - opens) + expr
+        elif opens > closes:
+            expr = expr + ")" * (opens - closes)
+        try:
+            result = float(calculate(expr))
+        except Exception:
+            continue
+        if _matches_within_1pct(result, float(value), tolerance_pct=0.5):
+            return expr
+        try:
+            rhs = float(m.group(2).replace(",", ""))
+        except ValueError:
+            rhs = None
+        if claimed_but_wrong is None and rhs is not None and _matches_within_1pct(rhs, float(value), tolerance_pct=0.5):
+            claimed_but_wrong = expr  # the text claims this arithmetic gives the value, but it doesn't: let the check flag it
+    return claimed_but_wrong
+
+
+def _memo_evidence_block(memo_obj: Any) -> str:
+    """Exact statements of every fact the memo cites, so the final check never has to guess what an ID means."""
+    ids: list[str] = []
+    for kn in (memo_obj.key_numbers or []):
+        ids.extend(str(e).strip() for e in (kn.evidence_ids or []))
+    for bf in (memo_obj.blocking_findings or []):
+        ids.extend(str(e).strip() for e in (bf.evidence_ids or []))
+    ids.extend(str(e).strip() for e in (memo_obj.evidence_index or []))
+    lines, seen = [], set()
+    for eid in ids:
+        if not eid or eid in seen or "brief" in eid.lower():
+            continue
+        seen.add(eid)
+        fact = get_fact(eid)
+        if fact is None:
+            continue
+        sup = f" [SUPERSEDED by {fact.superseded_by}]" if fact.superseded_by else ""
+        lines.append(f"- {fact.fact_id}: {fact.statement}{sup}")
+        if len(lines) >= 80:
+            break
+    if not lines:
+        return ""
+    return ("\n\nEvidence cited in the memo (exact statements from the knowledge base). Judge evidence IDs only "
+            "against these statements; never guess what an ID contains:\n" + "\n".join(lines))
+
+
 def check_memo(
     brief: DecisionBrief | dict[str, Any],
     memo: Memo | dict[str, Any],
@@ -1022,6 +1084,13 @@ def check_memo(
                         passed = True
                         break
 
+        # Formula written only in the text (e.g. "14.4 - 6 - 2 + 4 = 10.4"): extract it so it can be verified.
+        if not passed and not kn.formula and kn.value is not None:
+            _found = _extract_formula_from_text(kn.text, kn.value)
+            if _found:
+                kn.formula = _found
+                kn.kind = "calculation"
+
         # (ii) kind == "calculation" with formula evaluating within 0.5%
         if not passed and kn.kind == "calculation" and kn.formula:
             try:
@@ -1133,6 +1202,16 @@ def check_memo(
                             break
                     if passed:
                         break
+
+        if not passed and kn.kind == "calculation" and not kn.formula:
+            code_check_issues.append(
+                MemoIssue(
+                    kind="missing_formula",
+                    detail=f"Key number '{kn.text[:140]}' is a calculation but has no formula. Put the arithmetic in its `formula` field using only numbers and + - * / ( ), for example \"40 + 25\".",
+                    evidence_ids=kn.evidence_ids,
+                )
+            )
+            continue
 
         if not passed and (kn.value is not None or (kn.kind == "calculation" and kn.formula)):
             code_check_issues.append(
@@ -1267,7 +1346,7 @@ def check_memo(
         brief=json.dumps(brief_obj.model_dump(), indent=2, default=str),
         code_checks=code_checks_text,
         memo=json.dumps(memo_obj.model_dump(), indent=2, default=str),
-        claims="\n".join(accepted_claims_lines),
+        claims="\n".join(accepted_claims_lines) + _memo_evidence_block(memo_obj),
     )
 
     settings = get_settings()

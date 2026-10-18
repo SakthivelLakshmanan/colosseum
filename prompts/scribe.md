@@ -29,3 +29,5 @@ Inputs:
 - Revision instructions (if any): {revision_instructions}
 
 Reply with JSON matching the Memo schema in core/schemas.py.
+
+Formula rule for key numbers: every key number you calculate (anything not copied straight from one fact) must have kind "calculation" and a `formula` field containing only numbers and + - * / ( ), for example "40 + 25" or "65 / 10.4". The formula must evaluate to the value. Never leave `formula` empty or put the arithmetic only in the text. Cite the evidence IDs of its inputs, and BRIEF for numbers taken from the brief.

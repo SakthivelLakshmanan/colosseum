@@ -20,6 +20,7 @@ import random
 import threading
 import time
 from typing import Any, AsyncGenerator, Callable, Optional
+import weakref
 
 from google import genai
 from google.genai import types
@@ -43,6 +44,12 @@ _sem_lock = threading.Lock()
 # Shared genai Client instance
 _genai_client: Optional[genai.Client] = None
 _client_lock = threading.Lock()
+
+# Loop-bound genai Client instances for async calls
+_async_clients: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, genai.Client] = (
+    weakref.WeakKeyDictionary()
+)
+_async_client_lock = threading.Lock()
 
 
 def get_retry_counts() -> dict[str, int]:
@@ -292,6 +299,38 @@ def reset_genai_client() -> None:
     global _genai_client
     with _client_lock:
         _genai_client = None
+    with _async_client_lock:
+        _async_clients.clear()
+
+
+def _get_async_client(caller: Optional[str] = None) -> genai.Client:
+    """Return a google-genai Client cached per running event loop.
+
+    Each event loop gets its own client to avoid closed event loop errors
+    from async connection pools (httpx/httpcore).
+    """
+    loop = asyncio.get_running_loop()
+    with _async_client_lock:
+        client = _async_clients.get(loop)
+        if client is None:
+            settings = get_settings()
+            os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "TRUE"
+            os.environ["GOOGLE_CLOUD_PROJECT"] = settings.project_id
+            os.environ["GOOGLE_CLOUD_LOCATION"] = settings.models_location
+
+            default_timeout = get_model_timeout_s("", settings)
+            http_opts = _build_http_options(default_timeout)
+            client = genai.Client(
+                vertexai=True,
+                project=settings.project_id,
+                location=settings.models_location,
+                http_options=http_opts,
+            )
+            _async_clients[loop] = client
+
+    if caller:
+        current_caller.set(caller)
+    return client
 
 
 def get_genai_client(caller: Optional[str] = None) -> genai.Client:
@@ -496,10 +535,25 @@ class ColosseumGemini(Gemini):
         on_first_slot: Optional[Callable[[], None]] = None,
         **kwargs: Any,
     ) -> None:
+        kwargs.pop("client", None)
         super().__init__(**kwargs)
         self._caller = caller
         self._on_first_slot = on_first_slot
         self._first_slot_notified = False
+
+    @property
+    def api_client(self) -> genai.Client:
+        try:
+            return _get_async_client(caller=self._caller)
+        except RuntimeError:
+            return get_genai_client(caller=self._caller)
+
+    @property
+    def _live_api_client(self) -> genai.Client:
+        try:
+            return _get_async_client(caller=self._caller)
+        except RuntimeError:
+            return get_genai_client(caller=self._caller)
 
     async def generate_content_async(
         self, llm_request: Any, stream: bool = False

@@ -214,9 +214,10 @@ def aggregate_facts(
         col = None
         try:
             db = get_db()
-            col = db.collection("cache_summaries")
+            col_name = os.environ.get("COLOSSEUM_CACHE_SUMMARIES_COLLECTION") or f"{os.environ.get('COLOSSEUM_CACHE_PREFIX', '')}cache_summaries"
+            col = db.collection(col_name)
         except Exception as exc:
-            logger.warning("Could not connect to Firestore cache_summaries: %s", exc)
+            logger.warning("Could not connect to Firestore summary cache: %s", exc)
 
         for topic_name, topic_facts in topics.items():
             fact_ids = [f.fact_id for f in topic_facts]

@@ -1,0 +1,153 @@
+{
+  "timestamp": "2026-10-18T11:30:08.127507",
+  "config": {
+    "synthetic_facts_generated": 1200,
+    "seed": 7,
+    "baseline_dataset": "colosseum",
+    "scale_dataset": "colosseum_scale",
+    "project_id": "colosseum-510716"
+  },
+  "facts_in_store": {
+    "baseline": 125,
+    "scale": 1325,
+    "scale_ratio": 10.6
+  },
+  "selected_advisers": [
+    "ops",
+    "business",
+    "finance",
+    "customer",
+    "legal",
+    "infosec"
+  ],
+  "total_matching_facts": {
+    "baseline": 188,
+    "scale": 1656
+  },
+  "total_facts_in_pack": {
+    "baseline": 150,
+    "scale": 150
+  },
+  "packs_truncated": {
+    "baseline": "6/6",
+    "scale": "6/6"
+  },
+  "total_summaries": {
+    "baseline": 36,
+    "scale": 259
+  },
+  "total_latency_p50_s": {
+    "baseline": 22.5689,
+    "scale": 53.826
+  },
+  "total_latency_p95_s": {
+    "baseline": 24.1221,
+    "scale": 873.8163
+  },
+  "retention_pct": 20.7,
+  "total_syn_noise_admitted": 119,
+  "per_adviser": {
+    "ops": {
+      "adviser_id": "ops",
+      "baseline_matching": 39,
+      "scale_matching": 281,
+      "baseline_facts_in_pack": 25,
+      "scale_facts_in_pack": 25,
+      "baseline_truncated": true,
+      "scale_truncated": true,
+      "baseline_summaries": 14,
+      "scale_summaries": 47,
+      "baseline_latency_p50_s": 1.4313,
+      "baseline_latency_p95_s": 2.112,
+      "scale_latency_p50_s": 7.9738,
+      "scale_latency_p95_s": 167.7505,
+      "retention_pct": 24.0,
+      "syn_noise_admitted": 19
+    },
+    "business": {
+      "adviser_id": "business",
+      "baseline_matching": 31,
+      "scale_matching": 278,
+      "baseline_facts_in_pack": 25,
+      "scale_facts_in_pack": 25,
+      "baseline_truncated": true,
+      "scale_truncated": true,
+      "baseline_summaries": 5,
+      "scale_summaries": 45,
+      "baseline_latency_p50_s": 1.2981,
+      "baseline_latency_p95_s": 1.6286,
+      "scale_latency_p50_s": 11.7301,
+      "scale_latency_p95_s": 162.4901,
+      "retention_pct": 16.0,
+      "syn_noise_admitted": 21
+    },
+    "finance": {
+      "adviser_id": "finance",
+      "baseline_matching": 34,
+      "scale_matching": 280,
+      "baseline_facts_in_pack": 25,
+      "scale_facts_in_pack": 25,
+      "baseline_truncated": true,
+      "scale_truncated": true,
+      "baseline_summaries": 9,
+      "scale_summaries": 48,
+      "baseline_latency_p50_s": 1.4056,
+      "baseline_latency_p95_s": 1.44,
+      "scale_latency_p50_s": 5.8229,
+      "scale_latency_p95_s": 115.4658,
+      "retention_pct": 20.0,
+      "syn_noise_admitted": 20
+    },
+    "customer": {
+      "adviser_id": "customer",
+      "baseline_matching": 30,
+      "scale_matching": 268,
+      "baseline_facts_in_pack": 25,
+      "scale_facts_in_pack": 25,
+      "baseline_truncated": true,
+      "scale_truncated": true,
+      "baseline_summaries": 4,
+      "scale_summaries": 38,
+      "baseline_latency_p50_s": 0.9174,
+      "baseline_latency_p95_s": 1.0841,
+      "scale_latency_p50_s": 7.7015,
+      "scale_latency_p95_s": 92.2866,
+      "retention_pct": 28.0,
+      "syn_noise_admitted": 18
+    },
+    "legal": {
+      "adviser_id": "legal",
+      "baseline_matching": 28,
+      "scale_matching": 278,
+      "baseline_facts_in_pack": 25,
+      "scale_facts_in_pack": 25,
+      "baseline_truncated": true,
+      "scale_truncated": true,
+      "baseline_summaries": 3,
+      "scale_summaries": 42,
+      "baseline_latency_p50_s": 0.8842,
+      "baseline_latency_p95_s": 1.4083,
+      "scale_latency_p50_s": 6.1726,
+      "scale_latency_p95_s": 115.2052,
+      "retention_pct": 16.0,
+      "syn_noise_admitted": 21
+    },
+    "infosec": {
+      "adviser_id": "infosec",
+      "baseline_matching": 26,
+      "scale_matching": 271,
+      "baseline_facts_in_pack": 25,
+      "scale_facts_in_pack": 25,
+      "baseline_truncated": true,
+      "scale_truncated": true,
+      "baseline_summaries": 1,
+      "scale_summaries": 39,
+      "baseline_latency_p50_s": 0.7022,
+      "baseline_latency_p95_s": 0.8772,
+      "scale_latency_p50_s": 5.5842,
+      "scale_latency_p95_s": 159.7005,
+      "retention_pct": 20.0,
+      "syn_noise_admitted": 20
+    }
+  }
+}

@@ -34,7 +34,8 @@ def embed(texts: list[str], task_type: str = "RETRIEVAL_QUERY") -> list[list[flo
     model = settings.models.embedding
 
     db = get_db()
-    col = db.collection("cache_embeddings")
+    col_name = os.environ.get("COLOSSEUM_CACHE_EMBEDDINGS_COLLECTION") or f"{os.environ.get('COLOSSEUM_CACHE_PREFIX', '')}cache_embeddings"
+    col = db.collection(col_name)
 
     # 1. Compute cache keys for all texts
     keys = [_compute_cache_key(model, task_type, t) for t in texts]

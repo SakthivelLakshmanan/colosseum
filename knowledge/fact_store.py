@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date
+import os
 import re
 from typing import Any, Optional
 
@@ -81,7 +82,18 @@ def _row_to_fact(row: Any) -> Fact:
     )
 
 
-def load_facts(domains: list[str], include_superseded: bool = False) -> list[Fact]:
+def clear_fact_cache() -> None:
+    """Clear the in-memory fact cache."""
+    global _fact_cache, _all_facts_loaded
+    _fact_cache.clear()
+    _all_facts_loaded = False
+
+
+def load_facts(
+    domains: list[str],
+    include_superseded: bool = False,
+    dataset: str | None = None,
+) -> list[Fact]:
     """Return facts whose domain is in domains OR whose pipe-separated related_domains contains any of them.
 
     Unless include_superseded is True, excludes rows where superseded_by is not null and not empty.
@@ -92,7 +104,8 @@ def load_facts(domains: list[str], include_superseded: bool = False) -> list[Fac
 
     settings = get_settings()
     client = get_client()
-    table_id = f"`{settings.project_id}.{settings.bigquery.dataset}.facts`"
+    target_dataset = dataset or os.environ.get("COLOSSEUM_BQ_DATASET") or settings.bigquery.dataset
+    table_id = f"`{settings.project_id}.{target_dataset}.facts`"
 
     superseded_clause = ""
     if not include_superseded:
@@ -127,12 +140,13 @@ _fact_cache: dict[str, Fact] = {}
 _all_facts_loaded: bool = False
 
 
-def load_all_facts(include_superseded: bool = True) -> list[Fact]:
+def load_all_facts(include_superseded: bool = True, dataset: str | None = None) -> list[Fact]:
     """Retrieve all facts from the fact store and populate cache."""
     global _fact_cache, _all_facts_loaded
     settings = get_settings()
     client = get_client()
-    table_id = f"`{settings.project_id}.{settings.bigquery.dataset}.facts`"
+    target_dataset = dataset or os.environ.get("COLOSSEUM_BQ_DATASET") or settings.bigquery.dataset
+    table_id = f"`{settings.project_id}.{target_dataset}.facts`"
 
     superseded_clause = ""
     if not include_superseded:
@@ -169,7 +183,7 @@ def load_all_facts(include_superseded: bool = True) -> list[Fact]:
         return []
 
 
-def get_fact(fact_id: str) -> Fact | None:
+def get_fact(fact_id: str, dataset: str | None = None) -> Fact | None:
     """Retrieve a single fact by fact_id from the fact store (with in-memory cache)."""
     if not fact_id:
         return None
@@ -183,7 +197,7 @@ def get_fact(fact_id: str) -> Fact | None:
 
     # If cache is empty, load all facts to avoid repeated network round-trips
     if not _fact_cache:
-        load_all_facts(include_superseded=True)
+        load_all_facts(include_superseded=True, dataset=dataset)
         if clean_id in _fact_cache:
             return _fact_cache[clean_id]
         if _all_facts_loaded:
@@ -191,7 +205,8 @@ def get_fact(fact_id: str) -> Fact | None:
 
     settings = get_settings()
     client = get_client()
-    table_id = f"`{settings.project_id}.{settings.bigquery.dataset}.facts`"
+    target_dataset = dataset or os.environ.get("COLOSSEUM_BQ_DATASET") or settings.bigquery.dataset
+    table_id = f"`{settings.project_id}.{target_dataset}.facts`"
 
     query = f"""
         SELECT *
