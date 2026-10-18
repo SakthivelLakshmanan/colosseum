@@ -308,6 +308,7 @@ def run_decision(
                 "ignored_blocker",
                 "missing_dissent",
                 "number_mismatch",
+                "missing_condition",
             }
             current_code_issues = [
                 i for i in verdict.issues

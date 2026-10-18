@@ -17,7 +17,8 @@ Rules:
 12. Every derived key number must be written as kind: "calculation" with its formula, citing both the evidence ID and BRIEF where a brief number is used.
 13. If the memo proposes phases, and any constraint limits the number of migrations or projects, describe the phases as one migration with a staged traffic ramp, never as separate migrations.
 14. For each phase tied to a contract threshold, fee or notice period, state plainly which costs that phase triggers, when, and why, citing the evidence. Never say a cost is "avoided" if a later phase triggers it; say it's deferred or accepted, and state the amount.
-15. If this is a revision, fix every issue in the revision instructions and nothing else.
+15. Before finishing, go through every adviser’s conditions and every blocking finding’s fix. Each must appear in conditions (merged with similar ones if you like), keeping its evidence IDs, or be listed in dissent with the reason it isn’t adopted.
+16. If this is a revision, fix every issue in the revision instructions and nothing else.
 
 Inputs:
 - Decision brief: {brief}

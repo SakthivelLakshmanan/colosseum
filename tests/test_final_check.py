@@ -212,3 +212,197 @@ def test_check_memo_passes_when_all_checks_succeed(sample_brief, sample_memo):
 
     assert verdict.verdict == MemoVerdictType.pass_
     assert len(verdict.issues) == 0
+
+
+def test_check_memo_dropped_condition_gives_missing_condition_and_incomplete(sample_brief, sample_memo):
+    """Dropped condition gives missing_condition issue and INCOMPLETE verdict."""
+    pos_legal = AdviserPosition(
+        adviser_id="legal",
+        stance="conditional",
+        summary="Legal approval requires compliance audit",
+        conditions=["Require formal third-party compliance audit before contract execution (LEG-01)"],
+        claims=[],
+        criterion_scores=[],
+        blocking_findings=[],
+        confidence=0.9,
+    )
+    sample_memo.conditions = ["Activate India hosting add-on to resolve data localisation (BLOCK-01)"]
+    sample_memo.phased_plan = ["Phase 1: Pilot", "Phase 2: Migration"]
+    sample_memo.recommendation = "Adopt Option B conditionally upon review (legal)."
+    sample_memo.dissent = []
+
+    mock_llm_reply = json.dumps({
+        "verdict": "PASS",
+        "issues": [],
+        "revision_instructions": "",
+    })
+
+    with patch("agents.moderator.generate") as mock_generate:
+        mock_generate.return_value = mock_llm_reply
+        verdict = check_memo(
+            brief=sample_brief,
+            memo=sample_memo,
+            selected_advisers=["legal"],
+            positions={"legal": pos_legal},
+            claim_verdicts=[],
+        )
+
+    assert verdict.verdict == MemoVerdictType.incomplete
+    missing_issues = [i for i in verdict.issues if i.kind == "missing_condition"]
+    assert len(missing_issues) == 1
+    assert "LEG-01" in missing_issues[0].evidence_ids
+    assert "Require formal third-party compliance audit" in missing_issues[0].detail
+    assert "Condition from" in missing_issues[0].detail
+    assert "Resolve code check failures" in verdict.revision_instructions
+
+
+def test_check_memo_condition_carried_through_with_evidence_id_passes(sample_brief, sample_memo):
+    """Condition carried through into the memo with its cited evidence ID passes."""
+    pos_legal = AdviserPosition(
+        adviser_id="legal",
+        stance="conditional",
+        summary="Legal approval requires compliance audit",
+        conditions=["Require formal third-party compliance audit before contract execution (LEG-01)"],
+        claims=[],
+        criterion_scores=[],
+        blocking_findings=[],
+        confidence=0.9,
+    )
+    # Memo carries the evidence ID in conditions
+    sample_memo.conditions = [
+        "Complete vendor compliance verification under LEG-01 prior to rollout",
+    ]
+    sample_memo.phased_plan = ["Phase 1: Pilot", "Phase 2: Migration"]
+    sample_memo.recommendation = "Adopt Option B conditionally upon review (legal)."
+    sample_memo.dissent = []
+
+    mock_llm_reply = json.dumps({
+        "verdict": "PASS",
+        "issues": [],
+        "revision_instructions": "",
+    })
+
+    with patch("agents.moderator.generate") as mock_generate:
+        mock_generate.return_value = mock_llm_reply
+        verdict = check_memo(
+            brief=sample_brief,
+            memo=sample_memo,
+            selected_advisers=["legal"],
+            positions={"legal": pos_legal},
+            claim_verdicts=[],
+        )
+
+    assert verdict.verdict == MemoVerdictType.pass_
+    assert not any(i.kind == "missing_condition" for i in verdict.issues)
+
+
+def test_check_memo_three_similar_adviser_conditions_merged_passes(sample_brief, sample_memo):
+    """Three similar adviser conditions merged into one memo condition passes."""
+    pos_legal = AdviserPosition(
+        adviser_id="legal",
+        stance="conditional",
+        summary="Legal approval",
+        conditions=["Mandate multi-factor authentication for administrative access"],
+        claims=[],
+        criterion_scores=[],
+        blocking_findings=[],
+        confidence=0.9,
+    )
+    pos_infosec = AdviserPosition(
+        adviser_id="infosec",
+        stance="conditional",
+        summary="InfoSec approval",
+        conditions=["Require multi-factor authentication for administrative users"],
+        claims=[],
+        criterion_scores=[],
+        blocking_findings=[],
+        confidence=0.9,
+    )
+    pos_ops = AdviserPosition(
+        adviser_id="ops",
+        stance="conditional",
+        summary="Ops approval",
+        conditions=["Enforce multi-factor authentication across administrative accounts"],
+        claims=[],
+        criterion_scores=[],
+        blocking_findings=[],
+        confidence=0.9,
+    )
+
+    # Memo has one single merged condition covering all 3
+    sample_memo.conditions = [
+        "Enforce multi-factor authentication for all administrative access across users and accounts",
+    ]
+    sample_memo.phased_plan = ["Phase 1: Pilot", "Phase 2: Migration"]
+    sample_memo.recommendation = "Adopt Option B conditionally upon MFA rollout (legal, infosec, ops)."
+    sample_memo.dissent = []
+
+    mock_llm_reply = json.dumps({
+        "verdict": "PASS",
+        "issues": [],
+        "revision_instructions": "",
+    })
+
+    with patch("agents.moderator.generate") as mock_generate:
+        mock_generate.return_value = mock_llm_reply
+        verdict = check_memo(
+            brief=sample_brief,
+            memo=sample_memo,
+            selected_advisers=["legal", "infosec", "ops"],
+            positions={"legal": pos_legal, "infosec": pos_infosec, "ops": pos_ops},
+            claim_verdicts=[],
+        )
+
+    assert verdict.verdict == MemoVerdictType.pass_
+    assert not any(i.kind == "missing_condition" for i in verdict.issues)
+
+
+def test_check_memo_struck_blocking_finding_fix_not_required(sample_brief, sample_memo):
+    """Struck blocking finding's fix is not required in the memo."""
+    bf = BlockingFinding(
+        text="Arvanta datacenter in EU violates RBI rules",
+        evidence_ids=["REG-99"],
+        fix="Migrate database cluster to Mumbai within 30 days",
+    )
+    pos_infosec = AdviserPosition(
+        adviser_id="infosec",
+        stance="conditional",
+        summary="Infosec position",
+        conditions=[],
+        claims=[],
+        criterion_scores=[],
+        blocking_findings=[bf],
+        confidence=0.9,
+    )
+
+    struck_verdict = ClaimVerdict(
+        claim_id="infosec-B1",
+        status=ClaimStatus.strike,
+        check="superseded",
+        reason="Regulation REG-99 has been superseded",
+    )
+
+    sample_memo.conditions = ["Activate India hosting add-on (BLOCK-01)"]
+    sample_memo.phased_plan = ["Phase 1: Pilot", "Phase 2: Migration"]
+    sample_memo.recommendation = "Adopt Option B (infosec)."
+    sample_memo.dissent = []
+
+    mock_llm_reply = json.dumps({
+        "verdict": "PASS",
+        "issues": [],
+        "revision_instructions": "",
+    })
+
+    with patch("agents.moderator.generate") as mock_generate:
+        mock_generate.return_value = mock_llm_reply
+        verdict = check_memo(
+            brief=sample_brief,
+            memo=sample_memo,
+            selected_advisers=["infosec"],
+            positions={"infosec": pos_infosec},
+            claim_verdicts=[struck_verdict],
+        )
+
+    assert verdict.verdict == MemoVerdictType.pass_
+    assert not any(i.kind == "missing_condition" for i in verdict.issues)
+

@@ -739,6 +739,7 @@ def check_memo(
        - every unresolved blocking finding is a condition or explicitly marked as needing a human override
        - dissent is present if any adviser's stance differs from the memo's stance
        - every key_number matches its evidence (recompute calculations, 1% tolerance; fact values vs value_num)
+       - no adviser condition or un-struck blocking finding fix is dropped from the memo (Check 6)
     2. Pass code-check results and the memo to the reasoning model (temperature 0) with prompts/moderator_final.md,
        returning PASS / INCOMPLETE / WRONG with issues and revision instructions.
     3. If any code check failed, the verdict can't be PASS.
@@ -1142,9 +1143,103 @@ def check_memo(
                 )
             )
 
+    # Check 6: conditions carried through
+    # For every selected adviser, for each item in position.conditions, and for each blocking finding's fix
+    # that hasn't been struck: it counts as covered if the memo's conditions, phased_plan, recommendation
+    # or dissent either (a) contains any evidence ID cited in that condition's text, or (b) shares at least
+    # 3 meaningful words (4 or more letters, excluding a small stop-word list like the one in Check 3)
+    # with one memo condition or phased-plan step.
+    stop_words_c6 = {
+        "with", "this", "that", "order", "prior", "before", "agreement",
+        "standard", "formal", "vendor", "from", "have", "must", "should",
+        "will", "would", "could", "also", "into", "than", "then", "each", "both",
+    }
+
+    memo_corpus_upper = (
+        f"{memo_obj.recommendation or ''} "
+        f"{' '.join(memo_obj.conditions or [])} "
+        f"{' '.join(memo_obj.phased_plan or [])} "
+        f"{' '.join(memo_obj.dissent or [])}"
+    ).upper()
+
+    memo_steps = list(memo_obj.conditions or []) + list(memo_obj.phased_plan or [])
+
+    def _extract_c6_words(text: str) -> set[str]:
+        words = set()
+        for token in re.findall(r"[a-z]+(?:-[a-z]+)*", text.lower()):
+            for part in token.split("-"):
+                if len(part) >= 4 and part not in stop_words_c6:
+                    words.add(part)
+            combined = token.replace("-", "")
+            if len(combined) >= 4 and combined not in stop_words_c6:
+                words.add(combined)
+        return words
+
+    step_words_list = [_extract_c6_words(step) for step in memo_steps]
+
+    for aid in selected_advisers:
+        pos = positions_obj.get(aid)
+        if not pos:
+            continue
+        adv_cfg = registry.get(aid)
+        adv_name = adv_cfg.name if (adv_cfg and adv_cfg.name) else aid
+
+        items_to_check: list[tuple[str, list[str]]] = []
+
+        # 1. position.conditions
+        for cond in (pos.conditions or []):
+            c_str = str(cond).strip()
+            if not c_str:
+                continue
+            eids = list(dict.fromkeys(re.findall(r"\b[A-Za-z]{2,10}-[0-9A-Za-z]{1,6}\b", c_str)))
+            items_to_check.append((c_str, eids))
+
+        # 2. blocking findings' fixes that haven't been struck
+        for idx, bf in enumerate(pos.blocking_findings or [], start=1):
+            bf_cid = f"{aid}-B{idx}"
+            v = verdict_by_id.get(bf_cid) or verdict_by_id.get(bf_cid.lower()) or verdict_by_id.get(bf_cid.upper())
+            if v and v.status == ClaimStatus.strike:
+                continue
+            fix_str = str(bf.fix or "").strip()
+            if not fix_str:
+                continue
+            eids = list(dict.fromkeys(
+                re.findall(r"\b[A-Za-z]{2,10}-[0-9A-Za-z]{1,6}\b", fix_str)
+                + [str(e).strip() for e in (bf.evidence_ids or []) if str(e).strip()]
+            ))
+            items_to_check.append((fix_str, eids))
+
+        for cond_text, item_eids in items_to_check:
+            covered = False
+
+            # (a) Check evidence ID match in memo's conditions, phased_plan, recommendation, or dissent
+            if item_eids:
+                for eid in item_eids:
+                    if eid.upper() in memo_corpus_upper:
+                        covered = True
+                        break
+
+            # (b) Check word overlap with one memo condition or phased-plan step
+            if not covered:
+                cond_words = _extract_c6_words(cond_text)
+                for step_words in step_words_list:
+                    shared = cond_words & step_words
+                    if len(shared) >= 3 or (0 < len(cond_words) < 3 and len(shared) == len(cond_words)):
+                        covered = True
+                        break
+
+            if not covered:
+                code_check_issues.append(
+                    MemoIssue(
+                        kind="missing_condition",
+                        detail=f"Condition from {adv_name} not carried into the memo: '{cond_text[:160]}'",
+                        evidence_ids=item_eids,
+                    )
+                )
+
     # 2. Build code checks summary for reasoning model
     if not code_check_issues:
-        code_checks_text = "ALL CODE CHECKS PASSED: Every criterion addressed, every selected adviser represented, unresolved blockers reflected, dissent present, all key numbers match evidence."
+        code_checks_text = "ALL CODE CHECKS PASSED: Every criterion addressed, every selected adviser represented, unresolved blockers reflected, dissent present, all key numbers match evidence, conditions carried through."
     else:
         failures_list = [f"- [{issue.kind}] {issue.detail}" for issue in code_check_issues]
         code_checks_text = "CODE CHECK FAILURES DETECTED:\n" + "\n".join(failures_list)
